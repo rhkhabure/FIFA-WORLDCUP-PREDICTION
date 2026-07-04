@@ -294,11 +294,137 @@ def build_fixture_tree_from_matches(matches):
     (adjacent pairs meet in the next round -- match 0&1 feed one semifinal
     slot, match 2&3 feed the other, and so on). Returns a fixture_tree ready
     for simulate_tournament().
+
+    NOTE: this ASSUMES simple adjacent pairing, which real tournament data
+    proved wrong (see the real-wiring functions below) -- kept only for
+    situations where no real 'Winner Match N' labels are available.
     """
     level = [(m[0], m[1]) for m in matches]
     while len(level) > 1:
         level = [(level[i], level[i + 1]) for i in range(0, len(level), 2)]
     return level[0] if level else None
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# REAL BRACKET WIRING -- reads the feed's own "Winner Match N" labels instead
+# of assuming adjacent matches pair up. Proven necessary: match 90 (Canada vs
+# Morocco) is fed by matches 73 and 75, NOT 73 and 74 -- the real seeding
+# skips around, so guessing the pairing would silently give wrong odds for
+# some teams (who they'd really face along the way changes their true
+# chances, not just the bracket's cosmetic shape).
+# ═══════════════════════════════════════════════════════════════════════════
+
+import re as _re
+_WINNER_LABEL_RE = _re.compile(r"Winner Match (\d+)")
+
+TYPE_TO_STAGE_LABEL = {
+    "r16": "Round of 16", "qf": "Quarterfinal", "sf": "Semifinal", "final": "Final",
+}
+ROUND_ORDER = ["r16", "qf", "sf", "final"]
+
+
+def determine_ko_winner_id(game):
+    """
+    Who actually won a finished knockout match -- checks penalty shootout
+    scores first (a knockout match tied after 90 min goes to extra time
+    then penalties; the "regular" score can stay level even though the
+    match is genuinely decided), falling back to the normal score.
+    """
+    hp, ap = game.get("home_penalty_score"), game.get("away_penalty_score")
+    if hp not in (None, "null", "") and ap not in (None, "null", ""):
+        try:
+            if int(hp) != int(ap):
+                return game["home_team_id"] if int(hp) > int(ap) else game["away_team_id"]
+        except ValueError:
+            pass
+    hs, as_ = safe_int(game.get("home_score")), safe_int(game.get("away_score"))
+    if hs == as_:
+        return None  # genuinely undecided -- shouldn't happen for a finished KO match
+    return game["home_team_id"] if hs > as_ else game["away_team_id"]
+
+
+def resolve_slot(game, side, game_by_id, team_lookup):
+    """
+    Figure out who occupies one side of a match: a real, already-known team,
+    OR still-waiting-on-an-earlier-match. Returns (team_code_or_None, is_confirmed).
+
+    This is what lets Morocco sit alone in her Quarterfinal box the moment
+    she wins her Round of 16 match, without waiting for the OTHER semifinal
+    feeder match to be played -- each side resolves independently.
+    """
+    team_id = game.get(f"{side}_team_id")
+    if team_id and team_id != "0" and team_id in team_lookup:
+        return team_lookup[team_id].get("fifa_code", "UNK"), True
+
+    label = game.get(f"{side}_team_label", "") or ""
+    m = _WINNER_LABEL_RE.search(label)
+    if not m:
+        return None, False
+
+    src_game = game_by_id.get(m.group(1))
+    if not src_game or str(src_game.get("finished", "")).upper() != "TRUE":
+        return None, False  # the match that decides this slot hasn't been played yet
+
+    winner_id = determine_ko_winner_id(src_game)
+    if winner_id and winner_id in team_lookup:
+        return team_lookup[winner_id].get("fifa_code", "UNK"), True
+    return None, False
+
+
+def build_real_bracket_tree(root_game, game_by_id):
+    """
+    Recursively build the ACTUAL bracket tree by following each match's real
+    'Winner Match N' labels backward, all the way down to real Round of 16
+    matches (which always have two confirmed teams from the group stage).
+
+    Returns a tree of dicts:
+      {"kind": "match", "game": <the r16 game dict>}
+      {"kind": "pair", "game": <this round's game dict>, "left": <subtree>, "right": <subtree>}
+    """
+    gtype = (root_game.get("type") or "").lower()
+    if gtype == "r16":
+        return {"kind": "match", "game": root_game}
+
+    home_m = _WINNER_LABEL_RE.search(root_game.get("home_team_label", "") or "")
+    away_m = _WINNER_LABEL_RE.search(root_game.get("away_team_label", "") or "")
+    left = build_real_bracket_tree(game_by_id[home_m.group(1)], game_by_id) if home_m and home_m.group(1) in game_by_id else None
+    right = build_real_bracket_tree(game_by_id[away_m.group(1)], game_by_id) if away_m and away_m.group(1) in game_by_id else None
+    return {"kind": "pair", "game": root_game, "left": left, "right": right}
+
+
+def tree_height(node):
+    """Distance from the R16 leaves up to this node. Leaves = 0."""
+    if node is None or node["kind"] == "match":
+        return 0
+    return 1 + max(tree_height(node["left"]), tree_height(node["right"]))
+
+
+def tree_to_fixture(node, game_by_id, team_lookup):
+    """
+    Convert the real bracket tree into the plain nested-tuple-or-string
+    format simulate_tournament() already understands: a finished match
+    becomes a fixed team code (no coin-flip needed, it's decided); an
+    unfinished match becomes a (home_code, away_code) pair still to be
+    simulated; higher rounds recurse into their two children.
+    """
+    game = node["game"]
+    is_finished = str(game.get("finished", "")).upper() == "TRUE"
+
+    if node["kind"] == "match":
+        if is_finished:
+            winner_id = determine_ko_winner_id(game)
+            return team_lookup.get(winner_id, {}).get("fifa_code", "UNK")
+        return (team_lookup.get(game["home_team_id"], {}).get("fifa_code", "UNK"),
+               team_lookup.get(game["away_team_id"], {}).get("fifa_code", "UNK"))
+
+    if is_finished:
+        winner_id = determine_ko_winner_id(game)
+        return team_lookup.get(winner_id, {}).get("fifa_code", "UNK")
+
+    left = tree_to_fixture(node["left"], game_by_id, team_lookup) if node["left"] else None
+    right = tree_to_fixture(node["right"], game_by_id, team_lookup) if node["right"] else None
+    return (left, right)
+
 
 
 def build_live_features(game, team_lookup):
