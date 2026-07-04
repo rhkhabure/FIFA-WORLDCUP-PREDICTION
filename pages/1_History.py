@@ -71,7 +71,11 @@ def main():
     #    ?team=<code> jumps to that team's most recent finished match ──────
     query_match_id = st.query_params.get("match_id")
     query_team = st.query_params.get("team")
-    if query_team and not query_match_id:
+    # A team param always means "I want THIS team, right now" -- it must
+    # win even if a match_id happens to still be sitting in the URL from
+    # a previous visit (History always writes match_id back on every load
+    # to keep the URL shareable, so a stale one is always lurking).
+    if query_team:
         team_games = [
             g for g in finished_games
             if team_lookup.get(g["home_team_id"], {}).get("fifa_code") == query_team
