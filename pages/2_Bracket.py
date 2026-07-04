@@ -137,16 +137,14 @@ def main():
     H = 132  # estimated pixel height of one match box -- tune if spacing looks off
 
     def render_team_row(code, prob, side):
-        col_flag, col_name, col_pct, col_info, col_path = st.columns([1, 3, 1, 1, 1])
+        col_flag, col_name, col_info, col_path = st.columns([1, 6, 0.6, 0.6])
         with col_flag:
             flag = flag_of(code)
             if flag:
-                st.image(flag, width=28)
+                st.image(flag, width=26)
         with col_name:
-            clicked = st.button(name_of(code), key=f"team_{code}_{side}", use_container_width=True)
-        with col_pct:
-            st.markdown(f"<div style='padding-top:8px;color:#8b949e;font-size:13px'>{prob:.0%}</div>",
-                       unsafe_allow_html=True)
+            clicked = st.button(f"{name_of(code)}  ·  {prob:.0%}",
+                                key=f"team_{code}_{side}", use_container_width=True)
         with col_info:
             st.markdown(
                 f"<div class='tt-wrap' style='padding-top:8px'>ⓘ"
@@ -190,8 +188,16 @@ def main():
                 if idx < len(rnd) - 1 and gap_between > 0:
                     st.markdown(f"<div style='height:{gap_between:.0f}px'></div>", unsafe_allow_html=True)
 
-    total_cols = n_side_rounds * 2 + 1
-    columns = st.columns(total_cols)
+    def col_weight(round_idx):
+        # The first round has real content (flag+button+icons) and needs
+        # real width. Every later round is just a small dashed placeholder
+        # box until those matches are actually played, so it needs far less.
+        return 2.4 if round_idx == 0 else 1.0
+
+    left_weights = [col_weight(i) for i in range(n_side_rounds)]
+    right_weights = [col_weight(n_side_rounds - 1 - i) for i in range(n_side_rounds)]
+    final_weight = 1.3
+    columns = st.columns(left_weights + [final_weight] + right_weights)
 
     for i in range(n_side_rounds):
         with columns[i]:
@@ -223,19 +229,76 @@ def main():
         "Hover the ⓘ for their full stage odds. Click 🏁 to see their path to the Final."
     )
 
-    # ── Stage 2: show the selected team's path-to-final summary ────────────
+    # ── Stage 3: animated path to the Final ─────────────────────────────────
     if st.session_state.get("path_team"):
         pt = st.session_state["path_team"]
         stages = odds.get(pt, {})
-        if stages:
-            order = ["Reaches Round of 16", "Reaches Quarterfinal", "Reaches Semifinal", "Reaches Final", "Champion"]
-            lines = [f"- **{s}**: {stages[s]:.1%}" for s in order if s in stages]
-            st.info(f"**{name_of(pt)}'s path to the Final** (based on {n_trials:,} simulated tournaments)\n\n"
-                   + "\n".join(lines))
-            st.caption(
-                "This is the numbers-first version. The animated line tracing this path "
-                "through the bracket is Stage 3 -- next up, if you'd like it."
-            )
+
+        # Find this team's actual first-round match and per-match odds
+        opponent, first_match_prob = None, None
+        for (h, a) in matches:
+            if h == pt:
+                opponent = a
+                first_match_prob = c.resolve_advance_prob(h, a, model, scaler, T)
+                break
+            if a == pt:
+                opponent = h
+                first_match_prob = 1 - c.resolve_advance_prob(h, a, model, scaler, T)
+                break
+
+        if stages and opponent:
+            order = ["Reaches Round of 16", "Reaches Quarterfinal", "Reaches Semifinal", "Reaches Final"]
+            markers = [("vs " + name_of(opponent), first_match_prob)]
+            markers += [(s.replace("Reaches ", ""), stages[s]) for s in order if s in stages]
+            champion_pct = stages.get("Champion", 0.0)
+
+            marker_html = ""
+            for i, (label, pct) in enumerate(markers):
+                delay = i * 0.5
+                marker_html += f"""
+                <div style="display:flex;flex-direction:column;align-items:center;min-width:90px">
+                  <div style="width:22px;height:22px;border-radius:50%;background:#30363d;
+                              animation:lightUp 0.5s ease forwards;animation-delay:{delay}s"></div>
+                  <div style="font-size:12px;color:#e6edf3;margin-top:6px;text-align:center">{label}</div>
+                  <div style="font-size:12px;color:#8b949e">{pct:.0%}</div>
+                </div>"""
+                if i < len(markers) - 1:
+                    marker_html += f"""
+                    <div style="flex:1;height:4px;background:#30363d;position:relative;
+                                overflow:hidden;margin-top:11px;min-width:40px">
+                      <div style="position:absolute;left:0;top:0;height:100%;width:0%;
+                                  background:#1DB954;animation:drawLine 0.5s linear forwards;
+                                  animation-delay:{delay + 0.25}s"></div>
+                    </div>"""
+
+            final_delay = len(markers) * 0.5
+            path_html = f"""
+            <div style="font-family:sans-serif;padding:20px 16px;background:#0d1117;border-radius:10px">
+              <div style="font-weight:600;color:#e6edf3;margin-bottom:16px">
+                {name_of(pt)}'s path to the Final
+              </div>
+              <div style="display:flex;align-items:flex-start">
+                {marker_html}
+              </div>
+              <div style="text-align:center;margin-top:20px;opacity:0;
+                          animation:fadeIn 0.6s ease forwards;animation-delay:{final_delay}s">
+                <span style="font-size:32px">🏆</span><br>
+                <span style="font-size:20px;font-weight:700;color:#F0C040">
+                  Champion odds: {champion_pct:.1%}
+                </span>
+              </div>
+            </div>
+            <style>
+              @keyframes lightUp {{
+                from {{ background:#30363d; box-shadow:none; }}
+                to   {{ background:#1DB954; box-shadow:0 0 10px #1DB954; }}
+              }}
+              @keyframes drawLine {{ from {{ width:0%; }} to {{ width:100%; }} }}
+              @keyframes fadeIn   {{ from {{ opacity:0; }} to {{ opacity:1; }} }}
+            </style>
+            """
+            st.components.v1.html(path_html, height=180)
+            st.caption(f"Based on {n_trials:,} simulated tournaments.")
         if st.button("Clear"):
             del st.session_state["path_team"]
             st.rerun()
