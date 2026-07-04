@@ -78,11 +78,11 @@ def parse_scorers(raw):
 
 class FootballWinProbNet(nn.Module):
     """Matches football_v2.pth exactly: 11 -> 40 -> 20 -> 3, softmax output."""
-    def __init__(self, n_features=11, h1=40, h2=20, dropout=0.30):
+    def __init__(self, n_features=11, n_classes=3, h1=40, h2=20, dropout=0.30):
         super().__init__()
         self.fc1 = nn.Linear(n_features, h1)
         self.fc2 = nn.Linear(h1, h2)
-        self.head = nn.Linear(h2, 3)
+        self.head = nn.Linear(h2, n_classes)
         self.drop = nn.Dropout(dropout)
         self.act  = nn.ReLU()
 
