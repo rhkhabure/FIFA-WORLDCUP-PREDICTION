@@ -9,6 +9,7 @@ reads on load to jump straight to that game.
 
 import json
 import sys
+from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
@@ -50,17 +51,33 @@ def main():
         st.info("No finished matches yet.")
         st.stop()
 
+    # Newest matches first — easier to find recent games by default
+    def sort_key(g):
+        return c.parse_local_date(g.get("local_date")) or datetime.min
+    finished_games = sorted(finished_games, key=sort_key, reverse=True)
+
+    # ── Search box — filters the list by team name as you type ────────────
+    search = st.text_input("Search by team name", placeholder="e.g. Brazil, Germany, Japan...")
+    if search:
+        matches = [g for g in finished_games if search.lower() in label_for(g, team_lookup).lower()]
+    else:
+        matches = finished_games
+
+    if not matches:
+        st.warning(f"No finished matches found matching '{search}'.")
+        st.stop()
+
     # ── Deep-link support: ?match_id=<id> jumps straight to that game ──────
     query_match_id = st.query_params.get("match_id")
-    game_ids = [g["id"] for g in finished_games]
-    default_idx = game_ids.index(query_match_id) if query_match_id in game_ids else len(finished_games) - 1
+    game_ids = [g["id"] for g in matches]
+    default_idx = game_ids.index(query_match_id) if query_match_id in game_ids else 0
 
-    labels = [label_for(g, team_lookup) for g in finished_games]
+    labels = [label_for(g, team_lookup) for g in matches]
     choice_idx = st.selectbox(
-        "Pick a finished match", range(len(labels)),
+        f"Pick a finished match ({len(matches)} shown)", range(len(labels)),
         index=default_idx, format_func=lambda i: labels[i],
     )
-    game = finished_games[choice_idx]
+    game = matches[choice_idx]
     st.query_params["match_id"] = game["id"]  # keep the URL in sync for sharing/linking
 
     home_code = team_lookup.get(game["home_team_id"], {}).get("fifa_code", "UNK")
@@ -116,7 +133,20 @@ def main():
     stats_cache = load_stats_cache()
     stats = stats_cache.get(str(game["id"]))
     if stats:
-        st.json(stats)
+        stage_raw = stats.get("stage", "")
+        stage_label = "Group stage" if stage_raw == "group" else (
+            stage_raw.replace("_", " ").title() if stage_raw else "Unknown stage"
+        )
+        date_raw = stats.get("date")
+        try:
+            date_label = datetime.strptime(date_raw, "%m/%d/%Y %H:%M").strftime("%d %b %Y, %H:%M")
+        except Exception:
+            date_label = date_raw or "Unknown date"
+
+        st.write(f"**Stage:** {stage_label}")
+        st.write(f"**Kickoff:** {date_label}")
+        with st.expander("Raw data"):
+            st.json(stats)
     else:
         st.caption(
             "No cached stats for this match yet. Run `python fetch_match_stats.py` "
