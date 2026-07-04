@@ -32,7 +32,7 @@ except ImportError:
 
 st.set_page_config(page_title="World Cup Win Probability", page_icon="⚽", layout="wide")
 
-ROOT      = Path(__file__).parent.parent  # project root, one level up from dashboard/
+ROOT      = Path(__file__).parent  # app.py lives at repo root, models/ is right beside it
 MODELS    = ROOT / "models"
 DATA_RAW  = ROOT / "data" / "raw"
 WC26_BASE = "https://worldcup26.ir"
