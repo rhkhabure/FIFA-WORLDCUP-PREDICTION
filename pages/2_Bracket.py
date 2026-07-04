@@ -163,7 +163,10 @@ def main():
         # Using an emoji rather than a real photo of the actual trophy --
         # that's a specific, trademarked physical object, and a generic
         # emoji sidesteps any of that cleanly while still looking festive.
-        final_pitch = H * (2 ** n_side_rounds)
+        # The Final only needs to line up with ONE Semifinal box per side
+        # (there's just one per side at this point), so it uses the SAME
+        # pitch as that last per-side round -- not one level deeper.
+        final_pitch = H * (2 ** (n_side_rounds - 1))
         final_offset = max(0, (final_pitch - H) / 2)
         st.markdown(f"<div style='text-align:center;font-weight:600;margin-bottom:8px'>{stage_names[-1]}</div>",
                    unsafe_allow_html=True)
