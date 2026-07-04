@@ -13,12 +13,14 @@ standard tournament way (fixture 1 & 2's winners meet in the next round,
 the entire bracket from a screenshot -- a much safer bet than transcribing
 30+ match pairings by eye.
 
-Stage 2 additions: hovering the small info icon next to a team shows their
-full stage-by-stage odds via a pure-CSS tooltip (no click needed, works
-regardless of Streamlit's own click-handling). Clicking the small flag
-button next to it shows that team's path-to-final summary below the
-bracket -- a real click for a real action, same reliable pattern as the
-History link, rather than trying to fit a whole popup into a hover.
+The live feed can change the number of confirmed fixtures while someone is
+browsing (a match finishes, the count drops from 8 to 7, etc.), so that
+count is checked for a valid bracket shape BEFORE any pairing logic runs,
+rather than crashing partway through.
+
+Click 🏁 next to a team to trace their path: instead of a separate strip,
+their own remaining TBD boxes in the ACTUAL bracket light up with their
+flag and stage odds, in sequence, ending on the Final box.
 """
 
 import sys
@@ -34,19 +36,12 @@ import common as c
 st.set_page_config(page_title="Tournament Bracket Odds", page_icon="🏆", layout="wide")
 st.title("🏆 Tournament Bracket — Odds by Stage")
 
-# One shared CSS block for every hover tooltip on the page -- pure CSS,
-# no JS, no Streamlit interaction needed, so it always works reliably.
-TOOLTIP_CSS = """
+PATH_CSS = """
 <style>
-.tt-wrap { position: relative; display: inline-block; cursor: help; }
-.tt-content {
-  visibility: hidden; opacity: 0; transition: opacity 0.15s;
-  position: absolute; bottom: 130%; left: 50%; transform: translateX(-50%);
-  background: #161b22; border: 1px solid #30363d; border-radius: 6px;
-  padding: 8px 10px; white-space: nowrap; z-index: 50; font-size: 12px;
-  color: #e6edf3;
+@keyframes lightUp {
+  from { background:#0d1117; border-color:#30363d; box-shadow:none; }
+  to   { background:#0d2818; border-color:#1DB954; box-shadow:0 0 10px rgba(29,185,84,0.5); }
 }
-.tt-wrap:hover .tt-content { visibility: visible; opacity: 1; }
 </style>
 """
 
@@ -95,6 +90,20 @@ def main():
     upcoming = sorted(upcoming, key=lambda g: c.parse_local_date(g.get("local_date")) or "")
     matches = [(code_of(g["home_team_id"]), code_of(g["away_team_id"])) for g in upcoming]
 
+    # ── THE CRASH FIX: check the bracket shape is valid BEFORE any pairing
+    #    logic runs, not after. The live feed can change this count while
+    #    someone is browsing (a match finishes mid-session), so this is a
+    #    real, expected situation to handle gracefully, not a rare edge case.
+    n_check = len(matches)
+    if n_check == 0 or (n_check & (n_check - 1)) != 0:
+        st.warning(
+            f"Currently tracking {n_check} confirmed upcoming knockout match(es), which "
+            f"isn't a clean bracket size (1, 2, 4, 8, or 16). This usually means a result "
+            f"just came in while the feed was being read. Refresh in a moment once the "
+            f"count settles back to a clean power of two."
+        )
+        st.stop()
+
     def build_rounds(matches_subset):
         rounds = [matches_subset]
         while len(rounds[-1]) > 1:
@@ -102,8 +111,7 @@ def main():
             rounds.append([(prev[i], prev[i + 1]) for i in range(0, len(prev), 2)])
         return rounds
 
-    n = len(matches)
-    half = n // 2
+    half = n_check // 2
     left_rounds = build_rounds(matches[:half])
     right_rounds = build_rounds(matches[half:])
     n_side_rounds = len(left_rounds)
@@ -114,30 +122,42 @@ def main():
     n_matches = len(matches)
     stage_now = {1: "Final", 2: "Semifinal", 4: "Quarterfinal", 8: "Round of 16"}.get(n_matches, f"{n_matches} matches")
 
-    # ── Run the Monte Carlo simulation FIRST, so the odds are ready
-    #    before we render the bracket (needed for the hover tooltips) ──────
+    # ── Monte Carlo simulation, run before rendering so the bracket boxes
+    #    can use these numbers directly ──────────────────────────────────
     model, scaler, T = c.load_model()
     fixture_tree = c.build_fixture_tree_from_matches(matches)
     n_trials = st.select_slider("Monte Carlo trials", [5_000, 20_000, 50_000, 100_000], value=20_000)
     with st.spinner(f"Running {n_trials:,} simulated tournaments..."):
         odds = c.simulate_tournament(fixture_tree, model, scaler, T, n_trials=n_trials)
 
-    def tooltip_text(code):
-        stages = odds.get(code, {})
-        if not stages:
-            return "No simulation data yet"
-        order = ["Reaches Round of 16", "Reaches Quarterfinal", "Reaches Semifinal", "Reaches Final", "Champion"]
-        parts = [f"{s.replace('Reaches ', '')}: {stages[s]:.0%}" for s in order if s in stages]
-        return " · ".join(parts)
+    # ── Figure out, for the currently-selected team, which specific
+    #    placeholder box in each later round is actually theirs ─────────
+    path_team = st.session_state.get("path_team")
+    path_side, path_start_idx = None, None
+    if path_team:
+        left_matches, right_matches = matches[:half], matches[half:]
+        for i, (h, a) in enumerate(left_matches):
+            if path_team in (h, a):
+                path_side, path_start_idx = "L", i
+                break
+        if path_side is None:
+            for i, (h, a) in enumerate(right_matches):
+                if path_team in (h, a):
+                    path_side, path_start_idx = "R", i
+                    break
+
+    def relevant_box_index(round_idx):
+        """Which box in this later round is on the selected team's own path."""
+        return path_start_idx // (2 ** round_idx)
 
     # ── The visual bracket ──────────────────────────────────────────────────
-    st.markdown(TOOLTIP_CSS, unsafe_allow_html=True)
+    st.markdown(PATH_CSS, unsafe_allow_html=True)
     st.subheader("Bracket")
 
     H = 132  # estimated pixel height of one match box -- tune if spacing looks off
 
     def render_team_row(code, prob, side):
-        col_flag, col_name, col_info, col_path = st.columns([1, 6, 0.6, 0.6])
+        col_flag, col_name, col_path = st.columns([1, 7, 0.6])
         with col_flag:
             flag = flag_of(code)
             if flag:
@@ -145,12 +165,6 @@ def main():
         with col_name:
             clicked = st.button(f"{name_of(code)}  ·  {prob:.0%}",
                                 key=f"team_{code}_{side}", use_container_width=True)
-        with col_info:
-            st.markdown(
-                f"<div class='tt-wrap' style='padding-top:8px'>ⓘ"
-                f"<div class='tt-content'>{tooltip_text(code)}</div></div>",
-                unsafe_allow_html=True,
-            )
         with col_path:
             if st.button("🏁", key=f"path_{code}_{side}", help="See path to Final"):
                 st.session_state["path_team"] = code
@@ -158,6 +172,40 @@ def main():
             st.query_params.clear()
             st.query_params["team"] = code
             st.switch_page("pages/1_History.py")
+
+    def render_placeholder_box(round_idx, box_idx, side, stage_label):
+        """One TBD box -- or, if it's on the selected team's own path, their
+        flag and odds of reaching THIS stage, with a green light-up glow."""
+        is_on_path = (
+            path_team is not None and side == path_side
+            and box_idx == relevant_box_index(round_idx)
+        )
+        if is_on_path:
+            delay = round_idx * 0.5
+            stage_key = f"Reaches {stage_label}"
+            pct = odds.get(path_team, {}).get(stage_key, 0.0)
+            flag = flag_of(path_team)
+            extra = ""
+            if stage_label == "Final":
+                champ_pct = odds.get(path_team, {}).get("Champion", 0.0)
+                extra = f"<div style='font-size:11px;color:#F0C040;margin-top:2px'>🏆 {champ_pct:.0%}</div>"
+            st.markdown(
+                f"<div style='border:1px solid #30363d;border-radius:8px;padding:12px;"
+                f"min-height:{H-32}px;display:flex;flex-direction:column;align-items:center;"
+                f"justify-content:center;gap:4px;animation:lightUp 0.6s ease forwards;"
+                f"animation-delay:{delay}s'>"
+                f"<img src='{flag}' style='width:26px;border-radius:3px'/>"
+                f"<div style='font-size:13px;color:#e6edf3;font-weight:500'>{name_of(path_team)}</div>"
+                f"<div style='font-size:12px;color:#8b949e'>{pct:.0%}</div>{extra}</div>",
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown(
+                f"<div style='border:1px dashed #30363d;border-radius:8px;padding:16px 12px;"
+                f"min-height:{H-32}px;display:flex;align-items:center;justify-content:center;"
+                f"color:#8b949e;text-align:center;font-size:13px'>TBD</div>",
+                unsafe_allow_html=True,
+            )
 
     def render_round_column(rnd, stage_label, is_first_round, side, round_index):
         st.markdown(f"<div style='text-align:center;font-weight:600;margin-bottom:8px'>{stage_label}</div>",
@@ -179,19 +227,11 @@ def main():
                     st.markdown(f"<div style='height:{gap_between:.0f}px'></div>", unsafe_allow_html=True)
         else:
             for idx in range(len(rnd)):
-                st.markdown(
-                    f"<div style='border:1px dashed #30363d;border-radius:8px;padding:16px 12px;"
-                    f"min-height:{H-32}px;display:flex;align-items:center;justify-content:center;"
-                    f"color:#8b949e;text-align:center;font-size:13px'>TBD</div>",
-                    unsafe_allow_html=True,
-                )
+                render_placeholder_box(round_index, idx, side, stage_label)
                 if idx < len(rnd) - 1 and gap_between > 0:
                     st.markdown(f"<div style='height:{gap_between:.0f}px'></div>", unsafe_allow_html=True)
 
     def col_weight(round_idx):
-        # The first round has real content (flag+button+icons) and needs
-        # real width. Every later round is just a small dashed placeholder
-        # box until those matches are actually played, so it needs far less.
         return 2.4 if round_idx == 0 else 1.0
 
     left_weights = [col_weight(i) for i in range(n_side_rounds)]
@@ -210,13 +250,16 @@ def main():
                    unsafe_allow_html=True)
         if final_offset > 0:
             st.markdown(f"<div style='height:{final_offset:.0f}px'></div>", unsafe_allow_html=True)
-        st.markdown(
-            f"<div style='border:1px dashed #30363d;border-radius:8px;padding:16px 12px;"
-            f"min-height:{H-32}px;display:flex;flex-direction:column;align-items:center;"
-            f"justify-content:center;gap:6px;color:#8b949e;text-align:center;font-size:13px'>"
-            f"<span style='font-size:28px'>🏆</span>TBD</div>",
-            unsafe_allow_html=True,
-        )
+        if path_team is not None:
+            render_placeholder_box(n_side_rounds, 0, path_side, "Final")
+        else:
+            st.markdown(
+                f"<div style='border:1px dashed #30363d;border-radius:8px;padding:16px 12px;"
+                f"min-height:{H-32}px;display:flex;flex-direction:column;align-items:center;"
+                f"justify-content:center;gap:6px;color:#8b949e;text-align:center;font-size:13px'>"
+                f"<span style='font-size:28px'>🏆</span>TBD</div>",
+                unsafe_allow_html=True,
+            )
 
     for i in range(n_side_rounds):
         mirrored_i = n_side_rounds - 1 - i
@@ -224,84 +267,11 @@ def main():
             render_round_column(right_rounds[mirrored_i], stage_names[mirrored_i], mirrored_i == 0,
                                side="R", round_index=mirrored_i)
 
-    st.caption(
-        "Click a team name to see their most recent match on History. "
-        "Hover the ⓘ for their full stage odds. Click 🏁 to see their path to the Final."
-    )
+    st.caption("Click a team name to see their most recent match on History. Click 🏁 to trace their path to the Final.")
 
-    # ── Stage 3: animated path to the Final ─────────────────────────────────
-    if st.session_state.get("path_team"):
-        pt = st.session_state["path_team"]
-        stages = odds.get(pt, {})
-
-        # Find this team's actual first-round match and per-match odds
-        opponent, first_match_prob = None, None
-        for (h, a) in matches:
-            if h == pt:
-                opponent = a
-                first_match_prob = c.resolve_advance_prob(h, a, model, scaler, T)
-                break
-            if a == pt:
-                opponent = h
-                first_match_prob = 1 - c.resolve_advance_prob(h, a, model, scaler, T)
-                break
-
-        if stages and opponent:
-            order = ["Reaches Round of 16", "Reaches Quarterfinal", "Reaches Semifinal", "Reaches Final"]
-            markers = [("vs " + name_of(opponent), first_match_prob)]
-            markers += [(s.replace("Reaches ", ""), stages[s]) for s in order if s in stages]
-            champion_pct = stages.get("Champion", 0.0)
-
-            marker_html = ""
-            for i, (label, pct) in enumerate(markers):
-                delay = i * 0.5
-                marker_html += f"""
-                <div style="display:flex;flex-direction:column;align-items:center;min-width:90px">
-                  <div style="width:22px;height:22px;border-radius:50%;background:#30363d;
-                              animation:lightUp 0.5s ease forwards;animation-delay:{delay}s"></div>
-                  <div style="font-size:12px;color:#e6edf3;margin-top:6px;text-align:center">{label}</div>
-                  <div style="font-size:12px;color:#8b949e">{pct:.0%}</div>
-                </div>"""
-                if i < len(markers) - 1:
-                    marker_html += f"""
-                    <div style="flex:1;height:4px;background:#30363d;position:relative;
-                                overflow:hidden;margin-top:11px;min-width:40px">
-                      <div style="position:absolute;left:0;top:0;height:100%;width:0%;
-                                  background:#1DB954;animation:drawLine 0.5s linear forwards;
-                                  animation-delay:{delay + 0.25}s"></div>
-                    </div>"""
-
-            final_delay = len(markers) * 0.5
-            path_html = f"""
-            <div style="font-family:sans-serif;padding:20px 16px;background:#0d1117;border-radius:10px">
-              <div style="font-weight:600;color:#e6edf3;margin-bottom:16px">
-                {name_of(pt)}'s path to the Final
-              </div>
-              <div style="display:flex;align-items:flex-start">
-                {marker_html}
-              </div>
-              <div style="text-align:center;margin-top:20px;opacity:0;
-                          animation:fadeIn 0.6s ease forwards;animation-delay:{final_delay}s">
-                <span style="font-size:32px">🏆</span><br>
-                <span style="font-size:20px;font-weight:700;color:#F0C040">
-                  Champion odds: {champion_pct:.1%}
-                </span>
-              </div>
-            </div>
-            <style>
-              @keyframes lightUp {{
-                from {{ background:#30363d; box-shadow:none; }}
-                to   {{ background:#1DB954; box-shadow:0 0 10px #1DB954; }}
-              }}
-              @keyframes drawLine {{ from {{ width:0%; }} to {{ width:100%; }} }}
-              @keyframes fadeIn   {{ from {{ opacity:0; }} to {{ opacity:1; }} }}
-            </style>
-            """
-            st.components.v1.html(path_html, height=180)
-            st.caption(f"Based on {n_trials:,} simulated tournaments.")
-        if st.button("Clear"):
-            del st.session_state["path_team"]
-            st.rerun()
+    if path_team is not None and st.button("Clear path"):
+        del st.session_state["path_team"]
+        st.rerun()
 
     st.caption(
         f"Found **{n_matches}** confirmed upcoming knockout match(es) — treating this as the "
@@ -312,13 +282,6 @@ def main():
     with st.expander("Which matches were found"):
         for (h, a) in matches:
             st.write(f"{name_of(h)} ({h}) vs {name_of(a)} ({a})")
-
-    if n_matches not in (1, 2, 4, 8, 16):
-        st.warning(
-            f"{n_matches} confirmed fixtures isn't a clean power of two -- the pairing "
-            f"below may not exactly match the real bracket. Double-check against the "
-            f"official bracket if this looks off."
-        )
 
     # ── Build the results table ──────────────────────────────────────────
     all_stages = ["Reaches Round of 16", "Reaches Quarterfinal",
