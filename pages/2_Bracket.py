@@ -15,6 +15,7 @@ the entire bracket from a screenshot -- a much safer bet than transcribing
 """
 
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -46,6 +47,12 @@ def main():
                 return t.get("name_en", code)
         return code
 
+    def flag_of(code):
+        for t in teams:
+            if t.get("fifa_code") == code:
+                return t.get("flag", "")
+        return ""
+
     # ── Find confirmed, not-yet-played knockout fixtures ───────────────────
     knockout_games = [g for g in games if g.get("type") != "group"]
     upcoming = [
@@ -66,60 +73,78 @@ def main():
     upcoming = sorted(upcoming, key=lambda g: c.parse_local_date(g.get("local_date")) or "")
     matches = [(code_of(g["home_team_id"]), code_of(g["away_team_id"])) for g in upcoming]
 
-    # ── Stage 1: the actual visual bracket, with clickable team names ──────
-    def render_bracket_html(matches, model, scaler, T):
-        """
-        Build round-by-round columns. Round 0 is the real, confirmed
-        matchups (with each team's chance to win THAT match, a single
-        model call each -- cheap, no simulation needed). Later columns
-        are placeholders until those earlier matches are actually played.
-        """
-        rounds = [matches]
+    # ── The visual bracket, native Streamlit widgets so clicks actually work ──
+    def build_rounds(matches_subset):
+        rounds = [matches_subset]
         while len(rounds[-1]) > 1:
             prev = rounds[-1]
             rounds.append([(prev[i], prev[i + 1]) for i in range(0, len(prev), 2)])
+        return rounds
 
-        stage_pool = ["Round of 16", "Quarterfinal", "Semifinal", "Final"]
-        stage_names = stage_pool[-len(rounds):]
+    def render_team_row(code, prob, side):
+        """One team's row: flag, clickable name button, win% for this match."""
+        col_flag, col_name, col_pct = st.columns([1, 4, 1])
+        with col_flag:
+            flag = flag_of(code)
+            if flag:
+                st.image(flag, width=28)
+        with col_name:
+            clicked = st.button(name_of(code), key=f"team_{code}_{side}", use_container_width=True)
+        with col_pct:
+            st.markdown(
+                f"<div style='padding-top:8px;color:#8b949e;font-size:13px'>{prob:.0%}</div>",
+                unsafe_allow_html=True,
+            )
+        if clicked:
+            st.query_params.clear()
+            st.query_params["team"] = code
+            st.switch_page("pages/1_History.py")
 
-        cols_html = []
-
-        # Round 0 -- real matches, clickable, with per-match win odds
-        col = f'<div style="flex:1"><div style="text-align:center;font-weight:600;margin-bottom:10px">{stage_names[0]}</div>'
-        for (h, a) in rounds[0]:
-            p_h = c.resolve_advance_prob(h, a, model, scaler, T)
-            col += f'''
-            <div style="background:#161b22;border-radius:8px;padding:10px 12px;margin-bottom:18px">
-              <div style="display:flex;justify-content:space-between;align-items:center">
-                <a href="History?team={h}" target="_top" style="color:#378ADD;text-decoration:none;font-weight:500">{name_of(h)}</a>
-                <span style="color:#8b949e;font-size:13px">{p_h:.0%}</span>
-              </div>
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
-                <a href="History?team={a}" target="_top" style="color:#E24B4A;text-decoration:none;font-weight:500">{name_of(a)}</a>
-                <span style="color:#8b949e;font-size:13px">{1 - p_h:.0%}</span>
-              </div>
-            </div>'''
-        col += '</div>'
-        cols_html.append(col)
-
-        # Later rounds -- not played yet, shown as placeholders
-        for r in range(1, len(rounds)):
-            col = f'<div style="flex:1"><div style="text-align:center;font-weight:600;margin-bottom:10px">{stage_names[r]}</div>'
-            n_gap = 2 ** r  # roughly space these to visually align with feeder matches
-            for _ in rounds[r]:
-                col += (
-                    '<div style="background:#0d1117;border:1px dashed #30363d;'
-                    f'border-radius:8px;padding:10px 12px;margin-bottom:{18*n_gap}px;'
-                    'color:#8b949e;text-align:center;font-size:13px">TBD</div>'
+    def render_round_column(rnd, stage_label, is_first_round, side):
+        st.markdown(f"<div style='text-align:center;font-weight:600;margin-bottom:8px'>{stage_label}</div>",
+                   unsafe_allow_html=True)
+        if is_first_round:
+            for (h, a) in rnd:
+                p_h = c.resolve_advance_prob(h, a, model, scaler, T)
+                with st.container(border=True):
+                    render_team_row(h, p_h, f"{side}_{h}")
+                    render_team_row(a, 1 - p_h, f"{side}_{a}")
+                st.write("")  # small vertical gap between matches
+        else:
+            for _ in rnd:
+                st.markdown(
+                    "<div style='border:1px dashed #30363d;border-radius:8px;padding:16px 12px;"
+                    "margin-bottom:20px;color:#8b949e;text-align:center;font-size:13px'>TBD</div>",
+                    unsafe_allow_html=True,
                 )
-            col += '</div>'
-            cols_html.append(col)
 
-        return '<div style="display:flex;gap:16px;align-items:flex-start">' + ''.join(cols_html) + '</div>'
+    n = len(matches)
+    half = n // 2
+    left_rounds = build_rounds(matches[:half])
+    right_rounds = build_rounds(matches[half:])
+    n_side_rounds = len(left_rounds)
+
+    stage_pool = ["Round of 16", "Quarterfinal", "Semifinal", "Final"]
+    stage_names = stage_pool[-(n_side_rounds + 1):]
 
     st.subheader("Bracket")
     model, scaler, T = c.load_model()
-    st.markdown(render_bracket_html(matches, model, scaler, T), unsafe_allow_html=True)
+
+    total_cols = n_side_rounds * 2 + 1
+    columns = st.columns(total_cols)
+
+    for i in range(n_side_rounds):
+        with columns[i]:
+            render_round_column(left_rounds[i], stage_names[i], i == 0, side="L")
+
+    with columns[n_side_rounds]:
+        render_round_column([("?", "?")], stage_names[-1], False, side="final")
+
+    for i in range(n_side_rounds):
+        mirrored_i = n_side_rounds - 1 - i  # right side reads inward-to-outward
+        with columns[n_side_rounds + 1 + i]:
+            render_round_column(right_rounds[mirrored_i], stage_names[mirrored_i], mirrored_i == 0, side="R")
+
     st.caption("Click a team name to see their most recent match on the History page.")
 
     n_matches = len(matches)
@@ -165,6 +190,27 @@ def main():
     df = df.sort_values("Champion", ascending=False)
 
     st.subheader("Odds by stage")
+    if st.button("📌 Save this snapshot to the permanent record"):
+        log_path = Path(__file__).parent.parent / "results" / "bracket_odds_history.csv"
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now(timezone.utc).isoformat()
+        log_rows = [
+            {"timestamp": stamp, "stage_detected": stage_now, "team": team,
+             "predicted_stage": stage, "probability": round(prob, 4)}
+            for team, stages in odds.items() for stage, prob in stages.items()
+        ]
+        log_df = pd.DataFrame(log_rows)
+        log_df.to_csv(log_path, mode="a", header=not log_path.exists(), index=False)
+        st.success(
+            f"Saved {len(log_rows)} odds to results/bracket_odds_history.csv at {stamp[:19]} UTC. "
+            f"Once the tournament ends, compare this file against what actually happened."
+        )
+    st.caption(
+        "This is a manual save, on purpose -- Streamlit reruns this page on every click and "
+        "slider move, so auto-saving every time would flood the file with near-duplicate rows. "
+        "Click the button once per day (or whenever you want a checkpoint) instead."
+    )
+
     st.dataframe(
         df.style.format("{:.1%}"),
         use_container_width=True,
