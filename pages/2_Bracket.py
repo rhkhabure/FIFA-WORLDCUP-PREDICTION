@@ -24,8 +24,8 @@ import streamlit as st
 sys.path.append(str(Path(__file__).parent.parent))
 import common as c
 
-st.set_page_config(page_title="Tournament Bracket Odds", page_icon="🏆", layout="wide")
-st.title("🏆 Tournament Bracket — Odds by Stage")
+st.set_page_config(page_title="Worldcup Bracket Odds", page_icon="🏆", layout="wide")
+st.title("🏆 Worldcup Bracket — Odds by Stage")
 
 
 def main():
