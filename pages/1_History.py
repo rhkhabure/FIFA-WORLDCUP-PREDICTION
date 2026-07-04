@@ -145,8 +145,6 @@ def main():
 
         st.write(f"**Stage:** {stage_label}")
         st.write(f"**Kickoff:** {date_label}")
-        with st.expander("Raw data"):
-            st.json(stats)
     else:
         st.caption(
             "No cached stats for this match yet. Run `python fetch_match_stats.py` "
