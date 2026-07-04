@@ -1,0 +1,2 @@
+timestamp,phase,test_acc,test_logloss,draw_recall,draw_precision,notes
+2026-07-04 11:54 UTC,phase2c_CLOSED_rollback,0.551,0.903,0.164,0.656,rolled back to football_v2.pth as production model

@@ -1,0 +1,11 @@
+torch
+numpy
+pandas
+scikit-learn
+scipy
+streamlit
+plotly
+requests
+python-dotenv
+pyarrow
+tqdm
