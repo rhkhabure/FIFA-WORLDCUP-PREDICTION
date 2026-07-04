@@ -12,6 +12,13 @@ standard tournament way (fixture 1 & 2's winners meet in the next round,
 3 & 4's winners meet in the other slot, etc.) rather than us hand-typing
 the entire bracket from a screenshot -- a much safer bet than transcribing
 30+ match pairings by eye.
+
+Stage 2 additions: hovering the small info icon next to a team shows their
+full stage-by-stage odds via a pure-CSS tooltip (no click needed, works
+regardless of Streamlit's own click-handling). Clicking the small flag
+button next to it shows that team's path-to-final summary below the
+bracket -- a real click for a real action, same reliable pattern as the
+History link, rather than trying to fit a whole popup into a hover.
 """
 
 import sys
@@ -24,8 +31,24 @@ import streamlit as st
 sys.path.append(str(Path(__file__).parent.parent))
 import common as c
 
-st.set_page_config(page_title="Worldcup Bracket Odds", page_icon="🏆", layout="wide")
-st.title("🏆 Worldcup Bracket — Odds by Stage")
+st.set_page_config(page_title="Tournament Bracket Odds", page_icon="🏆", layout="wide")
+st.title("🏆 Tournament Bracket — Odds by Stage")
+
+# One shared CSS block for every hover tooltip on the page -- pure CSS,
+# no JS, no Streamlit interaction needed, so it always works reliably.
+TOOLTIP_CSS = """
+<style>
+.tt-wrap { position: relative; display: inline-block; cursor: help; }
+.tt-content {
+  visibility: hidden; opacity: 0; transition: opacity 0.15s;
+  position: absolute; bottom: 130%; left: 50%; transform: translateX(-50%);
+  background: #161b22; border: 1px solid #30363d; border-radius: 6px;
+  padding: 8px 10px; white-space: nowrap; z-index: 50; font-size: 12px;
+  color: #e6edf3;
+}
+.tt-wrap:hover .tt-content { visibility: visible; opacity: 1; }
+</style>
+"""
 
 
 def main():
@@ -69,11 +92,9 @@ def main():
         )
         st.stop()
 
-    # Sort for a stable, repeatable pairing order (by kickoff date)
     upcoming = sorted(upcoming, key=lambda g: c.parse_local_date(g.get("local_date")) or "")
     matches = [(code_of(g["home_team_id"]), code_of(g["away_team_id"])) for g in upcoming]
 
-    # ── The visual bracket, native Streamlit widgets so clicks actually work ──
     def build_rounds(matches_subset):
         rounds = [matches_subset]
         while len(rounds[-1]) > 1:
@@ -81,9 +102,42 @@ def main():
             rounds.append([(prev[i], prev[i + 1]) for i in range(0, len(prev), 2)])
         return rounds
 
+    n = len(matches)
+    half = n // 2
+    left_rounds = build_rounds(matches[:half])
+    right_rounds = build_rounds(matches[half:])
+    n_side_rounds = len(left_rounds)
+
+    stage_pool = ["Round of 16", "Quarterfinal", "Semifinal", "Final"]
+    stage_names = stage_pool[-(n_side_rounds + 1):]
+
+    n_matches = len(matches)
+    stage_now = {1: "Final", 2: "Semifinal", 4: "Quarterfinal", 8: "Round of 16"}.get(n_matches, f"{n_matches} matches")
+
+    # ── Run the Monte Carlo simulation FIRST, so the odds are ready
+    #    before we render the bracket (needed for the hover tooltips) ──────
+    model, scaler, T = c.load_model()
+    fixture_tree = c.build_fixture_tree_from_matches(matches)
+    n_trials = st.select_slider("Monte Carlo trials", [5_000, 20_000, 50_000, 100_000], value=20_000)
+    with st.spinner(f"Running {n_trials:,} simulated tournaments..."):
+        odds = c.simulate_tournament(fixture_tree, model, scaler, T, n_trials=n_trials)
+
+    def tooltip_text(code):
+        stages = odds.get(code, {})
+        if not stages:
+            return "No simulation data yet"
+        order = ["Reaches Round of 16", "Reaches Quarterfinal", "Reaches Semifinal", "Reaches Final", "Champion"]
+        parts = [f"{s.replace('Reaches ', '')}: {stages[s]:.0%}" for s in order if s in stages]
+        return " · ".join(parts)
+
+    # ── The visual bracket ──────────────────────────────────────────────────
+    st.markdown(TOOLTIP_CSS, unsafe_allow_html=True)
+    st.subheader("Bracket")
+
+    H = 132  # estimated pixel height of one match box -- tune if spacing looks off
+
     def render_team_row(code, prob, side):
-        """One team's row: flag, clickable name button, win% for this match."""
-        col_flag, col_name, col_pct = st.columns([1, 4, 1])
+        col_flag, col_name, col_pct, col_info, col_path = st.columns([1, 3, 1, 1, 1])
         with col_flag:
             flag = flag_of(code)
             if flag:
@@ -91,28 +145,25 @@ def main():
         with col_name:
             clicked = st.button(name_of(code), key=f"team_{code}_{side}", use_container_width=True)
         with col_pct:
+            st.markdown(f"<div style='padding-top:8px;color:#8b949e;font-size:13px'>{prob:.0%}</div>",
+                       unsafe_allow_html=True)
+        with col_info:
             st.markdown(
-                f"<div style='padding-top:8px;color:#8b949e;font-size:13px'>{prob:.0%}</div>",
+                f"<div class='tt-wrap' style='padding-top:8px'>ⓘ"
+                f"<div class='tt-content'>{tooltip_text(code)}</div></div>",
                 unsafe_allow_html=True,
             )
+        with col_path:
+            if st.button("🏁", key=f"path_{code}_{side}", help="See path to Final"):
+                st.session_state["path_team"] = code
         if clicked:
             st.query_params.clear()
             st.query_params["team"] = code
             st.switch_page("pages/1_History.py")
 
-    # H = approximate pixel height of one match box (button+flag rows+padding).
-    # This is an estimate -- Streamlit's native widgets don't report their exact
-    # rendered height, so this may need a small manual tweak once you see it live.
-    H = 132
-
     def render_round_column(rnd, stage_label, is_first_round, side, round_index):
         st.markdown(f"<div style='text-align:center;font-weight:600;margin-bottom:8px'>{stage_label}</div>",
                    unsafe_allow_html=True)
-
-        # Classic bracket-alignment trick: each round's boxes sit centered
-        # between their two feeder boxes from the round before. The gap
-        # between entries doubles every round, and the top gets a half-size
-        # push down so the very first box centers correctly too.
         pitch = H * (2 ** round_index)
         top_offset = max(0, (pitch - H) / 2)
         gap_between = max(0, pitch - H)
@@ -139,18 +190,6 @@ def main():
                 if idx < len(rnd) - 1 and gap_between > 0:
                     st.markdown(f"<div style='height:{gap_between:.0f}px'></div>", unsafe_allow_html=True)
 
-    n = len(matches)
-    half = n // 2
-    left_rounds = build_rounds(matches[:half])
-    right_rounds = build_rounds(matches[half:])
-    n_side_rounds = len(left_rounds)
-
-    stage_pool = ["Round of 16", "Quarterfinal", "Semifinal", "Final"]
-    stage_names = stage_pool[-(n_side_rounds + 1):]
-
-    st.subheader("Bracket")
-    model, scaler, T = c.load_model()
-
     total_cols = n_side_rounds * 2 + 1
     columns = st.columns(total_cols)
 
@@ -159,13 +198,6 @@ def main():
             render_round_column(left_rounds[i], stage_names[i], i == 0, side="L", round_index=i)
 
     with columns[n_side_rounds]:
-        # Final column, vertically centered the same way, with a trophy.
-        # Using an emoji rather than a real photo of the actual trophy --
-        # that's a specific, trademarked physical object, and a generic
-        # emoji sidesteps any of that cleanly while still looking festive.
-        # The Final only needs to line up with ONE Semifinal box per side
-        # (there's just one per side at this point), so it uses the SAME
-        # pitch as that last per-side round -- not one level deeper.
         final_pitch = H * (2 ** (n_side_rounds - 1))
         final_offset = max(0, (final_pitch - H) / 2)
         st.markdown(f"<div style='text-align:center;font-weight:600;margin-bottom:8px'>{stage_names[-1]}</div>",
@@ -181,15 +213,33 @@ def main():
         )
 
     for i in range(n_side_rounds):
-        mirrored_i = n_side_rounds - 1 - i  # right side reads inward-to-outward
+        mirrored_i = n_side_rounds - 1 - i
         with columns[n_side_rounds + 1 + i]:
             render_round_column(right_rounds[mirrored_i], stage_names[mirrored_i], mirrored_i == 0,
                                side="R", round_index=mirrored_i)
 
-    st.caption("Click a team name to see their most recent match on the History page.")
+    st.caption(
+        "Click a team name to see their most recent match on History. "
+        "Hover the ⓘ for their full stage odds. Click 🏁 to see their path to the Final."
+    )
 
-    n_matches = len(matches)
-    stage_now = {1: "Final", 2: "Semifinal", 4: "Quarterfinal", 8: "Round of 16"}.get(n_matches, f"{n_matches} matches")
+    # ── Stage 2: show the selected team's path-to-final summary ────────────
+    if st.session_state.get("path_team"):
+        pt = st.session_state["path_team"]
+        stages = odds.get(pt, {})
+        if stages:
+            order = ["Reaches Round of 16", "Reaches Quarterfinal", "Reaches Semifinal", "Reaches Final", "Champion"]
+            lines = [f"- **{s}**: {stages[s]:.1%}" for s in order if s in stages]
+            st.info(f"**{name_of(pt)}'s path to the Final** (based on {n_trials:,} simulated tournaments)\n\n"
+                   + "\n".join(lines))
+            st.caption(
+                "This is the numbers-first version. The animated line tracing this path "
+                "through the bracket is Stage 3 -- next up, if you'd like it."
+            )
+        if st.button("Clear"):
+            del st.session_state["path_team"]
+            st.rerun()
+
     st.caption(
         f"Found **{n_matches}** confirmed upcoming knockout match(es) — treating this as the "
         f"**{stage_now}** stage. Adjacent matches are assumed to pair up in the next round "
@@ -207,15 +257,7 @@ def main():
             f"official bracket if this looks off."
         )
 
-    fixture_tree = c.build_fixture_tree_from_matches(matches)
-
-    n_trials = st.select_slider("Monte Carlo trials", [5_000, 20_000, 50_000, 100_000], value=20_000)
-
-    with st.spinner(f"Running {n_trials:,} simulated tournaments..."):
-        model, scaler, T = c.load_model()
-        odds = c.simulate_tournament(fixture_tree, model, scaler, T, n_trials=n_trials)
-
-    # ── Build a clean results table ────────────────────────────────────────
+    # ── Build the results table ──────────────────────────────────────────
     all_stages = ["Reaches Round of 16", "Reaches Quarterfinal",
                   "Reaches Semifinal", "Reaches Final", "Champion"]
     present_stages = [s for s in all_stages if any(s in v for v in odds.values())]
