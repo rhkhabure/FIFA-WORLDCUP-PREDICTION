@@ -66,6 +66,62 @@ def main():
     upcoming = sorted(upcoming, key=lambda g: c.parse_local_date(g.get("local_date")) or "")
     matches = [(code_of(g["home_team_id"]), code_of(g["away_team_id"])) for g in upcoming]
 
+    # ── Stage 1: the actual visual bracket, with clickable team names ──────
+    def render_bracket_html(matches, model, scaler, T):
+        """
+        Build round-by-round columns. Round 0 is the real, confirmed
+        matchups (with each team's chance to win THAT match, a single
+        model call each -- cheap, no simulation needed). Later columns
+        are placeholders until those earlier matches are actually played.
+        """
+        rounds = [matches]
+        while len(rounds[-1]) > 1:
+            prev = rounds[-1]
+            rounds.append([(prev[i], prev[i + 1]) for i in range(0, len(prev), 2)])
+
+        stage_pool = ["Round of 16", "Quarterfinal", "Semifinal", "Final"]
+        stage_names = stage_pool[-len(rounds):]
+
+        cols_html = []
+
+        # Round 0 -- real matches, clickable, with per-match win odds
+        col = f'<div style="flex:1"><div style="text-align:center;font-weight:600;margin-bottom:10px">{stage_names[0]}</div>'
+        for (h, a) in rounds[0]:
+            p_h = c.resolve_advance_prob(h, a, model, scaler, T)
+            col += f'''
+            <div style="background:#161b22;border-radius:8px;padding:10px 12px;margin-bottom:18px">
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <a href="History?team={h}" target="_top" style="color:#378ADD;text-decoration:none;font-weight:500">{name_of(h)}</a>
+                <span style="color:#8b949e;font-size:13px">{p_h:.0%}</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
+                <a href="History?team={a}" target="_top" style="color:#E24B4A;text-decoration:none;font-weight:500">{name_of(a)}</a>
+                <span style="color:#8b949e;font-size:13px">{1 - p_h:.0%}</span>
+              </div>
+            </div>'''
+        col += '</div>'
+        cols_html.append(col)
+
+        # Later rounds -- not played yet, shown as placeholders
+        for r in range(1, len(rounds)):
+            col = f'<div style="flex:1"><div style="text-align:center;font-weight:600;margin-bottom:10px">{stage_names[r]}</div>'
+            n_gap = 2 ** r  # roughly space these to visually align with feeder matches
+            for _ in rounds[r]:
+                col += (
+                    '<div style="background:#0d1117;border:1px dashed #30363d;'
+                    f'border-radius:8px;padding:10px 12px;margin-bottom:{18*n_gap}px;'
+                    'color:#8b949e;text-align:center;font-size:13px">TBD</div>'
+                )
+            col += '</div>'
+            cols_html.append(col)
+
+        return '<div style="display:flex;gap:16px;align-items:flex-start">' + ''.join(cols_html) + '</div>'
+
+    st.subheader("Bracket")
+    model, scaler, T = c.load_model()
+    st.markdown(render_bracket_html(matches, model, scaler, T), unsafe_allow_html=True)
+    st.caption("Click a team name to see their most recent match on the History page.")
+
     n_matches = len(matches)
     stage_now = {1: "Final", 2: "Semifinal", 4: "Quarterfinal", 8: "Round of 16"}.get(n_matches, f"{n_matches} matches")
     st.caption(
