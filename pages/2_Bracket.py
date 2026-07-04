@@ -100,23 +100,44 @@ def main():
             st.query_params["team"] = code
             st.switch_page("pages/1_History.py")
 
-    def render_round_column(rnd, stage_label, is_first_round, side):
+    # H = approximate pixel height of one match box (button+flag rows+padding).
+    # This is an estimate -- Streamlit's native widgets don't report their exact
+    # rendered height, so this may need a small manual tweak once you see it live.
+    H = 132
+
+    def render_round_column(rnd, stage_label, is_first_round, side, round_index):
         st.markdown(f"<div style='text-align:center;font-weight:600;margin-bottom:8px'>{stage_label}</div>",
                    unsafe_allow_html=True)
+
+        # Classic bracket-alignment trick: each round's boxes sit centered
+        # between their two feeder boxes from the round before. The gap
+        # between entries doubles every round, and the top gets a half-size
+        # push down so the very first box centers correctly too.
+        pitch = H * (2 ** round_index)
+        top_offset = max(0, (pitch - H) / 2)
+        gap_between = max(0, pitch - H)
+
+        if top_offset > 0:
+            st.markdown(f"<div style='height:{top_offset:.0f}px'></div>", unsafe_allow_html=True)
+
         if is_first_round:
-            for (h, a) in rnd:
+            for idx, (h, a) in enumerate(rnd):
                 p_h = c.resolve_advance_prob(h, a, model, scaler, T)
                 with st.container(border=True):
                     render_team_row(h, p_h, f"{side}_{h}")
                     render_team_row(a, 1 - p_h, f"{side}_{a}")
-                st.write("")  # small vertical gap between matches
+                if idx < len(rnd) - 1 and gap_between > 0:
+                    st.markdown(f"<div style='height:{gap_between:.0f}px'></div>", unsafe_allow_html=True)
         else:
-            for _ in rnd:
+            for idx in range(len(rnd)):
                 st.markdown(
-                    "<div style='border:1px dashed #30363d;border-radius:8px;padding:16px 12px;"
-                    "margin-bottom:20px;color:#8b949e;text-align:center;font-size:13px'>TBD</div>",
+                    f"<div style='border:1px dashed #30363d;border-radius:8px;padding:16px 12px;"
+                    f"min-height:{H-32}px;display:flex;align-items:center;justify-content:center;"
+                    f"color:#8b949e;text-align:center;font-size:13px'>TBD</div>",
                     unsafe_allow_html=True,
                 )
+                if idx < len(rnd) - 1 and gap_between > 0:
+                    st.markdown(f"<div style='height:{gap_between:.0f}px'></div>", unsafe_allow_html=True)
 
     n = len(matches)
     half = n // 2
@@ -135,15 +156,32 @@ def main():
 
     for i in range(n_side_rounds):
         with columns[i]:
-            render_round_column(left_rounds[i], stage_names[i], i == 0, side="L")
+            render_round_column(left_rounds[i], stage_names[i], i == 0, side="L", round_index=i)
 
     with columns[n_side_rounds]:
-        render_round_column([("?", "?")], stage_names[-1], False, side="final")
+        # Final column, vertically centered the same way, with a trophy.
+        # Using an emoji rather than a real photo of the actual trophy --
+        # that's a specific, trademarked physical object, and a generic
+        # emoji sidesteps any of that cleanly while still looking festive.
+        final_pitch = H * (2 ** n_side_rounds)
+        final_offset = max(0, (final_pitch - H) / 2)
+        st.markdown(f"<div style='text-align:center;font-weight:600;margin-bottom:8px'>{stage_names[-1]}</div>",
+                   unsafe_allow_html=True)
+        if final_offset > 0:
+            st.markdown(f"<div style='height:{final_offset:.0f}px'></div>", unsafe_allow_html=True)
+        st.markdown(
+            f"<div style='border:1px dashed #30363d;border-radius:8px;padding:16px 12px;"
+            f"min-height:{H-32}px;display:flex;flex-direction:column;align-items:center;"
+            f"justify-content:center;gap:6px;color:#8b949e;text-align:center;font-size:13px'>"
+            f"<span style='font-size:28px'>🏆</span>TBD</div>",
+            unsafe_allow_html=True,
+        )
 
     for i in range(n_side_rounds):
         mirrored_i = n_side_rounds - 1 - i  # right side reads inward-to-outward
         with columns[n_side_rounds + 1 + i]:
-            render_round_column(right_rounds[mirrored_i], stage_names[mirrored_i], mirrored_i == 0, side="R")
+            render_round_column(right_rounds[mirrored_i], stage_names[mirrored_i], mirrored_i == 0,
+                               side="R", round_index=mirrored_i)
 
     st.caption("Click a team name to see their most recent match on the History page.")
 
