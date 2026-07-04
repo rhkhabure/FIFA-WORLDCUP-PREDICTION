@@ -173,13 +173,32 @@ def parse_time_elapsed(raw, status_finished):
 # FEATURE CONSTRUCTION FOR ONE LIVE GAME
 # ═══════════════════════════════════════════════════════════════════════════
 
+def safe_int(val, default=0):
+    """
+    The feed sends the literal text 'null' (not real JSON null) for scores
+    on games that haven't started yet. 'null' is a non-empty string, so
+    `val or default` never catches it -- int('null') just crashes. This
+    checks for that specific text first, same way parse_scorers() already
+    does for the scorer fields.
+    """
+    if val is None:
+        return default
+    s = str(val).strip().lower()
+    if s in ("", "null", "none"):
+        return default
+    try:
+        return int(s)
+    except ValueError:
+        return default
+
+
 def build_live_features(game, team_lookup):
     home_id, away_id = game["home_team_id"], game["away_team_id"]
     home_code = team_lookup.get(home_id, {}).get("fifa_code", "UNK")
     away_code = team_lookup.get(away_id, {}).get("fifa_code", "UNK")
 
-    hs = int(game.get("home_score") or 0)
-    as_ = int(game.get("away_score") or 0)
+    hs = safe_int(game.get("home_score"))
+    as_ = safe_int(game.get("away_score"))
     is_finished = str(game.get("finished", "")).upper() == "TRUE"
     minute = parse_time_elapsed(game.get("time_elapsed"), is_finished)
 
