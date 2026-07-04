@@ -103,14 +103,20 @@ def main():
 
     path_team = st.session_state.get("path_team")
 
-    def render_team_button(code, key_suffix):
+    def render_team_row(code, value_text, key_suffix):
+        """One team's row -- flag, clickable name, and a value on the right
+        (a live match's win %, a finished match's score, or nothing at all
+        for a bare confirmed-but-opponent-unknown slot). Every call site uses
+        this SAME layout so every box in the bracket ends up the same
+        height -- that's what keeps the whole column's spacing lined up."""
         col_flag, col_name, col_path = st.columns([1, 7, 0.6])
         with col_flag:
             flag = flag_of(code)
             if flag:
                 st.image(flag, width=26)
         with col_name:
-            clicked = st.button(name_of(code), key=f"team_{code}_{key_suffix}", use_container_width=True)
+            label = f"{name_of(code)}  ·  {value_text}" if value_text else name_of(code)
+            clicked = st.button(label, key=f"team_{code}_{key_suffix}", use_container_width=True)
         with col_path:
             if st.button("🏁", key=f"path_{code}_{key_suffix}", help="See path to Final"):
                 st.session_state["path_team"] = code
@@ -125,7 +131,7 @@ def main():
         other side."""
         code, confirmed = c.resolve_slot(game, side, game_by_id, team_lookup)
         if confirmed:
-            render_team_button(code, key_suffix)
+            render_team_row(code, "", key_suffix)
             return
 
         label = game.get(f"{side}_team_label", "") or "TBD"
@@ -141,8 +147,8 @@ def main():
                 flag = flag_of(path_team)
                 st.markdown(
                     f"<div style='border:1px solid #30363d;border-radius:8px;padding:8px 10px;"
-                    f"display:flex;align-items:center;gap:8px;animation:lightUp 0.6s ease forwards;"
-                    f"animation-delay:{delay}s'>"
+                    f"min-height:44px;display:flex;align-items:center;gap:8px;"
+                    f"animation:lightUp 0.6s ease forwards;animation-delay:{delay}s'>"
                     f"<img src='{flag}' style='width:22px;border-radius:3px'/>"
                     f"<div style='font-size:13px;color:#e6edf3'>{name_of(path_team)}</div>"
                     f"<div style='margin-left:auto;font-size:12px;color:#8b949e'>{pct:.0%}</div></div>",
@@ -152,13 +158,13 @@ def main():
 
         st.markdown(
             f"<div style='border:1px dashed #30363d;border-radius:8px;padding:10px;"
+            f"min-height:44px;display:flex;align-items:center;justify-content:center;"
             f"color:#8b949e;text-align:center;font-size:12px'>{label}</div>",
             unsafe_allow_html=True,
         )
 
     def render_node(node, key_suffix):
         game = node["game"]
-        h = c.tree_height(node)
         is_finished = str(game.get("finished", "")).upper() == "TRUE"
         home_code, home_conf = c.resolve_slot(game, "home", game_by_id, team_lookup)
         away_code, away_conf = c.resolve_slot(game, "away", game_by_id, team_lookup)
@@ -166,37 +172,15 @@ def main():
         with st.container(border=True):
             if is_finished and home_conf and away_conf:
                 hs, as_ = c.safe_int(game.get("home_score")), c.safe_int(game.get("away_score"))
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.image(flag_of(home_code), width=22)
-                    st.caption(f"{name_of(home_code)}  **{hs}**")
-                with col2:
-                    st.image(flag_of(away_code), width=22)
-                    st.caption(f"{name_of(away_code)}  **{as_}**")
+                render_team_row(home_code, str(hs), f"{key_suffix}_h")
+                render_team_row(away_code, str(as_), f"{key_suffix}_a")
             elif home_conf and away_conf:
                 p_h = c.resolve_advance_prob(home_code, away_code, model, scaler, T)
-                render_team_button_with_pct(home_code, p_h, f"{key_suffix}_h")
-                render_team_button_with_pct(away_code, 1 - p_h, f"{key_suffix}_a")
+                render_team_row(home_code, f"{p_h:.0%}", f"{key_suffix}_h")
+                render_team_row(away_code, f"{1 - p_h:.0%}", f"{key_suffix}_a")
             else:
                 render_side(game, "home", f"{key_suffix}_h")
                 render_side(game, "away", f"{key_suffix}_a")
-
-    def render_team_button_with_pct(code, prob, key_suffix):
-        col_flag, col_name, col_path = st.columns([1, 7, 0.6])
-        with col_flag:
-            flag = flag_of(code)
-            if flag:
-                st.image(flag, width=26)
-        with col_name:
-            clicked = st.button(f"{name_of(code)}  ·  {prob:.0%}",
-                                key=f"team_{code}_{key_suffix}", use_container_width=True)
-        with col_path:
-            if st.button("🏁", key=f"path_{code}_{key_suffix}", help="See path to Final"):
-                st.session_state["path_team"] = code
-        if clicked:
-            st.query_params.clear()
-            st.query_params["team"] = code
-            st.switch_page("pages/1_History.py")
 
     def nodes_at_height(node, target_h):
         if node is None:
