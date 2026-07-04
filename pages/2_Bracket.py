@@ -1,28 +1,19 @@
 """
-Bracket page — Monte Carlo tournament odds.
+Bracket page — built around the feed's REAL bracket wiring.
 
-Auto-detects the current stage of the knockout bracket from the live feed
-(finds every not-yet-played knockout match that already has both teams
-confirmed) and simulates the rest of the tournament thousands of times to
-answer: "what's each team's odds of reaching each remaining stage, and of
-winning it all?"
+Every knockout match beyond Round of 16 carries real labels like
+"Winner Match 89" telling us exactly which earlier match decides that
+slot. We follow those labels directly instead of assuming adjacent
+matches pair up -- proven necessary: the real data showed match 90 fed
+by matches 73 AND 75, not the adjacent 73/74 our old code assumed.
 
-One documented assumption: adjacent confirmed fixtures pair up in the
-standard tournament way (fixture 1 & 2's winners meet in the next round,
-3 & 4's winners meet in the other slot, etc.) rather than us hand-typing
-the entire bracket from a screenshot -- a much safer bet than transcribing
-30+ match pairings by eye.
-
-The live feed can change the number of confirmed fixtures while someone is
-browsing (a match finishes, the count drops from 8 to 7, etc.), so that
-count is checked for a valid bracket shape BEFORE any pairing logic runs,
-rather than crashing partway through.
-
-Click 🏁 next to a team to trace their path: instead of a separate strip,
-their own remaining TBD boxes in the ACTUAL bracket light up with their
-flag and stage odds, in sequence, ending on the Final box.
+Each side of every match resolves INDEPENDENTLY: the moment a team wins
+their earlier match, they show up in their next box immediately, even
+if the team who'll eventually face them hasn't been decided yet -- same
+as the real FIFA bracket, where a team can sit alone waiting.
 """
 
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -45,6 +36,8 @@ PATH_CSS = """
 </style>
 """
 
+_WINNER_RE = re.compile(r"Winner Match (\d+)")
+
 
 def main():
     try:
@@ -55,9 +48,6 @@ def main():
         st.stop()
 
     team_lookup = c.build_team_lookup(teams)
-
-    def code_of(team_id):
-        return team_lookup.get(team_id, {}).get("fifa_code", "UNK")
 
     def name_of(code):
         for t in teams:
@@ -71,92 +61,127 @@ def main():
                 return t.get("flag", "")
         return ""
 
-    # ── Find confirmed, not-yet-played knockout fixtures ───────────────────
-    knockout_games = [g for g in games if g.get("type") != "group"]
-    upcoming = [
-        g for g in knockout_games
-        if str(g.get("finished", "")).upper() != "TRUE"
-        and g.get("home_team_id") in team_lookup
-        and g.get("away_team_id") in team_lookup
-    ]
+    def contains_team(node, team_code):
+        """Does this node's real, eventual lineage include this team?"""
+        if node is None:
+            return False
+        if node["kind"] == "match":
+            game = node["game"]
+            for side in ("home", "away"):
+                tid = game.get(f"{side}_team_id")
+                if tid in team_lookup and team_lookup[tid].get("fifa_code") == team_code:
+                    return True
+            return False
+        return contains_team(node["left"], team_code) or contains_team(node["right"], team_code)
 
-    if not upcoming:
-        st.info(
-            "No confirmed upcoming knockout fixtures found in the feed right now. "
-            "This page will fill in automatically once the next round's matchups are set."
-        )
+    # ── Find every knockout-type match and index it by ID ───────────────────
+    knockout_games = [g for g in games if (g.get("type") or "").lower() in c.ROUND_ORDER]
+    if not knockout_games:
+        st.info("No knockout-stage matches found in the feed yet.")
         st.stop()
+    game_by_id = {g["id"]: g for g in knockout_games}
 
-    upcoming = sorted(upcoming, key=lambda g: c.parse_local_date(g.get("local_date")) or "")
-    matches = [(code_of(g["home_team_id"]), code_of(g["away_team_id"])) for g in upcoming]
-
-    # ── THE CRASH FIX: check the bracket shape is valid BEFORE any pairing
-    #    logic runs, not after. The live feed can change this count while
-    #    someone is browsing (a match finishes mid-session), so this is a
-    #    real, expected situation to handle gracefully, not a rare edge case.
-    n_check = len(matches)
-    if n_check == 0 or (n_check & (n_check - 1)) != 0:
+    final_games = [g for g in knockout_games if (g.get("type") or "").lower() == "final"]
+    if not final_games:
         st.warning(
-            f"Currently tracking {n_check} confirmed upcoming knockout match(es), which "
-            f"isn't a clean bracket size (1, 2, 4, 8, or 16). This usually means a result "
-            f"just came in while the feed was being read. Refresh in a moment once the "
-            f"count settles back to a clean power of two."
+            "Couldn't find a 'final'-type match in the feed yet -- the bracket page "
+            "needs that to build the full tree. Check back once it appears."
         )
         st.stop()
+    final_game = final_games[0]
 
-    def build_rounds(matches_subset):
-        rounds = [matches_subset]
-        while len(rounds[-1]) > 1:
-            prev = rounds[-1]
-            rounds.append([(prev[i], prev[i + 1]) for i in range(0, len(prev), 2)])
-        return rounds
+    # ── Build the REAL bracket tree by following the actual labels ──────────
+    tree = c.build_real_bracket_tree(final_game, game_by_id)
+    total_height = c.tree_height(tree)
 
-    half = n_check // 2
-    left_rounds = build_rounds(matches[:half])
-    right_rounds = build_rounds(matches[half:])
-    n_side_rounds = len(left_rounds)
-
-    stage_pool = ["Round of 16", "Quarterfinal", "Semifinal", "Final"]
-    stage_names = stage_pool[-(n_side_rounds + 1):]
-
-    n_matches = len(matches)
-    stage_now = {1: "Final", 2: "Semifinal", 4: "Quarterfinal", 8: "Round of 16"}.get(n_matches, f"{n_matches} matches")
-
-    # ── Monte Carlo simulation, run before rendering so the bracket boxes
-    #    can use these numbers directly ──────────────────────────────────
-    model, scaler, T = c.load_model()
-    fixture_tree = c.build_fixture_tree_from_matches(matches)
+    # ── Monte Carlo simulation, using the REAL tree (not an assumed one) ────
+    fixture_tree = c.tree_to_fixture(tree, game_by_id, team_lookup)
     n_trials = st.select_slider("Monte Carlo trials", [5_000, 20_000, 50_000, 100_000], value=20_000)
+    model, scaler, T = c.load_model()
     with st.spinner(f"Running {n_trials:,} simulated tournaments..."):
         odds = c.simulate_tournament(fixture_tree, model, scaler, T, n_trials=n_trials)
 
-    # ── Figure out, for the currently-selected team, which specific
-    #    placeholder box in each later round is actually theirs ─────────
     path_team = st.session_state.get("path_team")
-    path_side, path_start_idx = None, None
-    if path_team:
-        left_matches, right_matches = matches[:half], matches[half:]
-        for i, (h, a) in enumerate(left_matches):
-            if path_team in (h, a):
-                path_side, path_start_idx = "L", i
-                break
-        if path_side is None:
-            for i, (h, a) in enumerate(right_matches):
-                if path_team in (h, a):
-                    path_side, path_start_idx = "R", i
-                    break
 
-    def relevant_box_index(round_idx):
-        """Which box in this later round is on the selected team's own path."""
-        return path_start_idx // (2 ** round_idx)
+    def render_team_button(code, key_suffix):
+        col_flag, col_name, col_path = st.columns([1, 7, 0.6])
+        with col_flag:
+            flag = flag_of(code)
+            if flag:
+                st.image(flag, width=26)
+        with col_name:
+            clicked = st.button(name_of(code), key=f"team_{code}_{key_suffix}", use_container_width=True)
+        with col_path:
+            if st.button("🏁", key=f"path_{code}_{key_suffix}", help="See path to Final"):
+                st.session_state["path_team"] = code
+        if clicked:
+            st.query_params.clear()
+            st.query_params["team"] = code
+            st.switch_page("pages/1_History.py")
 
-    # ── The visual bracket ──────────────────────────────────────────────────
-    st.markdown(PATH_CSS, unsafe_allow_html=True)
-    st.subheader("Bracket")
+    def render_side(game, side, key_suffix):
+        """One side of a match box -- confirmed team, a speculative path
+        preview, or a plain waiting label, decided independently of the
+        other side."""
+        code, confirmed = c.resolve_slot(game, side, game_by_id, team_lookup)
+        if confirmed:
+            render_team_button(code, key_suffix)
+            return
 
-    H = 132  # estimated pixel height of one match box -- tune if spacing looks off
+        label = game.get(f"{side}_team_label", "") or "TBD"
+        m = _WINNER_RE.search(label)
+        if path_team and m and m.group(1) in game_by_id:
+            src_tree = c.build_real_bracket_tree(game_by_id[m.group(1)], game_by_id)
+            if contains_team(src_tree, path_team):
+                h = c.tree_height({"kind": "pair", "game": game, "left": src_tree, "right": None})
+                delay = h * 0.5
+                stage_label = c.TYPE_TO_STAGE_LABEL.get((game.get("type") or "").lower(), "")
+                stage_key = f"Reaches {stage_label}" if stage_label else None
+                pct = odds.get(path_team, {}).get(stage_key, 0.0) if stage_key else 0.0
+                flag = flag_of(path_team)
+                st.markdown(
+                    f"<div style='border:1px solid #30363d;border-radius:8px;padding:8px 10px;"
+                    f"display:flex;align-items:center;gap:8px;animation:lightUp 0.6s ease forwards;"
+                    f"animation-delay:{delay}s'>"
+                    f"<img src='{flag}' style='width:22px;border-radius:3px'/>"
+                    f"<div style='font-size:13px;color:#e6edf3'>{name_of(path_team)}</div>"
+                    f"<div style='margin-left:auto;font-size:12px;color:#8b949e'>{pct:.0%}</div></div>",
+                    unsafe_allow_html=True,
+                )
+                return
 
-    def render_team_row(code, prob, side):
+        st.markdown(
+            f"<div style='border:1px dashed #30363d;border-radius:8px;padding:10px;"
+            f"color:#8b949e;text-align:center;font-size:12px'>{label}</div>",
+            unsafe_allow_html=True,
+        )
+
+    def render_node(node, key_suffix):
+        game = node["game"]
+        h = c.tree_height(node)
+        is_finished = str(game.get("finished", "")).upper() == "TRUE"
+        home_code, home_conf = c.resolve_slot(game, "home", game_by_id, team_lookup)
+        away_code, away_conf = c.resolve_slot(game, "away", game_by_id, team_lookup)
+
+        with st.container(border=True):
+            if is_finished and home_conf and away_conf:
+                hs, as_ = c.safe_int(game.get("home_score")), c.safe_int(game.get("away_score"))
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.image(flag_of(home_code), width=22)
+                    st.caption(f"{name_of(home_code)}  **{hs}**")
+                with col2:
+                    st.image(flag_of(away_code), width=22)
+                    st.caption(f"{name_of(away_code)}  **{as_}**")
+            elif home_conf and away_conf:
+                p_h = c.resolve_advance_prob(home_code, away_code, model, scaler, T)
+                render_team_button_with_pct(home_code, p_h, f"{key_suffix}_h")
+                render_team_button_with_pct(away_code, 1 - p_h, f"{key_suffix}_a")
+            else:
+                render_side(game, "home", f"{key_suffix}_h")
+                render_side(game, "away", f"{key_suffix}_a")
+
+    def render_team_button_with_pct(code, prob, key_suffix):
         col_flag, col_name, col_path = st.columns([1, 7, 0.6])
         with col_flag:
             flag = flag_of(code)
@@ -164,108 +189,79 @@ def main():
                 st.image(flag, width=26)
         with col_name:
             clicked = st.button(f"{name_of(code)}  ·  {prob:.0%}",
-                                key=f"team_{code}_{side}", use_container_width=True)
+                                key=f"team_{code}_{key_suffix}", use_container_width=True)
         with col_path:
-            if st.button("🏁", key=f"path_{code}_{side}", help="See path to Final"):
+            if st.button("🏁", key=f"path_{code}_{key_suffix}", help="See path to Final"):
                 st.session_state["path_team"] = code
         if clicked:
             st.query_params.clear()
             st.query_params["team"] = code
             st.switch_page("pages/1_History.py")
 
-    def render_placeholder_box(round_idx, box_idx, side, stage_label):
-        """One TBD box -- or, if it's on the selected team's own path, their
-        flag and odds of reaching THIS stage, with a green light-up glow."""
-        is_on_path = (
-            path_team is not None and side == path_side
-            and box_idx == relevant_box_index(round_idx)
-        )
-        if is_on_path:
-            delay = round_idx * 0.5
-            stage_key = f"Reaches {stage_label}"
-            pct = odds.get(path_team, {}).get(stage_key, 0.0)
-            flag = flag_of(path_team)
-            extra = ""
-            if stage_label == "Final":
-                champ_pct = odds.get(path_team, {}).get("Champion", 0.0)
-                extra = f"<div style='font-size:11px;color:#F0C040;margin-top:2px'>🏆 {champ_pct:.0%}</div>"
-            st.markdown(
-                f"<div style='border:1px solid #30363d;border-radius:8px;padding:12px;"
-                f"min-height:{H-32}px;display:flex;flex-direction:column;align-items:center;"
-                f"justify-content:center;gap:4px;animation:lightUp 0.6s ease forwards;"
-                f"animation-delay:{delay}s'>"
-                f"<img src='{flag}' style='width:26px;border-radius:3px'/>"
-                f"<div style='font-size:13px;color:#e6edf3;font-weight:500'>{name_of(path_team)}</div>"
-                f"<div style='font-size:12px;color:#8b949e'>{pct:.0%}</div>{extra}</div>",
-                unsafe_allow_html=True,
-            )
-        else:
-            st.markdown(
-                f"<div style='border:1px dashed #30363d;border-radius:8px;padding:16px 12px;"
-                f"min-height:{H-32}px;display:flex;align-items:center;justify-content:center;"
-                f"color:#8b949e;text-align:center;font-size:13px'>TBD</div>",
-                unsafe_allow_html=True,
-            )
+    def nodes_at_height(node, target_h):
+        if node is None:
+            return []
+        h = c.tree_height(node)
+        if h == target_h:
+            return [node]
+        if node["kind"] == "match":
+            return []
+        return nodes_at_height(node["left"], target_h) + nodes_at_height(node["right"], target_h)
 
-    def render_round_column(rnd, stage_label, is_first_round, side, round_index):
-        st.markdown(f"<div style='text-align:center;font-weight:600;margin-bottom:8px'>{stage_label}</div>",
+    def render_side_columns(root, columns, col_start, mirrored):
+        H = 132
+        side_height = c.tree_height(root)
+
+        heights = list(range(0, side_height + 1))
+        col_order = heights if not mirrored else list(reversed(heights))
+        for i, h in enumerate(col_order):
+            col_idx = col_start + i
+            nodes = nodes_at_height(root, h)
+            stage_label = c.TYPE_TO_STAGE_LABEL.get((nodes[0]["game"].get("type") or "").lower(), f"Round {h}") if nodes else ""
+            with columns[col_idx]:
+                st.markdown(f"<div style='text-align:center;font-weight:600;margin-bottom:8px'>{stage_label}</div>",
+                           unsafe_allow_html=True)
+                pitch = H * (2 ** h)
+                top_offset = max(0, (pitch - H) / 2)
+                gap_between = max(0, pitch - H)
+                if top_offset > 0:
+                    st.markdown(f"<div style='height:{top_offset:.0f}px'></div>", unsafe_allow_html=True)
+                for idx, node in enumerate(nodes):
+                    render_node(node, f"{'L' if not mirrored else 'R'}_{h}_{idx}")
+                    if idx < len(nodes) - 1 and gap_between > 0:
+                        st.markdown(f"<div style='height:{gap_between:.0f}px'></div>", unsafe_allow_html=True)
+
+    st.markdown(PATH_CSS, unsafe_allow_html=True)
+    st.subheader("Bracket")
+
+    left_side_height = c.tree_height(tree["left"]) if tree["left"] else 0
+    right_side_height = c.tree_height(tree["right"]) if tree["right"] else 0
+    n_left_cols = left_side_height + 1
+    n_right_cols = right_side_height + 1
+
+    def col_weight(h):
+        return 2.4 if h == 0 else 1.0
+
+    left_weights = [col_weight(h) for h in range(n_left_cols)]
+    right_weights = [col_weight(h) for h in reversed(range(n_right_cols))]
+    columns = st.columns(left_weights + [1.3] + right_weights)
+
+    if tree["left"]:
+        render_side_columns(tree["left"], columns, 0, mirrored=False)
+
+    with columns[n_left_cols]:
+        st.markdown(f"<div style='text-align:center;font-weight:600;margin-bottom:8px'>Final</div>",
                    unsafe_allow_html=True)
-        pitch = H * (2 ** round_index)
-        top_offset = max(0, (pitch - H) / 2)
-        gap_between = max(0, pitch - H)
+        H = 132
+        pitch = H * (2 ** max(left_side_height, right_side_height))
+        offset = max(0, (pitch - H) / 2)
+        if offset > 0:
+            st.markdown(f"<div style='height:{offset:.0f}px'></div>", unsafe_allow_html=True)
+        render_node(tree, "final")
+        st.markdown("<div style='text-align:center;font-size:24px'>🏆</div>", unsafe_allow_html=True)
 
-        if top_offset > 0:
-            st.markdown(f"<div style='height:{top_offset:.0f}px'></div>", unsafe_allow_html=True)
-
-        if is_first_round:
-            for idx, (h, a) in enumerate(rnd):
-                p_h = c.resolve_advance_prob(h, a, model, scaler, T)
-                with st.container(border=True):
-                    render_team_row(h, p_h, f"{side}_{h}")
-                    render_team_row(a, 1 - p_h, f"{side}_{a}")
-                if idx < len(rnd) - 1 and gap_between > 0:
-                    st.markdown(f"<div style='height:{gap_between:.0f}px'></div>", unsafe_allow_html=True)
-        else:
-            for idx in range(len(rnd)):
-                render_placeholder_box(round_index, idx, side, stage_label)
-                if idx < len(rnd) - 1 and gap_between > 0:
-                    st.markdown(f"<div style='height:{gap_between:.0f}px'></div>", unsafe_allow_html=True)
-
-    def col_weight(round_idx):
-        return 2.4 if round_idx == 0 else 1.0
-
-    left_weights = [col_weight(i) for i in range(n_side_rounds)]
-    right_weights = [col_weight(n_side_rounds - 1 - i) for i in range(n_side_rounds)]
-    final_weight = 1.3
-    columns = st.columns(left_weights + [final_weight] + right_weights)
-
-    for i in range(n_side_rounds):
-        with columns[i]:
-            render_round_column(left_rounds[i], stage_names[i], i == 0, side="L", round_index=i)
-
-    with columns[n_side_rounds]:
-        final_pitch = H * (2 ** (n_side_rounds - 1))
-        final_offset = max(0, (final_pitch - H) / 2)
-        st.markdown(f"<div style='text-align:center;font-weight:600;margin-bottom:8px'>{stage_names[-1]}</div>",
-                   unsafe_allow_html=True)
-        if final_offset > 0:
-            st.markdown(f"<div style='height:{final_offset:.0f}px'></div>", unsafe_allow_html=True)
-        if path_team is not None:
-            render_placeholder_box(n_side_rounds, 0, path_side, "Final")
-        else:
-            st.markdown(
-                f"<div style='border:1px dashed #30363d;border-radius:8px;padding:16px 12px;"
-                f"min-height:{H-32}px;display:flex;flex-direction:column;align-items:center;"
-                f"justify-content:center;gap:6px;color:#8b949e;text-align:center;font-size:13px'>"
-                f"<span style='font-size:28px'>🏆</span>TBD</div>",
-                unsafe_allow_html=True,
-            )
-
-    for i in range(n_side_rounds):
-        mirrored_i = n_side_rounds - 1 - i
-        with columns[n_side_rounds + 1 + i]:
-            render_round_column(right_rounds[mirrored_i], stage_names[mirrored_i], mirrored_i == 0,
-                               side="R", round_index=mirrored_i)
+    if tree["right"]:
+        render_side_columns(tree["right"], columns, n_left_cols + 1, mirrored=True)
 
     st.caption("Click a team name to see their most recent match on History. Click 🏁 to trace their path to the Final.")
 
@@ -273,17 +269,17 @@ def main():
         del st.session_state["path_team"]
         st.rerun()
 
-    st.caption(
-        f"Found **{n_matches}** confirmed upcoming knockout match(es) — treating this as the "
-        f"**{stage_now}** stage. Adjacent matches are assumed to pair up in the next round "
-        f"(standard bracket convention)."
-    )
-
     with st.expander("Which matches were found"):
-        for (h, a) in matches:
-            st.write(f"{name_of(h)} ({h}) vs {name_of(a)} ({a})")
+        for g in knockout_games:
+            hc, _ = c.resolve_slot(g, "home", game_by_id, team_lookup)
+            ac, _ = c.resolve_slot(g, "away", game_by_id, team_lookup)
+            hl = name_of(hc) if hc else g.get("home_team_label", "TBD")
+            al = name_of(ac) if ac else g.get("away_team_label", "TBD")
+            stage = c.TYPE_TO_STAGE_LABEL.get((g.get("type") or "").lower(), g.get("type", "?"))
+            status = "FINISHED" if str(g.get("finished","")).upper()=="TRUE" else "upcoming"
+            st.write(f"[{stage}] {hl} vs {al}  ({status})")
 
-    # ── Build the results table ──────────────────────────────────────────
+    # ── Results table ─────────────────────────────────────────────────────
     all_stages = ["Reaches Round of 16", "Reaches Quarterfinal",
                   "Reaches Semifinal", "Reaches Final", "Champion"]
     present_stages = [s for s in all_stages if any(s in v for v in odds.values())]
@@ -304,30 +300,22 @@ def main():
         log_path.parent.mkdir(parents=True, exist_ok=True)
         stamp = datetime.now(timezone.utc).isoformat()
         log_rows = [
-            {"timestamp": stamp, "stage_detected": stage_now, "team": team,
-             "predicted_stage": stage, "probability": round(prob, 4)}
+            {"timestamp": stamp, "team": team, "predicted_stage": stage, "probability": round(prob, 4)}
             for team, stages in odds.items() for stage, prob in stages.items()
         ]
         log_df = pd.DataFrame(log_rows)
         log_df.to_csv(log_path, mode="a", header=not log_path.exists(), index=False)
-        st.success(
-            f"Saved {len(log_rows)} odds to results/bracket_odds_history.csv at {stamp[:19]} UTC. "
-            f"Once the tournament ends, compare this file against what actually happened."
-        )
+        st.success(f"Saved {len(log_rows)} odds to results/bracket_odds_history.csv at {stamp[:19]} UTC.")
     st.caption(
         "This is a manual save, on purpose -- Streamlit reruns this page on every click and "
-        "slider move, so auto-saving every time would flood the file with near-duplicate rows. "
-        "Click the button once per day (or whenever you want a checkpoint) instead."
+        "slider move, so auto-saving every time would flood the file with near-duplicate rows."
     )
 
-    st.dataframe(
-        df.style.format("{:.1%}"),
-        use_container_width=True,
-    )
+    st.dataframe(df.style.format("{:.1%}"), use_container_width=True)
     st.caption(
-        f"Based on {n_trials:,} simulated tournaments using football_v2.pth. "
-        f"Draw probability in each knockout match is split 50/50 between the two teams "
-        f"(no draws survive to a next round -- extra time and penalties decide it)."
+        f"Based on {n_trials:,} simulated tournaments using football_v2.pth, built from the feed's "
+        f"real 'Winner Match N' wiring -- not an assumed pairing. Draw probability in each knockout "
+        f"match is split 50/50 between the two teams."
     )
 
 
