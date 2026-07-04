@@ -1,0 +1,2014 @@
+{
+  "1": {
+    "home_team": "MEX",
+    "away_team": "RSA",
+    "home_score": 2,
+    "away_score": 0,
+    "home_scorers": [
+      [
+        "J. Qui\u00f1ones",
+        9
+      ],
+      [
+        "R. Jim\u00e9nez",
+        67
+      ]
+    ],
+    "away_scorers": [],
+    "date": "06/11/2026 13:00",
+    "stage": "group"
+  },
+  "2": {
+    "home_team": "KOR",
+    "away_team": "CZE",
+    "home_score": 2,
+    "away_score": 1,
+    "home_scorers": [
+      [
+        "I.B. Hwang",
+        67
+      ],
+      [
+        "H.G. Oh",
+        80
+      ]
+    ],
+    "away_scorers": [
+      [
+        "L. Krej\u010d\u00ed",
+        59
+      ]
+    ],
+    "date": "06/11/2026 20:00",
+    "stage": "group"
+  },
+  "3": {
+    "home_team": "CAN",
+    "away_team": "BIH",
+    "home_score": 1,
+    "away_score": 1,
+    "home_scorers": [
+      [
+        "C. Larin",
+        11
+      ]
+    ],
+    "away_scorers": [
+      [
+        "Jovo Luki\u0107",
+        21
+      ]
+    ],
+    "date": "06/12/2026 15:00",
+    "stage": "group"
+  },
+  "4": {
+    "home_team": "USA",
+    "away_team": "PAR",
+    "home_score": 4,
+    "away_score": 1,
+    "home_scorers": [
+      [
+        "D. Bobadilla",
+        7
+      ],
+      [
+        "F. Balogun",
+        31
+      ],
+      [
+        "F. Balogun",
+        50
+      ],
+      [
+        "G. Reyna",
+        90
+      ]
+    ],
+    "away_scorers": [
+      [
+        "Maur\u00edcio",
+        73
+      ]
+    ],
+    "date": "06/12/2026 18:00",
+    "stage": "group"
+  },
+  "5": {
+    "home_team": "HAI",
+    "away_team": "SCO",
+    "home_score": 0,
+    "away_score": 1,
+    "home_scorers": [],
+    "away_scorers": [
+      [
+        "J. McGinn",
+        28
+      ]
+    ],
+    "date": "06/13/2026 21:00",
+    "stage": "group"
+  },
+  "6": {
+    "home_team": "AUS",
+    "away_team": "TUR",
+    "home_score": 2,
+    "away_score": 0,
+    "home_scorers": [
+      [
+        "Nestory Irankunda",
+        27
+      ],
+      [
+        "C. Metcalfe",
+        75
+      ]
+    ],
+    "away_scorers": [],
+    "date": "06/13/2026 21:00",
+    "stage": "group"
+  },
+  "7": {
+    "home_team": "BRA",
+    "away_team": "MAR",
+    "home_score": 1,
+    "away_score": 1,
+    "home_scorers": [
+      [
+        "V. J\u00fanior",
+        32
+      ]
+    ],
+    "away_scorers": [
+      [
+        "I. Saibari",
+        21
+      ]
+    ],
+    "date": "06/13/2026 18:00",
+    "stage": "group"
+  },
+  "8": {
+    "home_team": "QAT",
+    "away_team": "SUI",
+    "home_score": 1,
+    "away_score": 1,
+    "home_scorers": [
+      [
+        "B. Khoukhi",
+        90
+      ]
+    ],
+    "away_scorers": [
+      [
+        "Breel Embolo",
+        17
+      ]
+    ],
+    "date": "06/13/2026 12:00",
+    "stage": "group"
+  },
+  "9": {
+    "home_team": "CIV",
+    "away_team": "ECU",
+    "home_score": 1,
+    "away_score": 0,
+    "home_scorers": [
+      [
+        "A. Diallo",
+        90
+      ]
+    ],
+    "away_scorers": [],
+    "date": "06/14/2026 19:00",
+    "stage": "group"
+  },
+  "10": {
+    "home_team": "GER",
+    "away_team": "CUW",
+    "home_score": 7,
+    "away_score": 1,
+    "home_scorers": [
+      [
+        "Felix Nmecha",
+        7
+      ],
+      [
+        "N. Schlotterbeck",
+        38
+      ],
+      [
+        "J. Musiala",
+        47
+      ],
+      [
+        "K. Havertz",
+        50
+      ],
+      [
+        "N. Brown",
+        68
+      ],
+      [
+        "D. Undav",
+        78
+      ],
+      [
+        "K. Havertz",
+        88
+      ]
+    ],
+    "away_scorers": [
+      [
+        "L. Comenencia",
+        21
+      ]
+    ],
+    "date": "06/14/2026 12:00",
+    "stage": "group"
+  },
+  "11": {
+    "home_team": "NED",
+    "away_team": "JPN",
+    "home_score": 2,
+    "away_score": 2,
+    "home_scorers": [
+      [
+        "Virgil van Dijk",
+        51
+      ],
+      [
+        "C. Summerville",
+        64
+      ]
+    ],
+    "away_scorers": [
+      [
+        "K. Nakamura",
+        57
+      ],
+      [
+        "K. Ogawa",
+        89
+      ]
+    ],
+    "date": "06/14/2026 15:00",
+    "stage": "group"
+  },
+  "12": {
+    "home_team": "SWE",
+    "away_team": "TUN",
+    "home_score": 5,
+    "away_score": 1,
+    "home_scorers": [
+      [
+        "Y.Ayari",
+        7
+      ],
+      [
+        "A. Isak",
+        30
+      ],
+      [
+        "V. Gy\u00f6keres",
+        59
+      ],
+      [
+        "M. Svanberg",
+        84
+      ],
+      [
+        "Y.Ayari",
+        90
+      ]
+    ],
+    "away_scorers": [
+      [
+        "O. Rekik",
+        43
+      ]
+    ],
+    "date": "06/14/2026 20:00",
+    "stage": "group"
+  },
+  "13": {
+    "home_team": "IRN",
+    "away_team": "NZL",
+    "home_score": 2,
+    "away_score": 2,
+    "home_scorers": [
+      [
+        "Ramin Rezaiian",
+        32
+      ],
+      [
+        "Mohammad Mohebi",
+        64
+      ]
+    ],
+    "away_scorers": [
+      [
+        "Elijah Just",
+        7
+      ],
+      [
+        "Elijah Just",
+        54
+      ]
+    ],
+    "date": "06/15/2026 18:00",
+    "stage": "group"
+  },
+  "14": {
+    "home_team": "ESP",
+    "away_team": "CPV",
+    "home_score": 0,
+    "away_score": 0,
+    "home_scorers": [],
+    "away_scorers": [],
+    "date": "06/15/2026 12:00",
+    "stage": "group"
+  },
+  "15": {
+    "home_team": "BEL",
+    "away_team": "EGY",
+    "home_score": 1,
+    "away_score": 1,
+    "home_scorers": [
+      [
+        "Mohamed Hany",
+        66
+      ]
+    ],
+    "away_scorers": [
+      [
+        "Emam Ashour",
+        20
+      ]
+    ],
+    "date": "06/15/2026 12:00",
+    "stage": "group"
+  },
+  "16": {
+    "home_team": "KSA",
+    "away_team": "URU",
+    "home_score": 1,
+    "away_score": 1,
+    "home_scorers": [
+      [
+        "Abdulelah Al-Amri",
+        41
+      ]
+    ],
+    "away_scorers": [
+      [
+        "Maximiliano Ara\u00fajo",
+        80
+      ]
+    ],
+    "date": "06/15/2026 18:00",
+    "stage": "group"
+  },
+  "17": {
+    "home_team": "FRA",
+    "away_team": "SEN",
+    "home_score": 3,
+    "away_score": 1,
+    "home_scorers": [
+      [
+        "K. Mbapp\u00e9",
+        66
+      ],
+      [
+        "B. Barcola",
+        82
+      ],
+      [
+        "K. Mbapp\u00e9",
+        90
+      ]
+    ],
+    "away_scorers": [
+      [
+        "I. Mbaye",
+        90
+      ]
+    ],
+    "date": "06/16/2026 15:00",
+    "stage": "group"
+  },
+  "18": {
+    "home_team": "IRQ",
+    "away_team": "NOR",
+    "home_score": 1,
+    "away_score": 4,
+    "home_scorers": [
+      [
+        "Aymen Hussein",
+        39
+      ]
+    ],
+    "away_scorers": [
+      [
+        "Erling Haaland",
+        29
+      ],
+      [
+        "Erling Haaland",
+        43
+      ],
+      [
+        "Leo \u00d8stig\u00e5rd",
+        76
+      ],
+      [
+        "Aymen Hussein",
+        90
+      ]
+    ],
+    "date": "06/16/2026 18:00",
+    "stage": "group"
+  },
+  "19": {
+    "home_team": "ARG",
+    "away_team": "ALG",
+    "home_score": 3,
+    "away_score": 0,
+    "home_scorers": [
+      [
+        "Lionel Messi",
+        17
+      ],
+      [
+        "Lionel Messi",
+        60
+      ],
+      [
+        "Lionel Messi",
+        76
+      ]
+    ],
+    "away_scorers": [],
+    "date": "06/16/2026 20:00",
+    "stage": "group"
+  },
+  "20": {
+    "home_team": "AUT",
+    "away_team": "JOR",
+    "home_score": 3,
+    "away_score": 1,
+    "home_scorers": [
+      [
+        "Rvmanv Ashmid",
+        21
+      ],
+      [
+        "Izn Alarb",
+        76
+      ]
+    ],
+    "away_scorers": [
+      [
+        "Ali Avlvan",
+        50
+      ]
+    ],
+    "date": "06/16/2026 21:00",
+    "stage": "group"
+  },
+  "21": {
+    "home_team": "POR",
+    "away_team": "COD",
+    "home_score": 1,
+    "away_score": 1,
+    "home_scorers": [
+      [
+        "J. Neves",
+        6
+      ]
+    ],
+    "away_scorers": [
+      [
+        "Y. Wissa",
+        50
+      ]
+    ],
+    "date": "06/17/2026 12:00",
+    "stage": "group"
+  },
+  "22": {
+    "home_team": "ENG",
+    "away_team": "CRO",
+    "home_score": 4,
+    "away_score": 2,
+    "home_scorers": [
+      [
+        "H. Kane",
+        12
+      ],
+      [
+        "H. Kane",
+        42
+      ],
+      [
+        "J. Bellingham",
+        47
+      ],
+      [
+        "M. Rashford",
+        85
+      ]
+    ],
+    "away_scorers": [
+      [
+        "M. Baturina",
+        36
+      ],
+      [
+        "P. Musa",
+        50
+      ]
+    ],
+    "date": "06/17/2026 15:00",
+    "stage": "group"
+  },
+  "23": {
+    "home_team": "UZB",
+    "away_team": "COL",
+    "home_score": 1,
+    "away_score": 3,
+    "home_scorers": [
+      [
+        "Abas Bk Fiz Allh Af",
+        60
+      ]
+    ],
+    "away_scorers": [
+      [
+        "Dnil Mvnvz",
+        40
+      ],
+      [
+        "Lviiz Diaz",
+        65
+      ],
+      [
+        "Khamintvn Kampaz",
+        90
+      ]
+    ],
+    "date": "06/17/2026 20:00",
+    "stage": "group"
+  },
+  "24": {
+    "home_team": "GHA",
+    "away_team": "PAN",
+    "home_score": 1,
+    "away_score": 0,
+    "home_scorers": [
+      [
+        "Kalb Iirnki",
+        90
+      ]
+    ],
+    "away_scorers": [],
+    "date": "06/17/2026 19:00",
+    "stage": "group"
+  },
+  "25": {
+    "home_team": "MEX",
+    "away_team": "KOR",
+    "home_score": 1,
+    "away_score": 0,
+    "home_scorers": [
+      [
+        "Luis Romo",
+        50
+      ]
+    ],
+    "away_scorers": [],
+    "date": "06/18/2026 19:00",
+    "stage": "group"
+  },
+  "26": {
+    "home_team": "SUI",
+    "away_team": "BIH",
+    "home_score": 4,
+    "away_score": 1,
+    "home_scorers": [
+      [
+        "Jvhan Mnzambi",
+        74
+      ],
+      [
+        "Rvbn Vargas",
+        84
+      ],
+      [
+        "Jvhan Mnzambi",
+        90
+      ]
+    ],
+    "away_scorers": [
+      [
+        "Armin Mhmich",
+        90
+      ]
+    ],
+    "date": "06/18/2026 12:00",
+    "stage": "group"
+  },
+  "27": {
+    "home_team": "CAN",
+    "away_team": "QAT",
+    "home_score": 6,
+    "away_score": 0,
+    "home_scorers": [
+      [
+        "Kail Larin",
+        16
+      ],
+      [
+        "Jonathan David",
+        29
+      ],
+      [
+        "Jonathan David",
+        48
+      ],
+      [
+        "Nathan Saliba",
+        64
+      ],
+      [
+        "Mohamed Almnai",
+        75
+      ],
+      [
+        "Jonathan David",
+        90
+      ]
+    ],
+    "away_scorers": [],
+    "date": "06/18/2026 15:00",
+    "stage": "group"
+  },
+  "28": {
+    "home_team": "CZE",
+    "away_team": "RSA",
+    "home_score": 1,
+    "away_score": 1,
+    "home_scorers": [
+      [
+        "\u202bmikhal Sadilk",
+        6
+      ]
+    ],
+    "away_scorers": [],
+    "date": "06/18/2026 12:00",
+    "stage": "group"
+  },
+  "29": {
+    "home_team": "BRA",
+    "away_team": "HAI",
+    "home_score": 3,
+    "away_score": 0,
+    "home_scorers": [
+      [
+        "Matheus Cunha",
+        23
+      ],
+      [
+        "Matheus Cunha",
+        36
+      ],
+      [
+        "Vin\u00edcius J\u00fanior",
+        48
+      ]
+    ],
+    "away_scorers": [],
+    "date": "06/19/2026 21:00",
+    "stage": "group"
+  },
+  "30": {
+    "home_team": "SCO",
+    "away_team": "MAR",
+    "home_score": 0,
+    "away_score": 1,
+    "home_scorers": [],
+    "away_scorers": [
+      [
+        "Asmaail Saibari",
+        2
+      ]
+    ],
+    "date": "06/19/2026 18:00",
+    "stage": "group"
+  },
+  "31": {
+    "home_team": "USA",
+    "away_team": "AUS",
+    "home_score": 2,
+    "away_score": 0,
+    "home_scorers": [
+      [
+        "Kamrvn Bargs",
+        11
+      ],
+      [
+        "Alex Freeman",
+        43
+      ]
+    ],
+    "away_scorers": [],
+    "date": "06/19/2026 12:00",
+    "stage": "group"
+  },
+  "32": {
+    "home_team": "TUR",
+    "away_team": "PAR",
+    "home_score": 0,
+    "away_score": 1,
+    "home_scorers": [],
+    "away_scorers": [
+      [
+        "Mat\u00edas Galarza",
+        2
+      ]
+    ],
+    "date": "06/19/2026 20:00",
+    "stage": "group"
+  },
+  "33": {
+    "home_team": "GER",
+    "away_team": "CIV",
+    "home_score": 2,
+    "away_score": 1,
+    "home_scorers": [
+      [
+        "Dniz Avndav",
+        68
+      ],
+      [
+        "Dniz Avndav",
+        90
+      ]
+    ],
+    "away_scorers": [
+      [
+        "Franck Kessi\u00e9",
+        30
+      ]
+    ],
+    "date": "06/20/2026 16:00",
+    "stage": "group"
+  },
+  "34": {
+    "home_team": "ECU",
+    "away_team": "CUW",
+    "home_score": 0,
+    "away_score": 0,
+    "home_scorers": [],
+    "away_scorers": [],
+    "date": "06/20/2026 19:00",
+    "stage": "group"
+  },
+  "35": {
+    "home_team": "NED",
+    "away_team": "SWE",
+    "home_score": 5,
+    "away_score": 1,
+    "home_scorers": [
+      [
+        "Brian Brobbey",
+        5
+      ],
+      [
+        "Brian Brobbey",
+        17
+      ],
+      [
+        "Kvdi Khakpv",
+        47
+      ],
+      [
+        "Kvdi Khakpv",
+        54
+      ],
+      [
+        "Crysencio Summerville",
+        89
+      ]
+    ],
+    "away_scorers": [
+      [
+        "Anthony Elanga",
+        59
+      ]
+    ],
+    "date": "06/20/2026 12:00",
+    "stage": "group"
+  },
+  "36": {
+    "home_team": "TUN",
+    "away_team": "JPN",
+    "home_score": 0,
+    "away_score": 4,
+    "home_scorers": [],
+    "away_scorers": [
+      [
+        "Daichi Kamada",
+        4
+      ],
+      [
+        "Aiash Ivida",
+        31
+      ],
+      [
+        "Junya It\u014d",
+        69
+      ],
+      [
+        "Aiash Ivida",
+        83
+      ]
+    ],
+    "date": "06/20/2026 22:00",
+    "stage": "group"
+  },
+  "37": {
+    "home_team": "BEL",
+    "away_team": "IRN",
+    "home_score": 0,
+    "away_score": 0,
+    "home_scorers": [],
+    "away_scorers": [],
+    "date": "06/21/2026 12:00",
+    "stage": "group"
+  },
+  "38": {
+    "home_team": "NZL",
+    "away_team": "EGY",
+    "home_score": 1,
+    "away_score": 3,
+    "home_scorers": [
+      [
+        "Fin Svrman",
+        15
+      ]
+    ],
+    "away_scorers": [
+      [
+        "Mostafa Ziko",
+        58
+      ],
+      [
+        "Mohamed Salah",
+        67
+      ],
+      [
+        "Mahmoud Hassan Trezeguet",
+        82
+      ]
+    ],
+    "date": "06/21/2026 18:00",
+    "stage": "group"
+  },
+  "39": {
+    "home_team": "ESP",
+    "away_team": "KSA",
+    "home_score": 4,
+    "away_score": 0,
+    "home_scorers": [
+      [
+        "Lamine Yamal",
+        10
+      ],
+      [
+        "Mikel Oyarzabal",
+        21
+      ],
+      [
+        "Mikel Oyarzabal",
+        24
+      ],
+      [
+        "Hassan Mohamed Altmbkti",
+        49
+      ]
+    ],
+    "away_scorers": [],
+    "date": "06/21/2026 12:00",
+    "stage": "group"
+  },
+  "40": {
+    "home_team": "URU",
+    "away_team": "CPV",
+    "home_score": 2,
+    "away_score": 2,
+    "home_scorers": [
+      [
+        "Maximiliano Ara\u00fajo",
+        44
+      ],
+      [
+        "Agust\u00edn Canobbio",
+        51
+      ]
+    ],
+    "away_scorers": [
+      [
+        "Kevin Pina",
+        21
+      ],
+      [
+        "Hliv Varla",
+        61
+      ]
+    ],
+    "date": "06/21/2026 18:00",
+    "stage": "group"
+  },
+  "41": {
+    "home_team": "FRA",
+    "away_team": "IRQ",
+    "home_score": 3,
+    "away_score": 0,
+    "home_scorers": [
+      [
+        "Kylian Mbapp\u00e9",
+        14
+      ],
+      [
+        "Kylian Mbapp\u00e9",
+        54
+      ],
+      [
+        "Ousmane Demb\u00e9l\u00e9",
+        66
+      ]
+    ],
+    "away_scorers": [],
+    "date": "06/22/2026 17:00",
+    "stage": "group"
+  },
+  "42": {
+    "home_team": "NOR",
+    "away_team": "SEN",
+    "home_score": 3,
+    "away_score": 2,
+    "home_scorers": [
+      [
+        "Markvs Hlmgrn Pdrsn",
+        43
+      ],
+      [
+        "Erling Haaland",
+        48
+      ],
+      [
+        "Erling Haaland",
+        58
+      ]
+    ],
+    "away_scorers": [
+      [
+        "Isma\u00efla Sarr",
+        53
+      ],
+      [
+        "Isma\u00efla Sarr",
+        90
+      ]
+    ],
+    "date": "06/22/2026 20:00",
+    "stage": "group"
+  },
+  "43": {
+    "home_team": "ARG",
+    "away_team": "AUT",
+    "home_score": 2,
+    "away_score": 0,
+    "home_scorers": [
+      [
+        "Lionel Messi",
+        38
+      ],
+      [
+        "Lionel Messi",
+        90
+      ]
+    ],
+    "away_scorers": [],
+    "date": "06/22/2026 12:00",
+    "stage": "group"
+  },
+  "44": {
+    "home_team": "JOR",
+    "away_team": "ALG",
+    "home_score": 1,
+    "away_score": 2,
+    "home_scorers": [
+      [
+        "Al Rashdan",
+        36
+      ]
+    ],
+    "away_scorers": [
+      [
+        "Nzir Bnbvali",
+        69
+      ],
+      [
+        "Amine Gouiri",
+        82
+      ]
+    ],
+    "date": "06/22/2026 20:00",
+    "stage": "group"
+  },
+  "45": {
+    "home_team": "POR",
+    "away_team": "UZB",
+    "home_score": 5,
+    "away_score": 0,
+    "home_scorers": [
+      [
+        "Cristiano Ronaldo",
+        6
+      ],
+      [
+        "Nvnv Mndz",
+        17
+      ],
+      [
+        "Cristiano Ronaldo",
+        39
+      ],
+      [
+        "Abdalvhid Namtvf",
+        60
+      ],
+      [
+        "Rafael Le\u00e3o",
+        87
+      ]
+    ],
+    "away_scorers": [],
+    "date": "06/23/2026 12:00",
+    "stage": "group"
+  },
+  "46": {
+    "home_team": "PAN",
+    "away_team": "CRO",
+    "home_score": 0,
+    "away_score": 1,
+    "home_scorers": [],
+    "away_scorers": [
+      [
+        "Ante Budimir",
+        54
+      ]
+    ],
+    "date": "06/23/2026 19:00",
+    "stage": "group"
+  },
+  "47": {
+    "home_team": "COL",
+    "away_team": "COD",
+    "home_score": 1,
+    "away_score": 0,
+    "home_scorers": [
+      [
+        "Dnil Mvnvz",
+        76
+      ]
+    ],
+    "away_scorers": [],
+    "date": "06/23/2026 20:00",
+    "stage": "group"
+  },
+  "48": {
+    "home_team": "ENG",
+    "away_team": "GHA",
+    "home_score": 0,
+    "away_score": 0,
+    "home_scorers": [],
+    "away_scorers": [],
+    "date": "06/23/2026 16:00",
+    "stage": "group"
+  },
+  "49": {
+    "home_team": "SCO",
+    "away_team": "BRA",
+    "home_score": 0,
+    "away_score": 3,
+    "home_scorers": [],
+    "away_scorers": [
+      [
+        "Vin\u00edcius J\u00fanior",
+        7
+      ],
+      [
+        "Vin\u00edcius J\u00fanior",
+        48
+      ],
+      [
+        "Matheus Cunha",
+        60
+      ]
+    ],
+    "date": "06/24/2026 18:00",
+    "stage": "group"
+  },
+  "50": {
+    "home_team": "MAR",
+    "away_team": "HAI",
+    "home_score": 4,
+    "away_score": 2,
+    "home_scorers": [
+      [
+        "Achraf Hakimi",
+        39
+      ],
+      [
+        "Asmaail Saibari",
+        46
+      ],
+      [
+        "Svfian Rhimi",
+        78
+      ],
+      [
+        "Gessime Yassine",
+        89
+      ]
+    ],
+    "away_scorers": [
+      [
+        "Yassine Bounou",
+        10
+      ],
+      [
+        "Wilson Isidor",
+        43
+      ]
+    ],
+    "date": "06/24/2026 18:00",
+    "stage": "group"
+  },
+  "51": {
+    "home_team": "RSA",
+    "away_team": "KOR",
+    "home_score": 1,
+    "away_score": 0,
+    "home_scorers": [
+      [
+        "Taplv Maskv",
+        63
+      ]
+    ],
+    "away_scorers": [],
+    "date": "06/24/2026 19:00",
+    "stage": "group"
+  },
+  "52": {
+    "home_team": "CZE",
+    "away_team": "MEX",
+    "home_score": 0,
+    "away_score": 3,
+    "home_scorers": [],
+    "away_scorers": [
+      [
+        "Mateo Ch\u00e1vez",
+        55
+      ],
+      [
+        "Jvlian Kviinvnz",
+        61
+      ],
+      [
+        "\u00c1lvaro Fidalgo",
+        90
+      ]
+    ],
+    "date": "06/24/2026 19:00",
+    "stage": "group"
+  },
+  "53": {
+    "home_team": "BIH",
+    "away_team": "QAT",
+    "home_score": 3,
+    "away_score": 1,
+    "home_scorers": [
+      [
+        "Karim Alaibgvvich",
+        29
+      ],
+      [
+        "Abvnad",
+        34
+      ],
+      [
+        "Armin Mhmich",
+        80
+      ]
+    ],
+    "away_scorers": [
+      [
+        "Hassan Al-Haydos",
+        42
+      ]
+    ],
+    "date": "06/24/2026 12:00",
+    "stage": "group"
+  },
+  "54": {
+    "home_team": "SUI",
+    "away_team": "CAN",
+    "home_score": 2,
+    "away_score": 1,
+    "home_scorers": [
+      [
+        "Rub\u00e9n Vargas",
+        46
+      ],
+      [
+        "Jvhan Mnzambi",
+        57
+      ]
+    ],
+    "away_scorers": [
+      [
+        "Prvmis Divid",
+        76
+      ]
+    ],
+    "date": "06/24/2026 12:00",
+    "stage": "group"
+  },
+  "55": {
+    "home_team": "CUW",
+    "away_team": "CIV",
+    "home_score": 0,
+    "away_score": 2,
+    "home_scorers": [],
+    "away_scorers": [
+      [
+        "Nikvlas Ph Ph",
+        7
+      ],
+      [
+        "Nikvlas Ph Ph",
+        64
+      ]
+    ],
+    "date": "06/25/2026 16:00",
+    "stage": "group"
+  },
+  "56": {
+    "home_team": "ECU",
+    "away_team": "GER",
+    "home_score": 2,
+    "away_score": 1,
+    "home_scorers": [
+      [
+        "Nilsvn Angvlv",
+        9
+      ],
+      [
+        "Gvnzalv Plata",
+        77
+      ]
+    ],
+    "away_scorers": [
+      [
+        "Leroy San\u00e9",
+        2
+      ]
+    ],
+    "date": "06/25/2026 16:00",
+    "stage": "group"
+  },
+  "57": {
+    "home_team": "PAR",
+    "away_team": "AUS",
+    "home_score": 0,
+    "away_score": 0,
+    "home_scorers": [],
+    "away_scorers": [],
+    "date": "06/25/2026 19:00",
+    "stage": "group"
+  },
+  "58": {
+    "home_team": "TUR",
+    "away_team": "USA",
+    "home_score": 3,
+    "away_score": 2,
+    "home_scorers": [
+      [
+        "Arda G\u00fcler",
+        10
+      ],
+      [
+        "Baris Alpr Ailmaz",
+        31
+      ],
+      [
+        "Kan Aihan",
+        90
+      ]
+    ],
+    "away_scorers": [
+      [
+        "Auston Trusty",
+        3
+      ],
+      [
+        "Sebastian Berhalter",
+        49
+      ]
+    ],
+    "date": "06/25/2026 19:00",
+    "stage": "group"
+  },
+  "59": {
+    "home_team": "JPN",
+    "away_team": "SWE",
+    "home_score": 1,
+    "away_score": 1,
+    "home_scorers": [
+      [
+        "Daizen Maeda",
+        56
+      ]
+    ],
+    "away_scorers": [
+      [
+        "Anthony Elanga",
+        62
+      ]
+    ],
+    "date": "06/25/2026 18:00",
+    "stage": "group"
+  },
+  "60": {
+    "home_team": "TUN",
+    "away_team": "NED",
+    "home_score": 1,
+    "away_score": 3,
+    "home_scorers": [
+      [
+        "Hazm Mstvri",
+        54
+      ]
+    ],
+    "away_scorers": [
+      [
+        "Alis Skhiri",
+        3
+      ],
+      [
+        "Brian Brobbey",
+        7
+      ],
+      [
+        "Ian Fn Hkh",
+        62
+      ]
+    ],
+    "date": "06/25/2026 18:00",
+    "stage": "group"
+  },
+  "61": {
+    "home_team": "SEN",
+    "away_team": "IRQ",
+    "home_score": 5,
+    "away_score": 0,
+    "home_scorers": [
+      [
+        "Habib Diarra",
+        4
+      ],
+      [
+        "Isma\u00efla Sarr",
+        56
+      ],
+      [
+        "Paph Gviih",
+        59
+      ],
+      [
+        "Paph Gviih",
+        71
+      ],
+      [
+        "Ailman Andiaih",
+        82
+      ]
+    ],
+    "away_scorers": [],
+    "date": "06/26/2026 15:00",
+    "stage": "group"
+  },
+  "62": {
+    "home_team": "NOR",
+    "away_team": "FRA",
+    "home_score": 1,
+    "away_score": 4,
+    "home_scorers": [
+      [
+        "Thelo Aasgaard",
+        21
+      ]
+    ],
+    "away_scorers": [
+      [
+        "Ousmane Demb\u00e9l\u00e9",
+        7
+      ],
+      [
+        "Ousmane Demb\u00e9l\u00e9",
+        20
+      ],
+      [
+        "Ousmane Demb\u00e9l\u00e9",
+        32
+      ],
+      [
+        "D\u00e9sir\u00e9 Dou\u00e9",
+        90
+      ]
+    ],
+    "date": "06/26/2026 15:00",
+    "stage": "group"
+  },
+  "63": {
+    "home_team": "EGY",
+    "away_team": "IRN",
+    "home_score": 1,
+    "away_score": 1,
+    "home_scorers": [
+      [
+        "Mahmoud Saber",
+        5
+      ]
+    ],
+    "away_scorers": [
+      [
+        "Ramin Rezaeian",
+        14
+      ]
+    ],
+    "date": "06/26/2026 20:00",
+    "stage": "group"
+  },
+  "64": {
+    "home_team": "NZL",
+    "away_team": "BEL",
+    "home_score": 1,
+    "away_score": 5,
+    "home_scorers": [
+      [
+        "Ali Jast",
+        84
+      ]
+    ],
+    "away_scorers": [
+      [
+        "Leandro Trossard",
+        28
+      ],
+      [
+        "Leandro Trossard",
+        50
+      ],
+      [
+        "Kevin De Bruyne",
+        66
+      ],
+      [
+        "Romelu Lukaku",
+        86
+      ],
+      [
+        "Alexis Saelemaekers",
+        90
+      ]
+    ],
+    "date": "06/26/2026 20:00",
+    "stage": "group"
+  },
+  "65": {
+    "home_team": "CPV",
+    "away_team": "KSA",
+    "home_score": 0,
+    "away_score": 0,
+    "home_scorers": [],
+    "away_scorers": [],
+    "date": "06/26/2026 19:00",
+    "stage": "group"
+  },
+  "66": {
+    "home_team": "URU",
+    "away_team": "ESP",
+    "home_score": 0,
+    "away_score": 1,
+    "home_scorers": [],
+    "away_scorers": [
+      [
+        "\u00c1lex Baena",
+        42
+      ]
+    ],
+    "date": "06/26/2026 18:00",
+    "stage": "group"
+  },
+  "67": {
+    "home_team": "PAN",
+    "away_team": "ENG",
+    "home_score": 0,
+    "away_score": 2,
+    "home_scorers": [],
+    "away_scorers": [
+      [
+        "Jvd Blingham",
+        62
+      ],
+      [
+        "Hri Kin",
+        67
+      ]
+    ],
+    "date": "06/27/2026 17:00",
+    "stage": "group"
+  },
+  "68": {
+    "home_team": "CRO",
+    "away_team": "GHA",
+    "home_score": 2,
+    "away_score": 1,
+    "home_scorers": [
+      [
+        "Petar Su\u010di\u0107",
+        31
+      ],
+      [
+        "Nikola Vla\u0161i\u0107",
+        83
+      ]
+    ],
+    "away_scorers": [
+      [
+        "Drik Lvkasn",
+        73
+      ]
+    ],
+    "date": "06/27/2026 17:00",
+    "stage": "group"
+  },
+  "69": {
+    "home_team": "ALG",
+    "away_team": "AUT",
+    "home_score": 3,
+    "away_score": 3,
+    "home_scorers": [
+      [
+        "Rafik Blghali",
+        45
+      ],
+      [
+        "Riyad Mahrez",
+        60
+      ],
+      [
+        "Riyad Mahrez",
+        90
+      ]
+    ],
+    "away_scorers": [
+      [
+        "Marko Arnautovi\u0107",
+        28
+      ],
+      [
+        "Marcel Sabitzer",
+        55
+      ],
+      [
+        "Sa\u0161a Kalajd\u017ei\u0107",
+        90
+      ]
+    ],
+    "date": "06/27/2026 21:00",
+    "stage": "group"
+  },
+  "70": {
+    "home_team": "JOR",
+    "away_team": "ARG",
+    "home_score": 1,
+    "away_score": 3,
+    "home_scorers": [
+      [
+        "Mvsi Altmari",
+        55
+      ]
+    ],
+    "away_scorers": [
+      [
+        "Jivani Lv Slsv",
+        19
+      ],
+      [
+        "Lautaro Mart\u00ednez",
+        31
+      ],
+      [
+        "Lionel Messi",
+        80
+      ]
+    ],
+    "date": "06/27/2026 21:00",
+    "stage": "group"
+  },
+  "71": {
+    "home_team": "COL",
+    "away_team": "POR",
+    "home_score": 0,
+    "away_score": 0,
+    "home_scorers": [],
+    "away_scorers": [],
+    "date": "06/27/2026 19:30",
+    "stage": "group"
+  },
+  "72": {
+    "home_team": "COD",
+    "away_team": "UZB",
+    "home_score": 3,
+    "away_score": 1,
+    "home_scorers": [
+      [
+        "Fistvn Mail",
+        78
+      ],
+      [
+        "Yoane Wissa",
+        90
+      ]
+    ],
+    "away_scorers": [
+      [
+        "Aldvr Shvmvrvdvf",
+        10
+      ]
+    ],
+    "date": "06/27/2026 19:30",
+    "stage": "group"
+  },
+  "73": {
+    "home_team": "RSA",
+    "away_team": "CAN",
+    "home_score": 0,
+    "away_score": 1,
+    "home_scorers": [],
+    "away_scorers": [
+      [
+        "Astfan Avstakviv",
+        90
+      ]
+    ],
+    "date": "06/28/2026 12:00",
+    "stage": "r32"
+  },
+  "74": {
+    "home_team": "GER",
+    "away_team": "PAR",
+    "home_score": 1,
+    "away_score": 1,
+    "home_scorers": [
+      [
+        "Kai Havertz",
+        54
+      ]
+    ],
+    "away_scorers": [
+      [
+        "Khvliv Ansisv",
+        42
+      ]
+    ],
+    "date": "06/29/2026 16:30",
+    "stage": "r32"
+  },
+  "75": {
+    "home_team": "NED",
+    "away_team": "MAR",
+    "home_score": 1,
+    "away_score": 1,
+    "home_scorers": [
+      [
+        "Kvdi Khakpv",
+        72
+      ]
+    ],
+    "away_scorers": [
+      [
+        "Issa Diop",
+        90
+      ]
+    ],
+    "date": "06/29/2026 19:00",
+    "stage": "r32"
+  },
+  "76": {
+    "home_team": "BRA",
+    "away_team": "JPN",
+    "home_score": 2,
+    "away_score": 1,
+    "home_scorers": [
+      [
+        "Casemiro",
+        56
+      ],
+      [
+        "Gabriel Martinelli",
+        90
+      ]
+    ],
+    "away_scorers": [
+      [
+        "Kaish\u016b Sano",
+        29
+      ]
+    ],
+    "date": "06/29/2026 12:00",
+    "stage": "r32"
+  },
+  "77": {
+    "home_team": "FRA",
+    "away_team": "SWE",
+    "home_score": 3,
+    "away_score": 0,
+    "home_scorers": [
+      [
+        "Kylian Mbapp\u00e9",
+        45
+      ],
+      [
+        "Bradley Barcola",
+        53
+      ],
+      [
+        "Kylian Mbapp\u00e9",
+        74
+      ]
+    ],
+    "away_scorers": [],
+    "date": "06/30/2026 17:00",
+    "stage": "r32"
+  },
+  "78": {
+    "home_team": "CIV",
+    "away_team": "NOR",
+    "home_score": 1,
+    "away_score": 2,
+    "home_scorers": [
+      [
+        "Amad Diallo",
+        74
+      ]
+    ],
+    "away_scorers": [
+      [
+        "Antonio Nusa",
+        39
+      ],
+      [
+        "Erling Haaland",
+        86
+      ]
+    ],
+    "date": "06/30/2026 12:00",
+    "stage": "r32"
+  },
+  "79": {
+    "home_team": "MEX",
+    "away_team": "ECU",
+    "home_score": 2,
+    "away_score": 0,
+    "home_scorers": [
+      [
+        "Jvlian Kviinvnz",
+        22
+      ],
+      [
+        "Ra\u00fal Jim\u00e9nez",
+        31
+      ]
+    ],
+    "away_scorers": [],
+    "date": "06/30/2026 19:00",
+    "stage": "r32"
+  },
+  "80": {
+    "home_team": "ENG",
+    "away_team": "COD",
+    "home_score": 2,
+    "away_score": 1,
+    "home_scorers": [
+      [
+        "Hri Kin",
+        75
+      ],
+      [
+        "Hri Kin",
+        86
+      ]
+    ],
+    "away_scorers": [
+      [
+        "Braian Sipnga",
+        7
+      ]
+    ],
+    "date": "07/01/2026 12:00",
+    "stage": "r32"
+  },
+  "81": {
+    "home_team": "USA",
+    "away_team": "BIH",
+    "home_score": 2,
+    "away_score": 0,
+    "home_scorers": [
+      [
+        "Flvrin Balvgan",
+        45
+      ],
+      [
+        "Malik Tillman",
+        82
+      ]
+    ],
+    "away_scorers": [],
+    "date": "07/01/2026 17:00",
+    "stage": "r32"
+  },
+  "82": {
+    "home_team": "BEL",
+    "away_team": "SEN",
+    "home_score": 3,
+    "away_score": 2,
+    "home_scorers": [
+      [
+        "Romelu Lukaku",
+        86
+      ],
+      [
+        "Youri Tielemans",
+        89
+      ]
+    ],
+    "away_scorers": [
+      [
+        "Habib Diarra",
+        25
+      ],
+      [
+        "Isma\u00efla Sarr",
+        51
+      ]
+    ],
+    "date": "07/01/2026 13:00",
+    "stage": "r32"
+  },
+  "83": {
+    "home_team": "POR",
+    "away_team": "CRO",
+    "home_score": 2,
+    "away_score": 1,
+    "home_scorers": [
+      [
+        "Gvnchalv Ramvs",
+        90
+      ]
+    ],
+    "away_scorers": [
+      [
+        "Ivan Peri\u0161i\u0107",
+        53
+      ]
+    ],
+    "date": "07/02/2026 19:00",
+    "stage": "r32"
+  },
+  "84": {
+    "home_team": "ESP",
+    "away_team": "AUT",
+    "home_score": 3,
+    "away_score": 0,
+    "home_scorers": [
+      [
+        "Mikel Oyarzabal",
+        36
+      ],
+      [
+        "Pedro Porro",
+        66
+      ],
+      [
+        "Mikel Oyarzabal",
+        89
+      ]
+    ],
+    "away_scorers": [],
+    "date": "07/02/2026 12:00",
+    "stage": "r32"
+  },
+  "85": {
+    "home_team": "SUI",
+    "away_team": "ALG",
+    "home_score": 2,
+    "away_score": 0,
+    "home_scorers": [
+      [
+        "Breel Embolo",
+        10
+      ],
+      [
+        "Dn Andvi",
+        46
+      ]
+    ],
+    "away_scorers": [],
+    "date": "07/02/2026 20:00",
+    "stage": "r32"
+  },
+  "86": {
+    "home_team": "ARG",
+    "away_team": "CPV",
+    "home_score": 3,
+    "away_score": 2,
+    "home_scorers": [
+      [
+        "Lionel Messi",
+        29
+      ],
+      [
+        "Lisandro Mart\u00ednez",
+        90
+      ],
+      [
+        "Dini Bvrgs",
+        90
+      ]
+    ],
+    "away_scorers": [
+      [
+        "Drvi Dviart",
+        59
+      ],
+      [
+        "Lvpz Kabral",
+        90
+      ]
+    ],
+    "date": "07/03/2026 18:00",
+    "stage": "r32"
+  },
+  "87": {
+    "home_team": "COL",
+    "away_team": "GHA",
+    "home_score": 1,
+    "away_score": 0,
+    "home_scorers": [
+      [
+        "Jan Arias",
+        14
+      ]
+    ],
+    "away_scorers": [],
+    "date": "07/03/2026 20:30",
+    "stage": "r32"
+  },
+  "88": {
+    "home_team": "AUS",
+    "away_team": "EGY",
+    "home_score": 1,
+    "away_score": 1,
+    "home_scorers": [
+      [
+        "Mohamed Hany",
+        55
+      ]
+    ],
+    "away_scorers": [
+      [
+        "Emam Ashour",
+        13
+      ]
+    ],
+    "date": "07/03/2026 13:00",
+    "stage": "r32"
+  }
+}
