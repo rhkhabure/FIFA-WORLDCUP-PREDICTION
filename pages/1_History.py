@@ -67,8 +67,18 @@ def main():
         st.warning(f"No finished matches found matching '{search}'.")
         st.stop()
 
-    # ── Deep-link support: ?match_id=<id> jumps straight to that game ──────
+    # ── Deep-link support: ?match_id=<id> jumps to a specific game,
+    #    ?team=<code> jumps to that team's most recent finished match ──────
     query_match_id = st.query_params.get("match_id")
+    query_team = st.query_params.get("team")
+    if query_team and not query_match_id:
+        team_games = [
+            g for g in finished_games
+            if team_lookup.get(g["home_team_id"], {}).get("fifa_code") == query_team
+            or team_lookup.get(g["away_team_id"], {}).get("fifa_code") == query_team
+        ]
+        if team_games:
+            query_match_id = team_games[0]["id"]  # finished_games is already newest-first
     game_ids = [g["id"] for g in matches]
     default_idx = game_ids.index(query_match_id) if query_match_id in game_ids else 0
 
