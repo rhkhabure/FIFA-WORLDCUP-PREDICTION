@@ -94,12 +94,19 @@ def main():
     tree = c.build_real_bracket_tree(final_game, game_by_id)
     total_height = c.tree_height(tree)
 
-    # ── Monte Carlo simulation, using the REAL tree (not an assumed one) ────
+    # ── Monte Carlo simulation, cached so clicking something unrelated
+    #    (like the path button) doesn't re-run thousands of fresh trials
+    #    every single time -- only a real change to the bracket or trial
+    #    count should trigger a genuine recomputation ──────────────────────
+    @st.cache_data(show_spinner=False)
+    def cached_simulate(_model, _scaler, _T, fixture_tree, n_trials):
+        return c.simulate_tournament(fixture_tree, _model, _scaler, _T, n_trials=n_trials)
+
     fixture_tree = c.tree_to_fixture(tree, game_by_id, team_lookup)
     n_trials = st.select_slider("Monte Carlo trials", [5_000, 20_000, 50_000, 100_000], value=20_000)
     model, scaler, T = c.load_model()
     with st.spinner(f"Running {n_trials:,} simulated tournaments..."):
-        odds = c.simulate_tournament(fixture_tree, model, scaler, T, n_trials=n_trials)
+        odds = cached_simulate(model, scaler, T, fixture_tree, n_trials)
 
     path_team = st.session_state.get("path_team")
 
@@ -139,9 +146,13 @@ def main():
         if path_team and m and m.group(1) in game_by_id:
             src_tree = c.build_real_bracket_tree(game_by_id[m.group(1)], game_by_id)
             if contains_team(src_tree, path_team):
-                h = c.tree_height({"kind": "pair", "game": game, "left": src_tree, "right": None})
-                delay = h * 0.5
-                stage_label = c.TYPE_TO_STAGE_LABEL.get((game.get("type") or "").lower(), "")
+                # Delay comes straight from this match's REAL stage -- r16
+                # always lights first, then qf, then sf, then final, in that
+                # exact fixed order every time. No calculation to get wrong.
+                game_type = (game.get("type") or "r16").lower()
+                stage_index = c.ROUND_ORDER.index(game_type) if game_type in c.ROUND_ORDER else 0
+                delay = stage_index * 0.5
+                stage_label = c.TYPE_TO_STAGE_LABEL.get(game_type, "")
                 stage_key = f"Reaches {stage_label}" if stage_label else None
                 pct = odds.get(path_team, {}).get(stage_key, 0.0) if stage_key else 0.0
                 flag = flag_of(path_team)
@@ -156,12 +167,14 @@ def main():
                 )
                 return
 
-        st.markdown(
-            f"<div style='border:1px dashed #30363d;border-radius:8px;padding:10px;"
-            f"min-height:44px;display:flex;align-items:center;justify-content:center;"
-            f"color:#8b949e;text-align:center;font-size:12px'>{label}</div>",
-            unsafe_allow_html=True,
-        )
+        # A real (disabled) button instead of a custom HTML box -- since
+        # it's the SAME widget type Streamlit uses for every clickable row,
+        # its height is guaranteed to match them exactly. No more guessing
+        # a pixel number and hoping it's close enough.
+        col_flag, col_name, col_path = st.columns([1, 7, 0.6])
+        with col_name:
+            st.button(label, key=f"waiting_{game.get('id')}_{side}_{key_suffix}",
+                     use_container_width=True, disabled=True)
 
     def render_node(node, key_suffix):
         game = node["game"]
