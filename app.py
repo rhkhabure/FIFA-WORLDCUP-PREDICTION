@@ -33,7 +33,11 @@ except ImportError:
 st.set_page_config(page_title="World Cup Win Probability", page_icon="⚽", layout="wide")
 
 ROOT      = Path(__file__).parent  # app.py lives at repo root, models/ is right beside it
-MODELS    = ROOT / "models"
+MODELS_CANDIDATES = [
+    ROOT / "models",
+    ROOT / "notebooks" / "models",  # confirmed actual location in the repo
+]
+MODELS = next((p for p in MODELS_CANDIDATES if (p / "football_v2.pth").exists()), MODELS_CANDIDATES[0])
 DATA_RAW  = ROOT / "data" / "raw"
 WC26_BASE = "https://worldcup26.ir"
 
@@ -90,7 +94,15 @@ class FootballWinProbNet(nn.Module):
 
 @st.cache_resource
 def load_model():
-    ckpt = torch.load(MODELS / "football_v2.pth", map_location="cpu", weights_only=False)
+    model_path = MODELS / "football_v2.pth"
+    if not model_path.exists():
+        st.error(
+            f"Can't find football_v2.pth. Checked: "
+            f"{[str(p / 'football_v2.pth') for p in MODELS_CANDIDATES]}. "
+            f"Update MODELS_CANDIDATES in app.py to match where models/ actually lives in the repo."
+        )
+        st.stop()
+    ckpt = torch.load(model_path, map_location="cpu", weights_only=False)
     model = FootballWinProbNet(**ckpt["arch"])
     model.load_state_dict(ckpt["model_state"])
     model.eval()
