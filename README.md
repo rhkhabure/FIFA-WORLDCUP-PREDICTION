@@ -4,7 +4,7 @@ A real-time win probability system for the 2026 FIFA World Cup — built using t
 learning from an NBA win probability neural network. Tracks live match state every 30
 seconds and outputs three probabilities: home win, draw, and away win.
 
-> **Live dashboard →** *([Streamlit Cloud link — add after deployment](https://fifa-worldcup-prediction-kc3azpj8tc2ynw4ylnjqv8.streamlit.app/))*  
+> **Live dashboard →** *([Click to see model](https://fifa-worldcup-prediction-kc3azpj8tc2ynw4ylnjqv8.streamlit.app/))*  
 > **Related project →** [NBA Live Win Probability](https://github.com/rhkhabure/NBA-Live-Win-Probability)
 
 ---
