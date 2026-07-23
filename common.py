@@ -218,7 +218,87 @@ def build_feature_row(home_code, away_code, minute, hs, as_, lead_changes, goals
             rank_diff, int(is_knockout), lead_changes_norm, 1, score_state, strength_x_time]
 
 
-def build_live_features(game, team_lookup):
+def resolve_advance_prob(home_code, away_code, model, scaler, T):
+    """
+    Pre-game probability that home_code advances past away_code in a
+    KNOCKOUT match. A knockout game can't end in a draw at full-time -- it
+    goes to extra time then penalties -- so we split the model's draw
+    probability evenly between both teams, since a shootout is close to a
+    coin flip regardless of which side was rated better in 90 minutes.
+    """
+    feat_row = build_feature_row(home_code, away_code, minute=0, hs=0, as_=0,
+                                 lead_changes=0, goals_so_far=0, is_knockout=1)
+    p_away, p_draw, p_home = predict(model, scaler, T, feat_row)
+    return p_home + p_draw / 2  # p_away's share is just 1 - this
+
+
+def simulate_tournament(fixture_tree, model, scaler, T, n_trials=20000):
+    """
+    Monte Carlo simulate an entire knockout bracket many times and tally,
+    per team, the fraction of trials where they reached each stage.
+
+    fixture_tree: a team code (string, already confirmed) OR a (left, right)
+    pair where left/right are themselves fixture_trees -- so a whole bracket
+    is one big nested tuple, e.g. (("PAR","FRA"), ("CAN","MAR")) for a
+    semifinal-and-final bracket built from two confirmed quarterfinal
+    winners... one level down.
+
+    Returns {team_code: {stage_label: probability, ...}, ...}
+    """
+    import random
+
+    def height(node):
+        if isinstance(node, str):
+            return 0
+        return 1 + max(height(node[0]), height(node[1]))
+
+    total_height = height(fixture_tree)
+    GENERIC_LABELS = ["Reaches Round of 16", "Reaches Quarterfinal",
+                      "Reaches Semifinal", "Reaches Final", "Champion"]
+    labels = GENERIC_LABELS[-total_height:] if total_height > 0 else []
+
+    pair_cache = {}
+    def get_prob(a, b):
+        key = tuple(sorted([a, b]))
+        if key not in pair_cache:
+            pair_cache[key] = resolve_advance_prob(key[0], key[1], model, scaler, T)
+        p_first = pair_cache[key]
+        return p_first if key[0] == a else 1 - p_first
+
+    tallies = {}
+
+    def resolve(node):
+        if isinstance(node, str):
+            return node, 0
+        left, right = node
+        left_team, lh = resolve(left)
+        right_team, rh = resolve(right)
+        h = max(lh, rh) + 1
+        p_left = get_prob(left_team, right_team)
+        winner = left_team if random.random() < p_left else right_team
+        label = labels[h - 1]
+        tallies.setdefault(winner, {}).setdefault(label, 0)
+        tallies[winner][label] += 1
+        return winner, h
+
+    for _ in range(n_trials):
+        resolve(fixture_tree)
+
+    return {team: {lbl: cnt / n_trials for lbl, cnt in counts.items()}
+            for team, counts in tallies.items()}
+
+
+def build_fixture_tree_from_matches(matches):
+    """
+    matches: list of (home_code, away_code) tuples, in bracket order
+    (adjacent pairs meet in the next round -- match 0&1 feed one semifinal
+    slot, match 2&3 feed the other, and so on). Returns a fixture_tree ready
+    for simulate_tournament().
+    """
+    level = [(m[0], m[1]) for m in matches]
+    while len(level) > 1:
+        level = [(level[i], level[i + 1]) for i in range(0, len(level), 2)]
+    return level[0] if level else None
     """Build the CURRENT single feature row for a live/pre-game match."""
     home_id, away_id = game["home_team_id"], game["away_team_id"]
     home_code = team_lookup.get(home_id, {}).get("fifa_code", "UNK")
