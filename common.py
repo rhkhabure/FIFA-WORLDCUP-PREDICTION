@@ -299,6 +299,9 @@ def build_fixture_tree_from_matches(matches):
     while len(level) > 1:
         level = [(level[i], level[i + 1]) for i in range(0, len(level), 2)]
     return level[0] if level else None
+
+
+def build_live_features(game, team_lookup):
     """Build the CURRENT single feature row for a live/pre-game match."""
     home_id, away_id = game["home_team_id"], game["away_team_id"]
     home_code = team_lookup.get(home_id, {}).get("fifa_code", "UNK")
