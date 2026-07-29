@@ -1,0 +1,267 @@
+import json
+
+notebook = {
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# V3 Universal Football Model — Data Pipeline & Testing\n",
+    "\n",
+    "This notebook is the foundation for Version 3. It handles the ingestion of club football data (Big 5 Leagues), extracts the new features (Starting XI values, Red Cards, League IDs), and transforms them into minute-by-minute snapshots.\n",
+    "\n",
+    "Crucially, it includes a **strict validation and testing suite** at the bottom to guarantee there is zero data leakage (future events bleeding into past snapshots) and that the data structures perfectly match the V3 requirements."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": None,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import os\n",
+    "import json\n",
+    "import pandas as pd\n",
+    "import numpy as np\n",
+    "from datetime import datetime\n",
+    "from typing import List, Dict, Any\n",
+    "\n",
+    "# Expected Features for V3\n",
+    "V3_FEATURE_COLS = [\n",
+    "    \"league_id\",\n",
+    "    \"minute\",\n",
+    "    \"home_starting_xi_value\",\n",
+    "    \"away_starting_xi_value\",\n",
+    "    \"days_since_last_match_home\",\n",
+    "    \"days_since_last_match_away\",\n",
+    "    \"goal_diff\",\n",
+    "    \"score_state\",          # 0: behind, 1: tied, 2: ahead (from home perspective)\n",
+    "    \"home_red_cards\",\n",
+    "    \"away_red_cards\",\n",
+    "    \"is_knockout\"           # Kept for cup games\n",
+    "]\n",
+    "\n",
+    "TARGET_COL = \"outcome\"      # 'home', 'draw', 'away'\n"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 1. Pipeline Functions\n",
+    "These functions map API-Football (or similar) data payloads into the exact snapshots needed for the neural network. To allow local testing right now, the logic is decoupled from the actual HTTP requests."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": None,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def calculate_xi_value(lineup: List[Dict]) -> float:\n",
+    "    \"\"\"\n",
+    "    Calculates the aggregate value of the starting 11.\n",
+    "    In production, this will map player IDs to a Transfermarkt/FIFA rating DB.\n",
+    "    \"\"\"\n",
+    "    total_value = 0.0\n",
+    "    for player in lineup:\n",
+    "        if player.get(\"is_starter\", False):\n",
+    "            # Mock lookup: default to 10M per player if unknown\n",
+    "            total_value += player.get(\"market_value_m\", 10.0) \n",
+    "    return total_value\n",
+    "\n",
+    "def build_match_snapshots(fixture: Dict, events: List[Dict], home_lineup: List[Dict], away_lineup: List[Dict]) -> pd.DataFrame:\n",
+    "    \"\"\"\n",
+    "    Takes a finished match and reconstructs the timeline every 5 minutes + on every goal/red card.\n",
+    "    Strictly prevents future leakage by only looking at events where event_minute <= current_minute.\n",
+    "    \"\"\"\n",
+    "    home_id = fixture[\"home_team_id\"]\n",
+    "    away_id = fixture[\"away_team_id\"]\n",
+    "    league_id = fixture[\"league_id\"]\n",
+    "    \n",
+    "    # Pre-game static features\n",
+    "    home_xi_val = calculate_xi_value(home_lineup)\n",
+    "    away_xi_val = calculate_xi_value(away_lineup)\n",
+    "    \n",
+    "    # Determine target outcome\n",
+    "    final_home_score = sum(1 for e in events if e[\"type\"] == \"Goal\" and e[\"team_id\"] == home_id)\n",
+    "    final_away_score = sum(1 for e in events if e[\"type\"] == \"Goal\" and e[\"team_id\"] == away_id)\n",
+    "    \n",
+    "    if final_home_score > final_away_score:\n",
+    "        outcome = \"home\"\n",
+    "    elif final_home_score < final_away_score:\n",
+    "        outcome = \"away\"\n",
+    "    else:\n",
+    "        outcome = \"draw\"\n",
+    "        \n",
+    "    # Base checkpoints: 0 to 90 every 5 minutes\n",
+    "    checkpoints = set([0] + list(range(5, 91, 5)) + [90])\n",
+    "    for e in events:\n",
+    "        if e[\"minute\"] <= 90:\n",
+    "            checkpoints.add(e[\"minute\"])\n",
+    "            \n",
+    "    checkpoints = sorted(list(checkpoints))\n",
+    "    \n",
+    "    snapshots = []\n",
+    "    \n",
+    "    for minute in checkpoints:\n",
+    "        # CRITICAL: Only filter events that happened ON OR BEFORE this exact minute.\n",
+    "        # This prevents data leakage.\n",
+    "        past_events = [e for e in events if e[\"minute\"] <= minute]\n",
+    "        \n",
+    "        h_score = sum(1 for e in past_events if e[\"type\"] == \"Goal\" and e[\"team_id\"] == home_id)\n",
+    "        a_score = sum(1 for e in past_events if e[\"type\"] == \"Goal\" and e[\"team_id\"] == away_id)\n",
+    "        h_reds = sum(1 for e in past_events if e[\"type\"] == \"Card\" and e[\"detail\"] == \"Red\" and e[\"team_id\"] == home_id)\n",
+    "        a_reds = sum(1 for e in past_events if e[\"type\"] == \"Card\" and e[\"detail\"] == \"Red\" and e[\"team_id\"] == away_id)\n",
+    "        \n",
+    "        goal_diff = h_score - a_score\n",
+    "        score_state = 1 # Tied\n",
+    "        if goal_diff > 0: score_state = 2 # Home leading\n",
+    "        if goal_diff < 0: score_state = 0 # Home trailing\n",
+    "        \n",
+    "        snapshots.append({\n",
+    "            \"match_id\": fixture[\"fixture_id\"], # Metadata\n",
+    "            \"league_id\": league_id,\n",
+    "            \"minute\": minute,\n",
+    "            \"home_starting_xi_value\": home_xi_val,\n",
+    "            \"away_starting_xi_value\": away_xi_val,\n",
+    "            \"days_since_last_match_home\": fixture.get(\"days_since_last_home\", 7), # Defaulting to 7 for testing\n",
+    "            \"days_since_last_match_away\": fixture.get(\"days_since_last_away\", 7),\n",
+    "            \"goal_diff\": goal_diff,\n",
+    "            \"score_state\": score_state,\n",
+    "            \"home_red_cards\": h_reds,\n",
+    "            \"away_red_cards\": a_reds,\n",
+    "            \"is_knockout\": fixture.get(\"is_knockout\", 0),\n",
+    "            \"outcome\": outcome # Target\n",
+    "        })\n",
+    "        \n",
+    "    return pd.DataFrame(snapshots)\n"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 2. Mock Data Generation for Local Testing\n",
+    "We generate a synthetic API response representing a dramatic Premier League match (e.g. Man City vs Arsenal) featuring goals and a red card. This allows us to test the pipeline before hitting real API endpoints."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": None,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "mock_fixture = {\n",
+    "    \"fixture_id\": 1001,\n",
+    "    \"league_id\": 39, # Premier League\n",
+    "    \"home_team_id\": 50, # Man City\n",
+    "    \"away_team_id\": 42, # Arsenal\n",
+    "    \"is_knockout\": 0,\n",
+    "    \"days_since_last_home\": 3, # Midweek CL game\n",
+    "    \"days_since_last_away\": 7\n",
+    "}\n",
+    "\n",
+    "# 11 starters, varying market values (in Millions)\n",
+    "mock_home_lineup = [{\"player_id\": i, \"is_starter\": True, \"market_value_m\": v} for i, v in enumerate([60, 50, 40, 80, 70, 90, 110, 60, 55, 45, 150])]\n",
+    "mock_away_lineup = [{\"player_id\": i+100, \"is_starter\": True, \"market_value_m\": v} for i, v in enumerate([50, 45, 60, 65, 80, 85, 120, 70, 60, 55, 90])]\n",
+    "\n",
+    "mock_events = [\n",
+    "    {\"minute\": 15, \"team_id\": 42, \"type\": \"Goal\", \"detail\": \"Normal Goal\"},       # Away scores (0-1)\n",
+    "    {\"minute\": 40, \"team_id\": 50, \"type\": \"Goal\", \"detail\": \"Normal Goal\"},       # Home equals (1-1)\n",
+    "    {\"minute\": 45, \"team_id\": 42, \"type\": \"Card\", \"detail\": \"Red\"},             # Away Red Card\n",
+    "    {\"minute\": 88, \"team_id\": 50, \"type\": \"Goal\", \"detail\": \"Normal Goal\"}        # Home wins late (2-1)\n",
+    "]\n",
+    "\n",
+    "df_snapshots = build_match_snapshots(mock_fixture, mock_events, mock_home_lineup, mock_away_lineup)\n",
+    "display(df_snapshots.head())\n",
+    "display(df_snapshots.tail())\n"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 3. Pipeline Validation Suite\n",
+    "These tests strictly enforce the integrity of the data. If any of these assert statements fail, the pipeline is compromised."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": None,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def run_pipeline_tests(df: pd.DataFrame):\n",
+    "    print(\"Running Pipeline Integrity Tests...\")\n",
+    "    \n",
+    "    # 1. Structure Test\n",
+    "    for col in V3_FEATURE_COLS:\n",
+    "        assert col in df.columns, f\"Missing required feature column: {col}\"\n",
+    "    assert TARGET_COL in df.columns, \"Missing target column\"\n",
+    "    print(\"✅ Structure Test Passed: All required V3 features are present.\")\n",
+    "    \n",
+    "    # 2. No Future Leakage Test\n",
+    "    # At minute 30, Man City (Home) should have 0 goals, Arsenal (Away) should have 1.\n",
+    "    min_30 = df[df['minute'] == 30].iloc[0]\n",
+    "    assert min_30['goal_diff'] == -1, f\"Leakage detected! At min 30, goal diff should be -1, got {min_30['goal_diff']}\"\n",
+    "    assert min_30['score_state'] == 0, f\"Leakage detected! At min 30, score state should be 0 (behind), got {min_30['score_state']}\"\n",
+    "    \n",
+    "    # At minute 45 (after the red card), Away should have 1 red card.\n",
+    "    min_45 = df[df['minute'] == 45].iloc[0]\n",
+    "    assert min_45['away_red_cards'] == 1, f\"Leakage or parsing error! Expected 1 away red card at min 45, got {min_45['away_red_cards']}\"\n",
+    "    \n",
+    "    # At minute 0, NO goals or cards should be recorded.\n",
+    "    min_0 = df[df['minute'] == 0].iloc[0]\n",
+    "    assert min_0['goal_diff'] == 0, \"Leakage! Goals present at minute 0.\"\n",
+    "    assert min_0['home_red_cards'] == 0 and min_0['away_red_cards'] == 0, \"Leakage! Red cards present at minute 0.\"\n",
+    "    print(\"✅ Leakage Test Passed: Future events do not bleed into past snapshots.\")\n",
+    "    \n",
+    "    # 3. Chronological Integrity & Monotonicity Test\n",
+    "    # Time, Goals, and Cards should only ever stay the same or increase.\n",
+    "    assert df['minute'].is_monotonic_increasing, \"Minutes are not strictly increasing!\"\n",
+    "    assert df['home_red_cards'].is_monotonic_increasing, \"Home red cards decreased over time!\"\n",
+    "    assert df['away_red_cards'].is_monotonic_increasing, \"Away red cards decreased over time!\"\n",
+    "    print(\"✅ Chronological Test Passed: Event monotonicity maintained.\")\n",
+    "    \n",
+    "    # 4. Feature Bounds & Validity Test\n",
+    "    assert (df['home_starting_xi_value'] > 0).all(), \"Starting XI value must be greater than 0\"\n",
+    "    assert (df['away_starting_xi_value'] > 0).all(), \"Starting XI value must be greater than 0\"\n",
+    "    assert (df['score_state'].isin([0, 1, 2])).all(), \"Score state must be strictly 0, 1, or 2\"\n",
+    "    assert not df.isnull().values.any(), \"NaN values detected in the pipeline!\"\n",
+    "    print(\"✅ Feature Bounds Test Passed: All values within acceptable ranges.\")\n",
+    "    \n",
+    "    print(\"\\n🚀 ALL TESTS PASSED. The V3 Pipeline is secure and ready.\")\n",
+    "\n",
+    "# Execute the test suite\n",
+    "run_pipeline_tests(df_snapshots)\n"
+   ]
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.11.0"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 4
+}
+
+with open('notebooks/phase1_v3_data_pipeline.ipynb', 'w') as f:
+    json.dump(notebook, f, indent=1)
+
+print("Notebook generated successfully.")
