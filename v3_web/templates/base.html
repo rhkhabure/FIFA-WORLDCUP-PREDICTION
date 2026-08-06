@@ -27,11 +27,19 @@
             padding: 20px;
             display: flex;
             flex-direction: column;
+            transition: margin-left 0.3s ease;
+            flex-shrink: 0;
+            z-index: 40;
+        }
+        .sidebar.collapsed {
+            margin-left: -250px;
         }
         .content {
             flex-grow: 1;
             padding: 40px;
             overflow-y: auto;
+            transition: padding-left 0.3s ease;
+            position: relative;
         }
         h1, h2, h3, h4 {
             color: var(--color-primary);
@@ -80,7 +88,13 @@
 </head>
 <body>
 
-    <div class="sidebar">
+    <button onclick="toggleSidebar()" class="fixed bottom-4 left-4 z-50 bg-gray-900 p-3 rounded-full text-white border border-gray-700 shadow-xl hover:bg-gray-800 transition focus:outline-none">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+    </button>
+
+    <div class="sidebar" id="sidebar">
         <h2 class="text-xl mb-6 flex items-center gap-2">⚽ V3 Model</h2>
         
         <div class="mb-6">
@@ -122,5 +136,10 @@
         {% block content %}{% endblock %}
     </div>
 
+    <script>
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('collapsed');
+        }
+    </script>
 </body>
 </html>
