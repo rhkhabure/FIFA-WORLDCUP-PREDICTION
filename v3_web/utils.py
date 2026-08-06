@@ -35,7 +35,7 @@ def generate_pitch_svg(home_formation="4-3-3", away_formation="4-2-3-1", home_co
     
     W, H = 100, 140
     
-    svg = f"""<svg width="100%" style="max-width: 450px; display: block; margin: 0 auto;" viewBox="0 0 {W} {H}" xmlns="http://www.w3.org/2000/svg">
+    svg = f"""<svg width="100%" style="max-width: 600px; display: block; margin: 0 auto; transform: rotate(90deg);" viewBox="0 0 {W} {H}" xmlns="http://www.w3.org/2000/svg">
         <rect width="{W}" height="{H}" fill="#2e7d32" rx="2" ry="2"/>
         <rect x="5" y="5" width="90" height="130" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="0.5"/>
         <line x1="5" y1="70" x2="95" y2="70" stroke="rgba(255,255,255,0.6)" stroke-width="0.5"/>
