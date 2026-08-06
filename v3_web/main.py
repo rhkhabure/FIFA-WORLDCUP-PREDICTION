@@ -94,8 +94,14 @@ async def team(request: Request):
     
     t_color = ctx["theme"]["primary"]
     
+    home_players = ["Alisson", "Alexander-Arnold", "Konate", "Van Dijk", "Robertson", "Mac Allister", "Szoboszlai", "Diaz", "Salah", "Nunez", "Gakpo"] if team == "Liverpool" else \
+                   ["Ederson", "Walker", "Dias", "Akanji", "Gvardiol", "Rodri", "De Bruyne", "Silva", "Foden", "Haaland", "Grealish"] if team == "Manchester City" else \
+                   ["Raya", "White", "Saliba", "Gabriel", "Zinchenko", "Rice", "Odegaard", "Saka", "Martinelli", "Jesus", "Trossard"] if team == "Arsenal" else \
+                   ["Courtois", "Carvajal", "Militao", "Rudiger", "Mendy", "Tchouameni", "Valverde", "Bellingham", "Vinicius", "Rodrygo", "Mbappe"] if team == "Real Madrid" else \
+                   None
+    
     # Render half pitch for just the home team standard XI
-    ctx["pitch_svg"] = generate_pitch_svg("4-3-3", "0-0", t_color, "#000000")
+    ctx["pitch_svg"] = generate_pitch_svg("4-3-3", "0-0", t_color, "#000000", home_players=home_players)
     
     return templates.TemplateResponse(request=request, name="team.html", context=ctx)
 

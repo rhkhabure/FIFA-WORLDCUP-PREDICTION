@@ -1,22 +1,30 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h1 class="text-4xl mb-2">🌍 League Hub: {{ current_league }}</h1>
-<p class="text-gray-300 mb-8">Welcome to the <strong>V3 Universal Model</strong> dashboard for the {{ current_league }}. Data is dynamically powered by Sofascore.</p>
+<h1 class="text-4xl mb-6">🌍 League Hub: {{ current_league }}</h1>
 
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-    <div class="metric-card">
-        <div class="text-gray-400 text-sm uppercase tracking-wider">Pipeline</div>
-        <div class="text-2xl font-black mt-2 text-primary-custom">V3 Universal</div>
-    </div>
-    <div class="metric-card">
-        <div class="text-gray-400 text-sm uppercase tracking-wider">API Provider</div>
-        <div class="text-2xl font-black mt-2 text-primary-custom">Sofascore</div>
-    </div>
-    <div class="metric-card">
-        <div class="text-gray-400 text-sm uppercase tracking-wider">Supported Leagues</div>
-        <div class="text-2xl font-black mt-2 text-primary-custom">Big 5</div>
-    </div>
+<!-- LEAGUE SELECTOR CARDS -->
+<div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+    <a href="/?league=Premier League&team=Default" class="flex flex-col items-center p-4 bg-gray-900 rounded-xl hover:bg-gray-800 transition border {% if current_league == 'Premier League' %}border-primary-custom shadow-[0_0_15px_rgba(0,255,135,0.2)]{% else %}border-gray-800{% endif %}">
+        <img src="https://media.api-sports.io/football/leagues/39.png" alt="EPL" class="w-16 h-16 mb-3 drop-shadow-lg">
+        <span class="text-sm font-bold text-center text-white">Premier League</span>
+    </a>
+    <a href="/?league=La Liga&team=Default" class="flex flex-col items-center p-4 bg-gray-900 rounded-xl hover:bg-gray-800 transition border {% if current_league == 'La Liga' %}border-primary-custom shadow-[0_0_15px_rgba(255,255,255,0.2)]{% else %}border-gray-800{% endif %}">
+        <img src="https://media.api-sports.io/football/leagues/140.png" alt="La Liga" class="w-16 h-16 mb-3 drop-shadow-lg">
+        <span class="text-sm font-bold text-center text-white">La Liga</span>
+    </a>
+    <a href="/?league=Serie A&team=Default" class="flex flex-col items-center p-4 bg-gray-900 rounded-xl hover:bg-gray-800 transition border {% if current_league == 'Serie A' %}border-primary-custom shadow-[0_0_15px_rgba(0,143,76,0.2)]{% else %}border-gray-800{% endif %}">
+        <img src="https://media.api-sports.io/football/leagues/135.png" alt="Serie A" class="w-16 h-16 mb-3 drop-shadow-lg">
+        <span class="text-sm font-bold text-center text-white">Serie A</span>
+    </a>
+    <a href="/?league=Bundesliga&team=Default" class="flex flex-col items-center p-4 bg-gray-900 rounded-xl hover:bg-gray-800 transition border {% if current_league == 'Bundesliga' %}border-primary-custom shadow-[0_0_15px_rgba(218,41,28,0.2)]{% else %}border-gray-800{% endif %}">
+        <img src="https://media.api-sports.io/football/leagues/78.png" alt="Bundesliga" class="w-16 h-16 mb-3 drop-shadow-lg">
+        <span class="text-sm font-bold text-center text-white">Bundesliga</span>
+    </a>
+    <a href="/?league=Ligue 1&team=Default" class="flex flex-col items-center p-4 bg-gray-900 rounded-xl hover:bg-gray-800 transition border {% if current_league == 'Ligue 1' %}border-primary-custom shadow-[0_0_15px_rgba(0,65,112,0.2)]{% else %}border-gray-800{% endif %}">
+        <img src="https://media.api-sports.io/football/leagues/61.png" alt="Ligue 1" class="w-16 h-16 mb-3 drop-shadow-lg">
+        <span class="text-sm font-bold text-center text-white">Ligue 1</span>
+    </a>
 </div>
 
 <hr>
@@ -27,7 +35,7 @@
         <h3 class="text-3xl mb-2 text-white"><span class="text-primary-custom">{{ match_home }}</span> vs <span>{{ match_away }}</span></h3>
         <div class="inline-block bg-red-600 text-white px-3 py-1 rounded text-sm font-bold animate-pulse mb-6">LIVE - 65'</div>
         
-        <div class="bg-black/40 p-6 rounded-lg border-l-4 border-primary-custom inline-block text-left w-full">
+        <div class="bg-black/40 p-6 rounded-lg border-l-4 border-primary-custom inline-block text-left w-full shadow-lg">
             <div class="text-gray-400 text-sm uppercase mb-1">V3 Projected Winner</div>
             <div class="text-2xl font-bold">{{ match_home }} <span class="text-green-400 text-lg ml-2">+12% Prob Shift</span></div>
         </div>
@@ -43,27 +51,46 @@
 <hr>
 
 <h2 class="text-2xl mb-6">Live Standings</h2>
-<div class="overflow-x-auto rounded-lg border border-gray-800">
+<div class="overflow-x-auto rounded-lg border border-gray-800 mb-12 shadow-lg">
     <table class="w-full text-left border-collapse">
         <thead>
-            <tr class="bg-gray-900 text-gray-400 text-sm">
+            <tr class="bg-gray-900 text-gray-400 text-sm uppercase tracking-wide">
                 <th class="p-4 border-b border-gray-800">Pos</th>
                 <th class="p-4 border-b border-gray-800">Team</th>
                 <th class="p-4 border-b border-gray-800 text-center">Played</th>
                 <th class="p-4 border-b border-gray-800 text-center">Points</th>
             </tr>
         </thead>
-        <tbody class="bg-black/20">
+        <tbody class="bg-black/40">
             {% for i in range(available_teams|length) %}
-            <tr class="border-b border-gray-800/50 hover:bg-gray-800/50 transition">
-                <td class="p-4">{{ i + 1 }}</td>
-                <td class="p-4 font-bold">{{ available_teams[i] }}</td>
-                <td class="p-4 text-center">38</td>
+            <tr class="border-b border-gray-800/50 hover:bg-gray-800/80 transition cursor-pointer" onclick="window.location.href='/team?league={{ current_league }}&team={{ available_teams[i] }}'">
+                <td class="p-4 text-gray-400">{{ i + 1 }}</td>
+                <td class="p-4 font-bold text-white">{{ available_teams[i] }}</td>
+                <td class="p-4 text-center text-gray-300">38</td>
                 <td class="p-4 text-center font-bold text-primary-custom">{{ [89, 87, 75, 66, 60][i] if i < 5 else 50 }}</td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
+</div>
+
+<!-- DIAGNOSTIC DATA MOVED TO BOTTOM -->
+<div class="mt-16 pt-8 border-t border-gray-800/50 opacity-70 hover:opacity-100 transition">
+    <h3 class="text-sm uppercase tracking-widest text-gray-500 mb-4 font-bold">System Diagnostics</h3>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="metric-card bg-black/30 border-b border-gray-700">
+            <div class="text-gray-500 text-xs uppercase tracking-wider">Pipeline</div>
+            <div class="text-lg font-bold mt-1 text-gray-300">V3 Universal Model</div>
+        </div>
+        <div class="metric-card bg-black/30 border-b border-gray-700">
+            <div class="text-gray-500 text-xs uppercase tracking-wider">Data Provider</div>
+            <div class="text-lg font-bold mt-1 text-gray-300">Sofascore API (Live)</div>
+        </div>
+        <div class="metric-card bg-black/30 border-b border-gray-700">
+            <div class="text-gray-500 text-xs uppercase tracking-wider">Status</div>
+            <div class="text-lg font-bold mt-1 text-green-500">Connected & Syncing</div>
+        </div>
+    </div>
 </div>
 
 {% endblock %}
