@@ -117,34 +117,33 @@ def generate_pitch_svg_vertical(formation="4-3-3", team_color="#EF0107", players
         return [1] + [int(x) for x in fmt_str.split("-")]
         
     lines = parse_formation(formation)
-    W, H = 120, 160  # Made wider and taller so names don't overlap
+    W, H = 160, 200  # Significantly widened and lengthened to prevent any overlapping
     
-    svg = f"""<svg width="100%" style="max-width: 500px; display: block; margin: 0 auto;" viewBox="0 0 {W} {H}" xmlns="http://www.w3.org/2000/svg">
+    svg = f"""<svg width="100%" style="max-width: 600px; display: block; margin: 0 auto;" viewBox="0 0 {W} {H}" xmlns="http://www.w3.org/2000/svg">
         <rect width="{W}" height="{H}" fill="#2e7d32" rx="2" ry="2"/>
-        <rect x="5" y="5" width="110" height="150" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="0.5"/>
+        <rect x="5" y="5" width="150" height="190" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="0.5"/>
         <!-- Halfway line at bottom -->
-        <line x1="5" y1="155" x2="115" y2="155" stroke="rgba(255,255,255,0.6)" stroke-width="0.5"/>
-        <circle cx="60" cy="155" r="15" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="0.5"/>
-        <circle cx="60" cy="155" r="0.8" fill="white" />
+        <line x1="5" y1="195" x2="155" y2="195" stroke="rgba(255,255,255,0.6)" stroke-width="0.5"/>
+        <circle cx="80" cy="195" r="20" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="0.5"/>
+        <circle cx="80" cy="195" r="1.5" fill="white" />
         
-        <rect x="30" y="5" width="60" height="22" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="0.5"/>
-        <rect x="45" y="5" width="30" height="8" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="0.5"/>
-        <line x1="52" y1="5" x2="68" y2="5" stroke="white" stroke-width="1.5" />
+        <rect x="35" y="5" width="90" height="30" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="0.5"/>
+        <rect x="60" y="5" width="40" height="10" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="0.5"/>
+        <line x1="72" y1="5" x2="88" y2="5" stroke="white" stroke-width="2" />
     """
     
     if lines:
         y_steps = len(lines)
         p_idx = 0
         for row_idx, num_players in enumerate(lines):
-            y = 15 + (120 / max(1, y_steps - 1)) * row_idx
+            y = 20 + (160 / max(1, y_steps - 1)) * row_idx
             for col_idx in range(num_players):
-                x = 10 + (100 / (num_players + 1)) * (col_idx + 1)
+                x = 10 + (140 / (num_players + 1)) * (col_idx + 1)
                 name = players[p_idx] if p_idx < len(players) else ""
-                # Wrap player in an anchor tag linked to the player profile
                 svg += f"""
                     <a href="/player?name={name}&team={team_name}" style="cursor: pointer;">
-                        <circle cx="{x}" cy="{y}" r="4" fill="{team_color}" stroke="white" stroke-width="0.8"/>
-                        <text x="{x}" y="{y+6.5}" fill="white" font-family="'Trebuchet MS', sans-serif" font-size="4.5px" font-weight="bold" text-anchor="middle">{name}</text>
+                        <circle cx="{x}" cy="{y}" r="5" fill="{team_color}" stroke="white" stroke-width="1"/>
+                        <text x="{x}" y="{y+9}" fill="white" font-family="'Trebuchet MS', sans-serif" font-size="6px" font-weight="bold" text-anchor="middle">{name}</text>
                     </a>
                 """
                 p_idx += 1
