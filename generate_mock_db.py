@@ -4,15 +4,37 @@ from pathlib import Path
 
 # Core teams to generate mock data for
 leagues = {
-    "Premier League": ["Arsenal", "Aston Villa", "Bournemouth", "Brentford", "Brighton", 
+    "Premier League": [
+        "Arsenal", "Aston Villa", "Bournemouth", "Brentford", "Brighton", 
         "Chelsea", "Crystal Palace", "Everton", "Fulham", "Ipswich Town", 
         "Leicester City", "Liverpool", "Manchester City", "Manchester United", 
         "Newcastle United", "Nottingham Forest", "Southampton", "Tottenham Hotspur", 
-        "West Ham United", "Wolverhampton"],
-    "La Liga": ["Real Madrid", "Barcelona", "Atletico Madrid", "Athletic Club", "Real Sociedad"],
-    "Serie A": ["Inter Milan", "AC Milan", "Juventus", "Atalanta", "Bologna"],
-    "Bundesliga": ["Bayer Leverkusen", "Bayern Munich", "VfB Stuttgart", "RB Leipzig", "Borussia Dortmund"],
-    "Ligue 1": ["Paris SG", "Monaco", "Marseille", "Lille", "Lens"]
+        "West Ham United", "Wolverhampton"
+    ],
+    "La Liga": [
+        "Real Madrid", "Barcelona", "Atletico Madrid", "Athletic Club", "Real Sociedad",
+        "Girona", "Real Betis", "Villarreal", "Valencia", "Sevilla",
+        "Osasuna", "Celta Vigo", "Alaves", "Mallorca", "Getafe",
+        "Las Palmas", "Rayo Vallecano", "Espanyol", "Valladolid", "Leganes"
+    ],
+    "Serie A": [
+        "Inter Milan", "AC Milan", "Juventus", "Atalanta", "Bologna",
+        "Roma", "Lazio", "Fiorentina", "Napoli", "Torino",
+        "Genoa", "Monza", "Lecce", "Empoli", "Udinese",
+        "Hellas Verona", "Cagliari", "Como", "Parma", "Venezia"
+    ],
+    "Bundesliga": [
+        "Bayer Leverkusen", "Bayern Munich", "VfB Stuttgart", "RB Leipzig", "Borussia Dortmund",
+        "Eintracht Frankfurt", "Hoffenheim", "Freiburg", "Heidenheim", "Augsburg",
+        "Werder Bremen", "Wolfsburg", "Borussia Monchengladbach", "Bochum", "Union Berlin",
+        "Mainz 05", "St. Pauli", "Holstein Kiel"
+    ],
+    "Ligue 1": [
+        "Paris SG", "Monaco", "Marseille", "Lille", "Lens",
+        "Nice", "Lyon", "Rennes", "Reims", "Toulouse",
+        "Montpellier", "Strasbourg", "Nantes", "Le Havre", "Brest",
+        "Auxerre", "Angers", "Saint-Etienne"
+    ]
 }
 
 db = {
