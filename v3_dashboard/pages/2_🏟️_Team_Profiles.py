@@ -7,7 +7,7 @@ import pandas as pd
 
 st.set_page_config(page_title="Team Profiles", layout="wide")
 
-team_theme = st.sidebar.selectbox("Team Theme", ["Arsenal", "Manchester City", "Manchester United", "Real Madrid", "Barcelona", "Default"])
+team_theme = st.sidebar.selectbox("Team Theme", ["Manchester United", "Arsenal", "Manchester City", "Real Madrid", "Barcelona", "Chelsea", "Liverpool", "Bayern Munich", "Paris SG", "Juventus", "Default"])
 ui.apply_theme(team_theme)
 
 st.title(f"🏟️ Team Profile: {team_theme}")
