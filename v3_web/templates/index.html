@@ -30,22 +30,20 @@
 <hr>
 
 <h2 class="text-2xl mb-6">Featured Match of the Week</h2>
-<div class="flex flex-col lg:flex-row gap-12 items-center bg-gray-900/50 p-8 rounded-xl border border-gray-800">
-    <div class="flex-1 text-center lg:text-left">
-        <h3 class="text-3xl mb-2 text-white"><span class="text-primary-custom">{{ match_home }}</span> vs <span>{{ match_away }}</span></h3>
-        <div class="inline-block bg-red-600 text-white px-3 py-1 rounded text-sm font-bold animate-pulse mb-6">LIVE - 65'</div>
-        
-        <div class="bg-black/40 p-6 rounded-lg border-l-4 border-primary-custom inline-block text-left w-full shadow-lg">
-            <div class="text-gray-400 text-sm uppercase mb-1">V3 Projected Winner</div>
-            <div class="text-2xl font-bold">{{ match_home }} <span class="text-green-400 text-lg ml-2">+12% Prob Shift</span></div>
-        </div>
-        <p class="text-gray-400 mt-6 text-sm italic">👈 Navigate to the 'Live Match' page in the sidebar for full play-by-play odds.</p>
-    </div>
+<div class="flex flex-col items-center bg-gray-900/50 p-8 rounded-xl border border-gray-800">
+    <h3 class="text-3xl mb-2 text-white font-bold"><span class="text-primary-custom hover:underline"><a href="/team?league={{ current_league }}&team={{ match_home }}">{{ match_home }}</a></span> vs <span><a href="/team?league={{ current_league }}&team={{ match_away }}" class="hover:underline">{{ match_away }}</a></span></h3>
+    <div class="inline-block bg-red-600 text-white px-3 py-1 rounded text-sm font-bold animate-pulse mb-8">LIVE - 65'</div>
     
-    <div class="flex-1 w-full flex justify-center mt-8 lg:mt-0">
+    <div class="w-full flex justify-center mb-8">
         <!-- The SVG Pitch -->
         {{ pitch_svg | safe }}
     </div>
+
+    <div class="bg-black/40 p-6 rounded-lg border-l-4 border-primary-custom inline-block text-left w-full max-w-lg shadow-lg">
+        <div class="text-gray-400 text-sm uppercase mb-1">V3 Projected Winner</div>
+        <div class="text-2xl font-bold">{{ match_home }} <span class="text-green-400 text-lg ml-2">+12% Prob Shift</span></div>
+    </div>
+    <p class="text-gray-400 mt-6 text-sm italic">👈 Navigate to the 'Live Match' page in the sidebar for full play-by-play odds.</p>
 </div>
 
 <hr>

@@ -10,10 +10,7 @@
         <div class="bg-gray-900/50 p-6 rounded-xl border border-gray-800 mb-6 inline-block w-full">
             <span class="text-gray-400 uppercase text-sm tracking-wide">Manager</span>
             <div class="text-xl font-bold text-white mt-1">
-                {% if current_team == 'Arsenal' %}Mikel Arteta
-                {% elif current_team == 'Manchester City' %}Pep Guardiola
-                {% elif current_team == 'Real Madrid' %}Carlo Ancelotti
-                {% else %}Head Coach{% endif %}
+                {{ manager }}
             </div>
         </div>
         
