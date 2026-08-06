@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1 class="text-4xl mb-8">🏟️ Team Profile: {{ current_team }}</h1>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-12">
+    <!-- Left Col: Manager & Pitch -->
+    <div>
+        <h2 class="text-2xl mb-6">Manager & Standard XI</h2>
+        <div class="bg-gray-900/50 p-6 rounded-xl border border-gray-800 mb-6 inline-block w-full">
+            <span class="text-gray-400 uppercase text-sm tracking-wide">Manager</span>
+            <div class="text-xl font-bold text-white mt-1">
+                {% if current_team == 'Arsenal' %}Mikel Arteta
+                {% elif current_team == 'Manchester City' %}Pep Guardiola
+                {% elif current_team == 'Real Madrid' %}Carlo Ancelotti
+                {% else %}Head Coach{% endif %}
+            </div>
+        </div>
+        
+        <div class="bg-gray-900/30 p-4 rounded-xl border border-gray-800 flex justify-center">
+            {{ pitch_svg | safe }}
+        </div>
+    </div>
+    
+    <!-- Right Col: History & Next -->
+    <div>
+        <h2 class="text-2xl mb-6">Match History</h2>
+        <div class="overflow-x-auto rounded-lg border border-gray-800 mb-8">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="bg-gray-900 text-gray-400 text-sm">
+                        <th class="p-3 border-b border-gray-800">Date</th>
+                        <th class="p-3 border-b border-gray-800">Opponent</th>
+                        <th class="p-3 border-b border-gray-800 text-center">Result</th>
+                        <th class="p-3 border-b border-gray-800 text-center">xG</th>
+                        <th class="p-3 border-b border-gray-800 text-center">Possession</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-black/20 text-sm">
+                    <tr class="border-b border-gray-800/50 hover:bg-gray-800/50">
+                        <td class="p-3 text-gray-400">Aug 01</td><td class="p-3 font-bold text-white">Chelsea</td><td class="p-3 text-center text-green-400 font-bold">W 2-0</td><td class="p-3 text-center">2.1 - 0.8</td><td class="p-3 text-center">55%</td>
+                    </tr>
+                    <tr class="border-b border-gray-800/50 hover:bg-gray-800/50">
+                        <td class="p-3 text-gray-400">Aug 08</td><td class="p-3 font-bold text-white">Tottenham</td><td class="p-3 text-center text-yellow-400 font-bold">D 1-1</td><td class="p-3 text-center">1.5 - 1.5</td><td class="p-3 text-center">48%</td>
+                    </tr>
+                    <tr class="border-b border-gray-800/50 hover:bg-gray-800/50">
+                        <td class="p-3 text-gray-400">Aug 15</td><td class="p-3 font-bold text-white">Liverpool</td><td class="p-3 text-center text-red-400 font-bold">L 1-2</td><td class="p-3 text-center">0.9 - 2.4</td><td class="p-3 text-center">42%</td>
+                    </tr>
+                    <tr class="border-b border-gray-800/50 hover:bg-gray-800/50">
+                        <td class="p-3 text-gray-400">Aug 22</td><td class="p-3 font-bold text-white">Aston Villa</td><td class="p-3 text-center text-green-400 font-bold">W 3-0</td><td class="p-3 text-center">3.0 - 0.5</td><td class="p-3 text-center">65%</td>
+                    </tr>
+                    <tr class="hover:bg-gray-800/50">
+                        <td class="p-3 text-gray-400">Aug 29</td><td class="p-3 font-bold text-white">Newcastle</td><td class="p-3 text-center text-green-400 font-bold">W 1-0</td><td class="p-3 text-center">1.2 - 0.4</td><td class="p-3 text-center">58%</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <h2 class="text-2xl mb-6">Upcoming Fixture</h2>
+        <div class="bg-primary-custom/10 p-6 rounded-xl border border-primary-custom/30 text-center">
+            <div class="text-gray-300 mb-2">Next Match</div>
+            <div class="text-2xl text-white font-bold mb-4">vs Everton (Away)</div>
+            <div class="inline-block bg-primary-custom text-white px-4 py-2 rounded-full font-bold shadow-lg">
+                Win Probability: 68%
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
