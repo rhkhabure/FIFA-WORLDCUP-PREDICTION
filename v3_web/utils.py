@@ -44,7 +44,7 @@ TEAM_THEMES = {
     "Chelsea": {"primary": "#034694", "secondary": "#DBA111", "bg": "#04142B"},
     "Tottenham Hotspur": {"primary": "#132257", "secondary": "#FFFFFF", "bg": "#02040A"},
     "Aston Villa": {"primary": "#670E36", "secondary": "#95BFE5", "bg": "#110209"},
-    "Newcastle United": {"primary": "#000000", "secondary": "#FFFFFF", "bg": "#111111"},
+    "Newcastle United": {"primary": "#FFFFFF", "secondary": "#242424", "bg": "#111111"},
     
     "Real Madrid": {"primary": "#FFFFFF", "secondary": "#00529F", "bg": "#0F1626"},
     "Barcelona": {"primary": "#A50044", "secondary": "#004D98", "bg": "#0A1128"},
@@ -107,7 +107,7 @@ def get_theme_for_team(team_name):
     return {"primary": primary, "secondary": "#FFFFFF", "bg": bg}
 
 
-def generate_pitch_svg_vertical(formation="4-3-3", team_color="#EF0107", players=None):
+def generate_pitch_svg_vertical(formation="4-3-3", team_color="#EF0107", players=None, team_name="Default"):
     """Generates a vertical half-pitch for the Team Profile page."""
     if players is None:
         players = [f"P{i}" for i in range(11)]
@@ -117,32 +117,35 @@ def generate_pitch_svg_vertical(formation="4-3-3", team_color="#EF0107", players
         return [1] + [int(x) for x in fmt_str.split("-")]
         
     lines = parse_formation(formation)
-    W, H = 100, 120
+    W, H = 120, 160  # Made wider and taller so names don't overlap
     
-    svg = f"""<svg width="100%" style="max-width: 400px; display: block; margin: 0 auto;" viewBox="0 0 {W} {H}" xmlns="http://www.w3.org/2000/svg">
+    svg = f"""<svg width="100%" style="max-width: 500px; display: block; margin: 0 auto;" viewBox="0 0 {W} {H}" xmlns="http://www.w3.org/2000/svg">
         <rect width="{W}" height="{H}" fill="#2e7d32" rx="2" ry="2"/>
-        <rect x="5" y="5" width="90" height="110" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="0.5"/>
+        <rect x="5" y="5" width="110" height="150" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="0.5"/>
         <!-- Halfway line at bottom -->
-        <line x1="5" y1="115" x2="95" y2="115" stroke="rgba(255,255,255,0.6)" stroke-width="0.5"/>
-        <circle cx="50" cy="115" r="12" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="0.5"/>
-        <circle cx="50" cy="115" r="0.8" fill="white" />
+        <line x1="5" y1="155" x2="115" y2="155" stroke="rgba(255,255,255,0.6)" stroke-width="0.5"/>
+        <circle cx="60" cy="155" r="15" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="0.5"/>
+        <circle cx="60" cy="155" r="0.8" fill="white" />
         
-        <rect x="25" y="5" width="50" height="18" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="0.5"/>
-        <rect x="38" y="5" width="24" height="6" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="0.5"/>
-        <line x1="44" y1="5" x2="56" y2="5" stroke="white" stroke-width="1.5" />
+        <rect x="30" y="5" width="60" height="22" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="0.5"/>
+        <rect x="45" y="5" width="30" height="8" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="0.5"/>
+        <line x1="52" y1="5" x2="68" y2="5" stroke="white" stroke-width="1.5" />
     """
     
     if lines:
         y_steps = len(lines)
         p_idx = 0
         for row_idx, num_players in enumerate(lines):
-            y = 12 + (85 / max(1, y_steps - 1)) * row_idx
+            y = 15 + (120 / max(1, y_steps - 1)) * row_idx
             for col_idx in range(num_players):
-                x = 10 + (80 / (num_players + 1)) * (col_idx + 1)
+                x = 10 + (100 / (num_players + 1)) * (col_idx + 1)
                 name = players[p_idx] if p_idx < len(players) else ""
+                # Wrap player in an anchor tag linked to the player profile
                 svg += f"""
-                    <circle cx="{x}" cy="{y}" r="3.5" fill="{team_color}" stroke="white" stroke-width="0.8"/>
-                    <text x="{x}" y="{y+5.5}" fill="white" font-family="'Trebuchet MS', sans-serif" font-size="4px" font-weight="bold" text-anchor="middle">{name}</text>
+                    <a href="/player?name={name}&team={team_name}" style="cursor: pointer;">
+                        <circle cx="{x}" cy="{y}" r="4" fill="{team_color}" stroke="white" stroke-width="0.8"/>
+                        <text x="{x}" y="{y+6.5}" fill="white" font-family="'Trebuchet MS', sans-serif" font-size="4.5px" font-weight="bold" text-anchor="middle">{name}</text>
+                    </a>
                 """
                 p_idx += 1
                 
@@ -150,7 +153,7 @@ def generate_pitch_svg_vertical(formation="4-3-3", team_color="#EF0107", players
     return svg
 
 
-def generate_pitch_svg_horizontal(home_formation="4-3-3", away_formation="4-2-3-1", home_color="#6CABDD", away_color="#EF0107", home_players=None, away_players=None):
+def generate_pitch_svg_horizontal(home_formation="4-3-3", away_formation="4-2-3-1", home_color="#6CABDD", away_color="#EF0107", home_players=None, away_players=None, home_team="Home", away_team="Away"):
     """Generates a native horizontal full-pitch for the Live Match and Hub pages."""
     if home_players is None:
         home_players = [f"H{i}" for i in range(11)]
@@ -164,59 +167,62 @@ def generate_pitch_svg_horizontal(home_formation="4-3-3", away_formation="4-2-3-
     h_lines = parse_formation(home_formation)
     a_lines = parse_formation(away_formation)
     
-    W, H = 140, 90  # Wide pitch
+    W, H = 160, 100  # Made even wider so it expands beautifully when sidebar closes
     
-    svg = f"""<svg width="100%" style="max-width: 800px; display: block; margin: 0 auto;" viewBox="0 0 {W} {H}" xmlns="http://www.w3.org/2000/svg">
+    svg = f"""<svg width="100%" style="max-width: 100%; display: block; margin: 0 auto; transition: all 0.3s ease;" viewBox="0 0 {W} {H}" xmlns="http://www.w3.org/2000/svg">
         <rect width="{W}" height="{H}" fill="#2e7d32" rx="2" ry="2"/>
-        <rect x="5" y="5" width="130" height="80" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="0.5"/>
+        <rect x="5" y="5" width="150" height="90" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="0.5"/>
         
         <!-- Halfway line & circle -->
-        <line x1="70" y1="5" x2="70" y2="85" stroke="rgba(255,255,255,0.6)" stroke-width="0.5"/>
-        <circle cx="70" cy="45" r="12" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="0.5"/>
-        <circle cx="70" cy="45" r="0.8" fill="white" />
+        <line x1="80" y1="5" x2="80" y2="95" stroke="rgba(255,255,255,0.6)" stroke-width="0.5"/>
+        <circle cx="80" cy="50" r="15" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="0.5"/>
+        <circle cx="80" cy="50" r="0.8" fill="white" />
         
         <!-- Penalty Areas -->
-        <rect x="5" y="20" width="18" height="50" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="0.5"/>
-        <rect x="117" y="20" width="18" height="50" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="0.5"/>
+        <rect x="5" y="22" width="22" height="56" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="0.5"/>
+        <rect x="133" y="22" width="22" height="56" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="0.5"/>
         
         <!-- Goal Areas -->
-        <rect x="5" y="33" width="6" height="24" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="0.5"/>
-        <rect x="129" y="33" width="6" height="24" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="0.5"/>
+        <rect x="5" y="37" width="8" height="26" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="0.5"/>
+        <rect x="147" y="37" width="8" height="26" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="0.5"/>
         
         <!-- Goals -->
-        <line x1="5" y1="39" x2="5" y2="51" stroke="white" stroke-width="2" />
-        <line x1="135" y1="39" x2="135" y2="51" stroke="white" stroke-width="2" />
+        <line x1="5" y1="44" x2="5" y2="56" stroke="white" stroke-width="2" />
+        <line x1="155" y1="44" x2="155" y2="56" stroke="white" stroke-width="2" />
     """
     
-    # Draw Home Players (Left side, attacking right)
+    # Draw Home Players
     if h_lines:
         x_steps = len(h_lines)
         p_idx = 0
         for col_idx, num_players in enumerate(h_lines):
-            x = 12 + (50 / max(1, x_steps - 1)) * col_idx
+            x = 15 + (60 / max(1, x_steps - 1)) * col_idx
             for row_idx in range(num_players):
-                # Spread evenly vertically
-                y = 10 + (70 / (num_players + 1)) * (row_idx + 1)
+                y = 10 + (80 / (num_players + 1)) * (row_idx + 1)
                 name = home_players[p_idx] if p_idx < len(home_players) else ""
                 svg += f"""
-                    <circle cx="{x}" cy="{y}" r="2.5" fill="{home_color}" stroke="white" stroke-width="0.5"/>
-                    <text x="{x}" y="{y+4.5}" fill="white" font-family="'Trebuchet MS', sans-serif" font-size="3px" font-weight="bold" text-anchor="middle">{name}</text>
+                    <a href="/player?name={name}&team={home_team}" style="cursor: pointer;">
+                        <circle cx="{x}" cy="{y}" r="3" fill="{home_color}" stroke="white" stroke-width="0.5"/>
+                        <text x="{x}" y="{y+5}" fill="white" font-family="'Trebuchet MS', sans-serif" font-size="3.5px" font-weight="bold" text-anchor="middle">{name}</text>
+                    </a>
                 """
                 p_idx += 1
 
-    # Draw Away Players (Right side, attacking left)
+    # Draw Away Players
     if a_lines:
         x_steps = len(a_lines)
         p_idx = 0
         for col_idx, num_players in enumerate(a_lines):
-            x = 128 - (50 / max(1, x_steps - 1)) * col_idx
+            x = 145 - (60 / max(1, x_steps - 1)) * col_idx
             for row_idx in range(num_players):
-                y = 10 + (70 / (num_players + 1)) * (row_idx + 1)
+                y = 10 + (80 / (num_players + 1)) * (row_idx + 1)
                 name = away_players[p_idx] if p_idx < len(away_players) else ""
                 border = "#00529F" if away_color.upper() == "#FFFFFF" else "white"
                 svg += f"""
-                    <circle cx="{x}" cy="{y}" r="2.5" fill="{away_color}" stroke="{border}" stroke-width="0.5"/>
-                    <text x="{x}" y="{y+4.5}" fill="white" font-family="'Trebuchet MS', sans-serif" font-size="3px" font-weight="bold" text-anchor="middle">{name}</text>
+                    <a href="/player?name={name}&team={away_team}" style="cursor: pointer;">
+                        <circle cx="{x}" cy="{y}" r="3" fill="{away_color}" stroke="{border}" stroke-width="0.5"/>
+                        <text x="{x}" y="{y+5}" fill="white" font-family="'Trebuchet MS', sans-serif" font-size="3.5px" font-weight="bold" text-anchor="middle">{name}</text>
+                    </a>
                 """
                 p_idx += 1
             
