@@ -1,11 +1,17 @@
 import streamlit as st
 
+# Expanded Theme Dictionary
 TEAM_THEMES = {
     "Manchester City": {"primary": "#6CABDD", "secondary": "#1C2C5B", "bg": "#0B1320"},
     "Arsenal": {"primary": "#EF0107", "secondary": "#9C824A", "bg": "#1A0505"},
     "Manchester United": {"primary": "#DA291C", "secondary": "#FBE122", "bg": "#1C0A0A"},
     "Real Madrid": {"primary": "#FFFFFF", "secondary": "#00529F", "bg": "#0F1626"},
     "Barcelona": {"primary": "#A50044", "secondary": "#004D98", "bg": "#0A1128"},
+    "Chelsea": {"primary": "#034694", "secondary": "#DBA111", "bg": "#04142B"},
+    "Liverpool": {"primary": "#C8102E", "secondary": "#00B2A9", "bg": "#180205"},
+    "Bayern Munich": {"primary": "#DC052D", "secondary": "#0066B2", "bg": "#1C0005"},
+    "Paris SG": {"primary": "#004170", "secondary": "#DA291C", "bg": "#020D1A"},
+    "Juventus": {"primary": "#000000", "secondary": "#FFFFFF", "bg": "#111111"},
     "Default": {"primary": "#00FF87", "secondary": "#008F4C", "bg": "#0E1117"}
 }
 
@@ -37,21 +43,21 @@ def apply_theme(team_name="Default"):
         color: {theme['primary']} !important;
         font-weight: 900 !important;
     }}
-    /* SVG Pitch labels */
+    /* SVG Pitch styling */
     .player-label {{
-        fill: white;
-        font-family: 'Trebuchet MS', sans-serif;
-        font-size: 3.5px;
-        font-weight: bold;
-        text-anchor: middle;
+        fill: white !important;
+        font-family: 'Trebuchet MS', sans-serif !important;
+        font-size: 3.5px !important;
+        font-weight: bold !important;
+        text-anchor: middle !important;
     }}
     .pitch-bg {{
-        fill: #2e7d32;
+        fill: #2e7d32 !important;
     }}
     .pitch-lines {{
-        fill: none;
-        stroke: rgba(255,255,255,0.6);
-        stroke-width: 0.5;
+        fill: none !important;
+        stroke: rgba(255,255,255,0.6) !important;
+        stroke-width: 0.5 !important;
     }}
     hr {{
         border-color: {theme['secondary']} !important;
@@ -68,7 +74,7 @@ def generate_pitch_svg(home_formation="4-3-3", away_formation="4-2-3-1", home_co
         away_players = [f"A{i}" for i in range(11)]
         
     def parse_formation(fmt_str):
-        if fmt_str == "0-0": return []
+        if not fmt_str or fmt_str == "0-0": return []
         return [1] + [int(x) for x in fmt_str.split("-")]
         
     h_lines = parse_formation(home_formation)
@@ -76,33 +82,23 @@ def generate_pitch_svg(home_formation="4-3-3", away_formation="4-2-3-1", home_co
     
     W, H = 100, 140
     
-    svg = f"""<svg width="100%" height="500px" viewBox="0 0 {W} {H}" xmlns="http://www.w3.org/2000/svg">
-        <!-- Pitch Background -->
+    # We must wrap the SVG in a div and remove comments that streamlit might try to markdown-parse
+    svg = f"""<div style="display: flex; justify-content: center; width: 100%; margin: 20px 0;">
+        <svg width="100%" max-width="400px" viewBox="0 0 {W} {H}" xmlns="http://www.w3.org/2000/svg">
         <rect width="{W}" height="{H}" class="pitch-bg" rx="2" ry="2"/>
-        
-        <!-- Outer boundary -->
         <rect x="5" y="5" width="90" height="130" class="pitch-lines" />
-        
-        <!-- Halfway line & circle -->
         <line x1="5" y1="70" x2="95" y2="70" class="pitch-lines" />
         <circle cx="50" cy="70" r="12" class="pitch-lines" />
         <circle cx="50" cy="70" r="0.8" fill="white" />
-        
-        <!-- Penalty Areas -->
         <rect x="25" y="5" width="50" height="18" class="pitch-lines" />
         <rect x="25" y="117" width="50" height="18" class="pitch-lines" />
-        
-        <!-- Goal Areas -->
         <rect x="38" y="5" width="24" height="6" class="pitch-lines" />
         <rect x="38" y="129" width="24" height="6" class="pitch-lines" />
-        
-        <!-- Goals -->
         <line x1="44" y1="5" x2="56" y2="5" stroke="white" stroke-width="1.5" />
         <line x1="44" y1="135" x2="56" y2="135" stroke="white" stroke-width="1.5" />
     """
     
     # Draw Home Players (Top Half, attacking downwards)
-    # y ranges from 12 to 62
     if h_lines:
         y_steps = len(h_lines)
         p_idx = 0
@@ -118,7 +114,6 @@ def generate_pitch_svg(home_formation="4-3-3", away_formation="4-2-3-1", home_co
                 p_idx += 1
 
     # Draw Away Players (Bottom Half, attacking upwards)
-    # y ranges from 128 to 78
     if a_lines:
         y_steps = len(a_lines)
         p_idx = 0
@@ -127,7 +122,6 @@ def generate_pitch_svg(home_formation="4-3-3", away_formation="4-2-3-1", home_co
             for col_idx in range(num_players):
                 x = 10 + (80 / (num_players + 1)) * (col_idx + 1)
                 name = away_players[p_idx] if p_idx < len(away_players) else ""
-                # For Real Madrid, if color is white, border should be dark
                 border = "#00529F" if away_color.upper() == "#FFFFFF" else "white"
                 svg += f"""
                     <circle cx="{x}" cy="{y}" r="2.8" fill="{away_color}" stroke="{border}" stroke-width="0.5"/>
@@ -135,5 +129,5 @@ def generate_pitch_svg(home_formation="4-3-3", away_formation="4-2-3-1", home_co
                 """
                 p_idx += 1
             
-    svg += "</svg>"
+    svg += "</svg></div>"
     return svg
