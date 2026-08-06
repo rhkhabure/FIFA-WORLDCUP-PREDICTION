@@ -34,21 +34,15 @@
                     </tr>
                 </thead>
                 <tbody class="bg-black/20 text-sm">
+                    {% for match in match_history %}
                     <tr class="border-b border-gray-800/50 hover:bg-gray-800/50">
-                        <td class="p-3 text-gray-400">Aug 01</td><td class="p-3 font-bold text-white">Chelsea</td><td class="p-3 text-center text-green-400 font-bold">W 2-0</td><td class="p-3 text-center">2.1 - 0.8</td><td class="p-3 text-center">55%</td>
+                        <td class="p-3 text-gray-400">{{ match.date }}</td>
+                        <td class="p-3 font-bold text-white">{{ match.opponent }}</td>
+                        <td class="p-3 text-center font-bold {% if match.result.startswith('W') %}text-green-400{% elif match.result.startswith('L') %}text-red-400{% else %}text-yellow-400{% endif %}">{{ match.result }}</td>
+                        <td class="p-3 text-center">{{ match.xg }}</td>
+                        <td class="p-3 text-center">{{ match.possession }}</td>
                     </tr>
-                    <tr class="border-b border-gray-800/50 hover:bg-gray-800/50">
-                        <td class="p-3 text-gray-400">Aug 08</td><td class="p-3 font-bold text-white">Tottenham</td><td class="p-3 text-center text-yellow-400 font-bold">D 1-1</td><td class="p-3 text-center">1.5 - 1.5</td><td class="p-3 text-center">48%</td>
-                    </tr>
-                    <tr class="border-b border-gray-800/50 hover:bg-gray-800/50">
-                        <td class="p-3 text-gray-400">Aug 15</td><td class="p-3 font-bold text-white">Liverpool</td><td class="p-3 text-center text-red-400 font-bold">L 1-2</td><td class="p-3 text-center">0.9 - 2.4</td><td class="p-3 text-center">42%</td>
-                    </tr>
-                    <tr class="border-b border-gray-800/50 hover:bg-gray-800/50">
-                        <td class="p-3 text-gray-400">Aug 22</td><td class="p-3 font-bold text-white">Aston Villa</td><td class="p-3 text-center text-green-400 font-bold">W 3-0</td><td class="p-3 text-center">3.0 - 0.5</td><td class="p-3 text-center">65%</td>
-                    </tr>
-                    <tr class="hover:bg-gray-800/50">
-                        <td class="p-3 text-gray-400">Aug 29</td><td class="p-3 font-bold text-white">Newcastle</td><td class="p-3 text-center text-green-400 font-bold">W 1-0</td><td class="p-3 text-center">1.2 - 0.4</td><td class="p-3 text-center">58%</td>
-                    </tr>
+                    {% endfor %}
                 </tbody>
             </table>
         </div>

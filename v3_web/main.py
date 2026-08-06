@@ -5,13 +5,14 @@ from fastapi.templating import Jinja2Templates
 import uvicorn
 from utils import TEAM_THEMES, LEAGUE_TEAMS, TEAM_MANAGERS, get_theme_for_team, generate_pitch_svg_horizontal, generate_pitch_svg_vertical
 import os
+from pathlib import Path
 
 app = FastAPI(title="V3 Universal Football Model")
-templates = Jinja2Templates(directory="templates")
+templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 
 # Load the comprehensive mock DB generated earlier
-DB_PATH = "data.json"
-if os.path.exists(DB_PATH):
+DB_PATH = Path(__file__).parent / "data.json"
+if DB_PATH.exists():
     with open(DB_PATH, "r") as f:
         db = json.load(f)
 else:
