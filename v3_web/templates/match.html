@@ -4,19 +4,19 @@
 <h1 class="text-4xl mb-6">🔴 Live Match Center</h1>
 
 <!-- Match Banner -->
-<div class="flex justify-between items-center bg-gray-900/50 p-6 rounded-xl border border-gray-800 mb-8">
+<div class="flex justify-between items-center bg-gray-900/50 p-6 rounded-xl border border-gray-800 mb-8 shadow-lg">
     <div class="text-center flex-1">
-        <h2 class="text-3xl text-primary-custom mb-1">{{ match_home }}</h2>
+        <a href="/team?league={{ current_league }}&team={{ match_home }}" class="text-3xl text-primary-custom mb-1 hover:underline block font-bold transition-all duration-200 hover:scale-105">{{ match_home }}</a>
         <p class="text-gray-400 text-sm">Home | 4-3-3</p>
     </div>
     
     <div class="text-center flex-1 px-4 border-x border-gray-800">
         <div class="text-5xl font-black text-white mb-2">2 - 1</div>
-        <p class="text-gray-400 text-sm">88' | Etihad Stadium | Ref: Michael Oliver</p>
+        <p class="text-gray-400 text-sm">88' | Main Stadium | Ref: M. Oliver</p>
     </div>
     
     <div class="text-center flex-1">
-        <h2 class="text-3xl text-white mb-1">{{ match_away }}</h2>
+        <a href="/team?league={{ current_league }}&team={{ match_away }}" class="text-3xl text-white mb-1 hover:text-gray-300 hover:underline block font-bold transition-all duration-200 hover:scale-105">{{ match_away }}</a>
         <p class="text-gray-400 text-sm">Away | 4-2-3-1</p>
     </div>
 </div>

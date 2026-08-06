@@ -83,22 +83,33 @@
     <div class="sidebar">
         <h2 class="text-xl mb-6 flex items-center gap-2">⚽ V3 Model</h2>
         
-        <form action="/" method="get" id="nav-form">
+        <div class="mb-6">
             <label class="text-sm text-gray-400">Select League</label>
-            <select name="league" onchange="document.getElementById('nav-form').submit()">
+            <select id="league-select" onchange="updateNav()">
                 {% for l in leagues %}
                     <option value="{{ l }}" {% if l == current_league %}selected{% endif %}>{{ l }}</option>
                 {% endfor %}
             </select>
             
             <label class="text-sm text-gray-400">Select Team Theme</label>
-            <select name="team" onchange="document.getElementById('nav-form').submit()">
+            <select id="team-select" onchange="updateNav()">
                 <option value="Default">Default</option>
                 {% for t in available_teams %}
                     <option value="{{ t }}" {% if t == current_team %}selected{% endif %}>{{ t }}</option>
                 {% endfor %}
             </select>
-        </form>
+        </div>
+
+        <script>
+            function updateNav() {
+                const league = document.getElementById('league-select').value;
+                const team = document.getElementById('team-select').value;
+                const url = new URL(window.location);
+                url.searchParams.set('league', league);
+                url.searchParams.set('team', team);
+                window.location.href = url.href;
+            }
+        </script>
 
         <div class="mt-8">
             <a href="/?league={{ current_league }}&team={{ current_team }}" class="nav-link {% if active_page == 'hub' %}active{% endif %}">🌍 League Hub</a>
