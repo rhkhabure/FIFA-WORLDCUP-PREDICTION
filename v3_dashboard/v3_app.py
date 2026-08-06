@@ -12,7 +12,7 @@ st.set_page_config(page_title="V3 League Hub", page_icon="⚽", layout="wide")
 st.sidebar.title("⚽ Universal Football Model")
 st.sidebar.markdown("---")
 
-league = st.sidebar.selectbox("Select League", ["Premier League", "La Liga", "Serie A", "Bundesliga", "Ligue 1", "Champions League"])
+league = st.sidebar.selectbox("Select League", ["Premier League", "La Liga", "Serie A", "Bundesliga", "Ligue 1"])
 
 # Dynamic Team Selection based on League
 league_teams = {
@@ -20,12 +20,12 @@ league_teams = {
     "La Liga": ["Real Madrid", "Barcelona", "Atletico Madrid"],
     "Serie A": ["Juventus", "AC Milan", "Inter Milan"],
     "Bundesliga": ["Bayern Munich", "Dortmund", "Bayer Leverkusen"],
-    "Ligue 1": ["Paris SG", "Marseille", "Lyon"],
-    "Champions League": ["Real Madrid", "Manchester City", "Bayern Munich", "Paris SG"]
+    "Ligue 1": ["Paris SG", "Marseille", "Lyon"]
 }
 
 available_teams = league_teams.get(league, ["Default"])
-team = st.sidebar.selectbox("Select Team Theme", ["Default"] + available_teams)
+team = st.sidebar.selectbox("Select Team Theme", ["Default"] + available_teams, index=1)
+
 
 ui.apply_theme(team)
 
