@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1 class="text-4xl mb-2">🌍 League Hub: {{ current_league }}</h1>
+<p class="text-gray-300 mb-8">Welcome to the <strong>V3 Universal Model</strong> dashboard for the {{ current_league }}. Data is dynamically powered by Sofascore.</p>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+    <div class="metric-card">
+        <div class="text-gray-400 text-sm uppercase tracking-wider">Pipeline</div>
+        <div class="text-2xl font-black mt-2 text-primary-custom">V3 Universal</div>
+    </div>
+    <div class="metric-card">
+        <div class="text-gray-400 text-sm uppercase tracking-wider">API Provider</div>
+        <div class="text-2xl font-black mt-2 text-primary-custom">Sofascore</div>
+    </div>
+    <div class="metric-card">
+        <div class="text-gray-400 text-sm uppercase tracking-wider">Supported Leagues</div>
+        <div class="text-2xl font-black mt-2 text-primary-custom">Big 5</div>
+    </div>
+</div>
+
+<hr>
+
+<h2 class="text-2xl mb-6">Featured Match of the Week</h2>
+<div class="flex flex-col lg:flex-row gap-12 items-center bg-gray-900/50 p-8 rounded-xl border border-gray-800">
+    <div class="flex-1 text-center lg:text-left">
+        <h3 class="text-3xl mb-2 text-white"><span class="text-primary-custom">{{ match_home }}</span> vs <span>{{ match_away }}</span></h3>
+        <div class="inline-block bg-red-600 text-white px-3 py-1 rounded text-sm font-bold animate-pulse mb-6">LIVE - 65'</div>
+        
+        <div class="bg-black/40 p-6 rounded-lg border-l-4 border-primary-custom inline-block text-left w-full">
+            <div class="text-gray-400 text-sm uppercase mb-1">V3 Projected Winner</div>
+            <div class="text-2xl font-bold">{{ match_home }} <span class="text-green-400 text-lg ml-2">+12% Prob Shift</span></div>
+        </div>
+        <p class="text-gray-400 mt-6 text-sm italic">👈 Navigate to the 'Live Match' page in the sidebar for full play-by-play odds.</p>
+    </div>
+    
+    <div class="flex-1 w-full flex justify-center">
+        <!-- The SVG Pitch -->
+        {{ pitch_svg | safe }}
+    </div>
+</div>
+
+<hr>
+
+<h2 class="text-2xl mb-6">Live Standings</h2>
+<div class="overflow-x-auto rounded-lg border border-gray-800">
+    <table class="w-full text-left border-collapse">
+        <thead>
+            <tr class="bg-gray-900 text-gray-400 text-sm">
+                <th class="p-4 border-b border-gray-800">Pos</th>
+                <th class="p-4 border-b border-gray-800">Team</th>
+                <th class="p-4 border-b border-gray-800 text-center">Played</th>
+                <th class="p-4 border-b border-gray-800 text-center">Points</th>
+            </tr>
+        </thead>
+        <tbody class="bg-black/20">
+            {% for i in range(available_teams|length) %}
+            <tr class="border-b border-gray-800/50 hover:bg-gray-800/50 transition">
+                <td class="p-4">{{ i + 1 }}</td>
+                <td class="p-4 font-bold">{{ available_teams[i] }}</td>
+                <td class="p-4 text-center">38</td>
+                <td class="p-4 text-center font-bold text-primary-custom">{{ [89, 87, 75, 66, 60][i] if i < 5 else 50 }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% endblock %}

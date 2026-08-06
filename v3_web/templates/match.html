@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1 class="text-4xl mb-6">🔴 Live Match Center</h1>
+
+<!-- Match Banner -->
+<div class="flex justify-between items-center bg-gray-900/50 p-6 rounded-xl border border-gray-800 mb-8">
+    <div class="text-center flex-1">
+        <h2 class="text-3xl text-primary-custom mb-1">{{ match_home }}</h2>
+        <p class="text-gray-400 text-sm">Home | 4-3-3</p>
+    </div>
+    
+    <div class="text-center flex-1 px-4 border-x border-gray-800">
+        <div class="text-5xl font-black text-white mb-2">2 - 1</div>
+        <p class="text-gray-400 text-sm">88' | Etihad Stadium | Ref: Michael Oliver</p>
+    </div>
+    
+    <div class="text-center flex-1">
+        <h2 class="text-3xl text-white mb-1">{{ match_away }}</h2>
+        <p class="text-gray-400 text-sm">Away | 4-2-3-1</p>
+    </div>
+</div>
+
+<!-- Win Probability Bar -->
+<h3 class="text-xl mb-4 text-white">Live Win Probability</h3>
+<div class="grid grid-cols-3 gap-4 mb-8">
+    <div class="metric-card bg-primary-custom/10 border-primary-custom">
+        <div class="text-gray-400 text-sm">{{ match_home }}</div>
+        <div class="text-3xl font-black mt-1 text-primary-custom">72% <span class="text-green-400 text-sm ml-1">+15%</span></div>
+    </div>
+    <div class="metric-card border-gray-700">
+        <div class="text-gray-400 text-sm">Draw</div>
+        <div class="text-3xl font-black mt-1 text-gray-300">18% <span class="text-red-400 text-sm ml-1">-10%</span></div>
+    </div>
+    <div class="metric-card border-gray-700">
+        <div class="text-gray-400 text-sm">{{ match_away }}</div>
+        <div class="text-3xl font-black mt-1 text-gray-300">10% <span class="text-red-400 text-sm ml-1">-5%</span></div>
+    </div>
+</div>
+
+<hr>
+
+<h3 class="text-2xl mb-6">Live Formations & Events</h3>
+<div class="flex flex-col lg:flex-row gap-8">
+    <div class="flex-[2] bg-gray-900/30 p-4 rounded-xl border border-gray-800 flex justify-center">
+        <!-- SVG Pitch -->
+        {{ pitch_svg | safe }}
+    </div>
+    
+    <div class="flex-1">
+        <div class="bg-gray-900/50 p-6 rounded-xl border border-gray-800 mb-6">
+            <h4 class="text-lg text-white border-b border-gray-800 pb-3 mb-4">Match Events</h4>
+            <ul class="space-y-4 text-gray-300">
+                <li class="flex gap-3"><span class="text-xl">⚽</span> <div><strong>15'</strong> - Goal ({{ match_away }}) - Saka</div></li>
+                <li class="flex gap-3"><span class="text-xl">⚽</span> <div><strong>40'</strong> - Goal ({{ match_home }}) - De Bruyne</div></li>
+                <li class="flex gap-3"><span class="text-xl">🟥</span> <div><strong>45'</strong> - Red Card ({{ match_away }}) - Gabriel</div></li>
+                <li class="flex gap-3"><span class="text-xl">⚽</span> <div><strong>88'</strong> - Goal ({{ match_home }}) - Haaland</div></li>
+            </ul>
+        </div>
+        
+        <div class="bg-gray-900/50 p-6 rounded-xl border border-gray-800">
+            <h4 class="text-lg text-white border-b border-gray-800 pb-3 mb-4">Managers</h4>
+            <div class="mb-2"><strong class="text-gray-400">Home:</strong> <span class="text-white">Pep Guardiola</span></div>
+            <div><strong class="text-gray-400">Away:</strong> <span class="text-white">Mikel Arteta</span></div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
