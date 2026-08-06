@@ -12,8 +12,11 @@
     <!-- Player Image & Basic Info (Placeholder for API image) -->
     <div class="bg-gray-900/50 p-6 rounded-xl border border-gray-800 text-center">
         <div class="w-48 h-48 mx-auto bg-gray-800 rounded-full border-4 border-primary-custom mb-4 flex items-center justify-center overflow-hidden">
-            <span class="text-6xl text-gray-600">👤</span>
-            <!-- When API is ready: <img src="sofascore_image_url" class="object-cover"> -->
+            {% if player_data.get('image') %}
+                <img src="{{ player_data.image }}" alt="{{ player_name }}" class="w-full h-full object-cover">
+            {% else %}
+                <span class="text-6xl text-gray-600">👤</span>
+            {% endif %}
         </div>
         <h2 class="text-2xl font-bold text-white mb-1">{{ player_name }}</h2>
         <p class="text-primary-custom font-bold uppercase tracking-wider text-sm">{{ team_name }}</p>
