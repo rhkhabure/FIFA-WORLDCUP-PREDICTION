@@ -1,12 +1,21 @@
-import random
+import json
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 import uvicorn
 from utils import TEAM_THEMES, LEAGUE_TEAMS, TEAM_MANAGERS, get_theme_for_team, generate_pitch_svg_horizontal, generate_pitch_svg_vertical
+import os
 
 app = FastAPI(title="V3 Universal Football Model")
 templates = Jinja2Templates(directory="templates")
+
+# Load the comprehensive mock DB generated earlier
+DB_PATH = "data.json"
+if os.path.exists(DB_PATH):
+    with open(DB_PATH, "r") as f:
+        db = json.load(f)
+else:
+    db = {"teams": {}, "players": {}, "match_history": {}}
 
 def get_common_context(request: Request):
     league = request.query_params.get("league", "Premier League")
@@ -31,40 +40,16 @@ def get_common_context(request: Request):
     }
 
 def get_real_players(team):
-    # Expanded real player list for UI testing
-    rosters = {
-        "Liverpool": ["Alisson", "Alexander-Arnold", "Konate", "Van Dijk", "Robertson", "Mac Allister", "Szoboszlai", "Diaz", "Salah", "Nunez", "Gakpo"],
-        "Manchester City": ["Ederson", "Walker", "Dias", "Akanji", "Gvardiol", "Rodri", "De Bruyne", "Silva", "Foden", "Haaland", "Grealish"],
-        "Arsenal": ["Raya", "White", "Saliba", "Gabriel", "Zinchenko", "Rice", "Odegaard", "Saka", "Martinelli", "Jesus", "Trossard"],
-        "Real Madrid": ["Courtois", "Carvajal", "Militao", "Rudiger", "Mendy", "Tchouameni", "Valverde", "Bellingham", "Vinicius", "Rodrygo", "Mbappe"],
-        "Barcelona": ["Ter Stegen", "Kounde", "Araujo", "Christensen", "Balde", "De Jong", "Pedri", "Gundogan", "Raphinha", "Lewandowski", "Yamal"],
-        "Bayern Munich": ["Neuer", "Mazraoui", "Upamecano", "Kim", "Davies", "Kimmich", "Goretzka", "Sane", "Musiala", "Coman", "Kane"],
-        "Inter Milan": ["Sommer", "Pavard", "Acerbi", "Bastoni", "Dumfries", "Barella", "Calhanoglu", "Mkhitaryan", "Dimarco", "Thuram", "Martinez"],
-        "Juventus": ["Szczesny", "Gatti", "Bremer", "Danilo", "Cambiaso", "Rabiot", "Locatelli", "McKennie", "Chiesa", "Vlahovic", "Milik"],
-        "Paris SG": ["Donnarumma", "Hakimi", "Marquinhos", "Skriniar", "Mendes", "Ugarte", "Zaire-Emery", "Vitinha", "Dembele", "Ramos", "Barcola"],
-        "Bayer Leverkusen": ["Hradecky", "Kossounou", "Tah", "Tapsoba", "Frimpong", "Palacios", "Xhaka", "Grimaldo", "Hofmann", "Wirtz", "Schick"]
-    }
-    return rosters.get(team, [f"{team[:3]}{i}" for i in range(11)])
+    # Fetch from DB if available, else fallback
+    if team in db.get("teams", {}):
+        return db["teams"][team].get("roster", [f"{team[:3]}{i}" for i in range(11)])
+    return [f"{team[:3]}{i}" for i in range(11)]
 
 def get_dynamic_history(team_name, league):
-    # generate 5 fake but team-specific matches for the UI until API is wired
-    opponents = [t for t in LEAGUE_TEAMS.get(league, []) if t != team_name][:5] 
-    if len(opponents) < 5:
-        opponents = (opponents * 5)[:5]
-        
-    results = []
-    for opp in opponents:
-        scored = random.randint(0, 3)
-        conceded = random.randint(0, 3)
-        res = "W" if scored > conceded else "L" if conceded > scored else "D"
-        results.append({
-            "date": "Sep " + str(random.randint(1, 30)),
-            "opponent": opp,
-            "result": f"{res} {scored}-{conceded}",
-            "xg": f"{scored*0.8:.1f} - {conceded*0.9:.1f}",
-            "possession": f"{random.randint(40, 60)}%"
-        })
-    return results
+    # Fetch from DB if available
+    if team_name in db.get("match_history", {}):
+        return db["match_history"][team_name]
+    return []
 
 @app.get("/", response_class=HTMLResponse)
 async def hub(request: Request):
@@ -189,11 +174,13 @@ async def player(request: Request):
     player_name = request.query_params.get("name", "Unknown Player")
     team_name = request.query_params.get("team", "Unknown Team")
     
-    # Overwrite theme if passed via URL
     ctx["theme"] = get_theme_for_team(team_name)
-    
     ctx["player_name"] = player_name
     ctx["team_name"] = team_name
+    
+    # Grab player detailed stats from the DB
+    player_data = db.get("players", {}).get(player_name, {})
+    ctx["player_data"] = player_data
     
     return templates.TemplateResponse(request=request, name="player.html", context=ctx)
 
