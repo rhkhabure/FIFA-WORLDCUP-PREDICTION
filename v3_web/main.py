@@ -1,3 +1,4 @@
+import random
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
@@ -37,10 +38,33 @@ def get_real_players(team):
         "Arsenal": ["Raya", "White", "Saliba", "Gabriel", "Zinchenko", "Rice", "Odegaard", "Saka", "Martinelli", "Jesus", "Trossard"],
         "Real Madrid": ["Courtois", "Carvajal", "Militao", "Rudiger", "Mendy", "Tchouameni", "Valverde", "Bellingham", "Vinicius", "Rodrygo", "Mbappe"],
         "Barcelona": ["Ter Stegen", "Kounde", "Araujo", "Christensen", "Balde", "De Jong", "Pedri", "Gundogan", "Raphinha", "Lewandowski", "Yamal"],
-        "Bayern Munich": ["Neuer", "Mazraoui", "Upamecano", "Kim", "Davies", "Kimmich", "Goretzka", "Sane", "Musiala", "Coman", "Kane"]
+        "Bayern Munich": ["Neuer", "Mazraoui", "Upamecano", "Kim", "Davies", "Kimmich", "Goretzka", "Sane", "Musiala", "Coman", "Kane"],
+        "Inter Milan": ["Sommer", "Pavard", "Acerbi", "Bastoni", "Dumfries", "Barella", "Calhanoglu", "Mkhitaryan", "Dimarco", "Thuram", "Martinez"],
+        "Juventus": ["Szczesny", "Gatti", "Bremer", "Danilo", "Cambiaso", "Rabiot", "Locatelli", "McKennie", "Chiesa", "Vlahovic", "Milik"],
+        "Paris SG": ["Donnarumma", "Hakimi", "Marquinhos", "Skriniar", "Mendes", "Ugarte", "Zaire-Emery", "Vitinha", "Dembele", "Ramos", "Barcola"],
+        "Bayer Leverkusen": ["Hradecky", "Kossounou", "Tah", "Tapsoba", "Frimpong", "Palacios", "Xhaka", "Grimaldo", "Hofmann", "Wirtz", "Schick"]
     }
     return rosters.get(team, [f"{team[:3]}{i}" for i in range(11)])
 
+def get_dynamic_history(team_name, league):
+    # generate 5 fake but team-specific matches for the UI until API is wired
+    opponents = [t for t in LEAGUE_TEAMS.get(league, []) if t != team_name][:5] 
+    if len(opponents) < 5:
+        opponents = (opponents * 5)[:5]
+        
+    results = []
+    for opp in opponents:
+        scored = random.randint(0, 3)
+        conceded = random.randint(0, 3)
+        res = "W" if scored > conceded else "L" if conceded > scored else "D"
+        results.append({
+            "date": "Sep " + str(random.randint(1, 30)),
+            "opponent": opp,
+            "result": f"{res} {scored}-{conceded}",
+            "xg": f"{scored*0.8:.1f} - {conceded*0.9:.1f}",
+            "possession": f"{random.randint(40, 60)}%"
+        })
+    return results
 
 @app.get("/", response_class=HTMLResponse)
 async def hub(request: Request):
@@ -50,7 +74,6 @@ async def hub(request: Request):
     league = ctx["current_league"]
     avail = ctx["available_teams"]
     
-    # Pick a dynamic feature match based on the league
     if league == "Premier League":
         home, away = "Manchester City", "Arsenal"
     elif league == "La Liga":
@@ -79,7 +102,9 @@ async def hub(request: Request):
         home_color=h_color, 
         away_color=a_color,
         home_players=home_players,
-        away_players=away_players
+        away_players=away_players,
+        home_team=home,
+        away_team=away
     )
     
     return templates.TemplateResponse(request=request, name="index.html", context=ctx)
@@ -92,7 +117,6 @@ async def match(request: Request):
     league = ctx["current_league"]
     avail = ctx["available_teams"]
     
-    # Pick a dynamic feature match based on the league
     if league == "Premier League":
         home, away = "Manchester City", "Arsenal"
     elif league == "La Liga":
@@ -124,7 +148,9 @@ async def match(request: Request):
         home_color=h_color, 
         away_color=a_color, 
         home_players=home_players, 
-        away_players=away_players
+        away_players=away_players,
+        home_team=home,
+        away_team=away
     )
     
     return templates.TemplateResponse(request=request, name="match.html", context=ctx)
@@ -136,7 +162,6 @@ async def team(request: Request):
     
     team_name = ctx["current_team"]
     if team_name == "Default" and len(ctx["available_teams"]) > 0:
-        # If user navigates to team profile but is on Default, fallback gracefully
         team_name = ctx["available_teams"][0]
         ctx["current_team"] = team_name
         ctx["theme"] = get_theme_for_team(team_name)
@@ -145,15 +170,32 @@ async def team(request: Request):
     home_players = get_real_players(team_name)
     
     ctx["manager"] = TEAM_MANAGERS.get(team_name, "Head Coach")
+    ctx["match_history"] = get_dynamic_history(team_name, ctx["current_league"])
     
-    # Team Profile gets the vertical half-pitch
     ctx["pitch_svg"] = generate_pitch_svg_vertical(
         formation="4-3-3", 
         team_color=t_color, 
-        players=home_players
+        players=home_players,
+        team_name=team_name
     )
     
     return templates.TemplateResponse(request=request, name="team.html", context=ctx)
+
+@app.get("/player", response_class=HTMLResponse)
+async def player(request: Request):
+    ctx = get_common_context(request)
+    ctx["active_page"] = "team" # highlight team tab
+    
+    player_name = request.query_params.get("name", "Unknown Player")
+    team_name = request.query_params.get("team", "Unknown Team")
+    
+    # Overwrite theme if passed via URL
+    ctx["theme"] = get_theme_for_team(team_name)
+    
+    ctx["player_name"] = player_name
+    ctx["team_name"] = team_name
+    
+    return templates.TemplateResponse(request=request, name="player.html", context=ctx)
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
