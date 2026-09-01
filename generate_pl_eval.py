@@ -1,0 +1,208 @@
+import json
+
+notebook = {
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# 🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League Opening Weekend Evaluation (V2 Model)\n",
+    "\n",
+    "Since our V3 model is currently an architectural shell trained on mock data, we are going to evaluate the newly played Premier League games using our production **V2 Model**.\n",
+    "\n",
+    "Because V2 was built for the World Cup and relies on FIFA Rankings, we have to supply a **\"Pseudo-FIFA Rank\"** for the 20 Premier League clubs so the model understands who the favorites and underdogs are. We have mapped Man City to 1, Arsenal to 2, down to the newly promoted sides at 18-20."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": None,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import sys\n",
+    "import urllib.request\n",
+    "import ssl\n",
+    "import json\n",
+    "import pandas as pd\n",
+    "from pathlib import Path\n",
+    "import matplotlib.pyplot as plt\n",
+    "\n",
+    "# Import common for V2 logic\n",
+    "sys.path.append(str(Path.cwd().parent))\n",
+    "import common as c\n",
+    "\n",
+    "plt.style.use('ggplot')\n"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 1. Club Ranks & API Setup"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": None,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Pseudo-FIFA Rankings for the 24/25 Premier League based on pre-season odds\n",
+    "PL_RANKS = {\n",
+    "    \"Manchester City\": 1,\n",
+    "    \"Arsenal\": 2,\n",
+    "    \"Liverpool\": 3,\n",
+    "    \"Chelsea\": 4,\n",
+    "    \"Tottenham Hotspur\": 5,\n",
+    "    \"Manchester United\": 6,\n",
+    "    \"Newcastle United\": 7,\n",
+    "    \"Aston Villa\": 8,\n",
+    "    \"Brighton\": 9,\n",
+    "    \"West Ham United\": 10,\n",
+    "    \"Crystal Palace\": 11,\n",
+    "    \"Bournemouth\": 12,\n",
+    "    \"Fulham\": 13,\n",
+    "    \"Wolverhampton\": 14,\n",
+    "    \"Everton\": 15,\n",
+    "    \"Brentford\": 16,\n",
+    "    \"Nottingham Forest\": 17,\n",
+    "    \"Leicester City\": 18,\n",
+    "    \"Southampton\": 19,\n",
+    "    \"Ipswich Town\": 20\n",
+    "}\n",
+    "\n",
+    "# Inject these into V2's ranking system so it understands the clubs\n",
+    "c.FIFA_RANK.update(PL_RANKS)\n",
+    "\n",
+    "import os\n",
+    "from dotenv import load_dotenv\n",
+    "load_dotenv(Path.cwd().parent / \".env\")\n",
+    "API_KEY = os.getenv(\"SOFASCORE_API_KEY\")\n",
+    "HOST = \"sofascore.p.rapidapi.com\"\n",
+    "\n",
+    "def fetch(endpoint):\n",
+    "    url = f\"https://{HOST}/{endpoint}\"\n",
+    "    req = urllib.request.Request(url, headers={'x-rapidapi-key': API_KEY, 'x-rapidapi-host': HOST})\n",
+    "    ctx = ssl.create_default_context()\n",
+    "    ctx.check_hostname = False\n",
+    "    ctx.verify_mode = ssl.CERT_NONE\n",
+    "    try:\n",
+    "        with urllib.request.urlopen(req, context=ctx) as res:\n",
+    "            if res.status == 200:\n",
+    "                return json.loads(res.read().decode())\n",
+    "    except Exception as e:\n",
+    "        print(f\"Error fetching {endpoint}: {e}\")\n",
+    "    return None\n"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 2. Fetch Opening Weekend Matches\n",
+    "We pull the results of the recent Premier League games (Tournament ID 17)."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": None,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Fetch recent events for Premier League (ID 17)\n",
+    "# Note: 61627 is the 24/25 season ID for the Premier League in Sofascore\n",
+    "season_data = fetch(\"tournaments/get-events?tournamentId=17&seasonId=61627&page=0\")\n",
+    "\n",
+    "pl_matches = []\n",
+    "if season_data and 'events' in season_data:\n",
+    "    # Filter for matches that are finished ('closed')\n",
+    "    pl_matches = [e for e in season_data['events'] if e.get('status', {}).get('type') == 'finished']\n",
+    "    # Sort by start timestamp descending (most recent first)\n",
+    "    pl_matches = sorted(pl_matches, key=lambda x: x.get('startTimestamp', 0), reverse=True)\n",
+    "    \n",
+    "    # Let's just grab the most recent 10 (which is exactly Matchweek 1)\n",
+    "    pl_matches = pl_matches[:10]\n",
+    "    print(f\"Found {len(pl_matches)} recent Premier League matches!\")\n",
+    "else:\n",
+    "    print(\"Could not fetch matches. Check API limits.\")\n"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 3. Predict & Evaluate with V2\n",
+    "For each match, we'll check what the model predicted at Minute 0 (Kickoff) based solely on the pseudo-ranks, and compare it to the actual final result."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": None,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "model, scaler, T = c.load_model()\n",
+    "results = []\n",
+    "\n",
+    "for match in pl_matches:\n",
+    "    home = match['homeTeam']['name']\n",
+    "    away = match['awayTeam']['name']\n",
+    "    hs = match['homeScore'].get('current', 0)\n",
+    "    as_ = match['awayScore'].get('current', 0)\n",
+    "    \n",
+    "    # Clean names to match our PL_RANKS\n",
+    "    # Sofascore sometimes returns slightly different strings, we might need to map them\n",
+    "    home_clean = \"Manchester United\" if home == \"Manchester Utd\" else home\n",
+    "    away_clean = \"Manchester United\" if away == \"Manchester Utd\" else away\n",
+    "    \n",
+    "    # Generate Pre-Game Feature Row (Minute 0, 0-0, No Lead Changes)\n",
+    "    # c.build_feature_row(home_code, away_code, minute, hs, as_, lead_changes, goals_so_far, is_knockout)\n",
+    "    feat_row = c.build_feature_row(home_clean, away_clean, 0, 0, 0, 0, 0, 0)\n",
+    "    p_away, p_draw, p_home = c.predict(model, scaler, T, feat_row)\n",
+    "    \n",
+    "    actual = \"Home\" if hs > as_ else (\"Away\" if as_ > hs else \"Draw\")\n",
+    "    predicted = \"Home\" if p_home > p_away and p_home > p_draw else (\"Away\" if p_away > p_home and p_away > p_draw else \"Draw\")\n",
+    "    \n",
+    "    results.append({\n",
+    "        \"Match\": f\"{home} {hs} - {as_} {away}\",\n",
+    "        \"P(Home)\": f\"{p_home*100:.1f}%\",\n",
+    "        \"P(Draw)\": f\"{p_draw*100:.1f}%\",\n",
+    "        \"P(Away)\": f\"{p_away*100:.1f}%\",\n",
+    "        \"Actual\": actual,\n",
+    "        \"Predicted\": predicted,\n",
+    "        \"Correct\": actual == predicted\n",
+    "    })\n",
+    "\n",
+    "df_res = pd.DataFrame(results)\n",
+    "display(df_res)\n",
+    "\n",
+    "acc = df_res['Correct'].sum() / len(df_res) if len(df_res) > 0 else 0\n",
+    "print(f\"\\nOpening Weekend Pre-Match Accuracy (V2 Model): {acc*100:.1f}%\")\n"
+   ]
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.11.0"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 4
+}
+
+with open('notebooks/pl_opening_weekend_eval.ipynb', 'w') as f:
+    json.dump(notebook, f, indent=1)
