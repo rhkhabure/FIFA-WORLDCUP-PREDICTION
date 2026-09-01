@@ -11,8 +11,9 @@
     </div>
     
     <div class="text-center flex-1 px-4 border-x border-gray-800">
-        <div class="text-5xl font-black text-white mb-2">2 - 1</div>
-        <p class="text-gray-400 text-sm">88' | Main Stadium | Ref: M. Oliver</p>
+        <div class="inline-block {% if match_status == 'FULL TIME' %}bg-gray-600{% else %}bg-red-600 animate-pulse{% endif %} text-white px-3 py-1 rounded text-sm font-bold mb-2">{{ match_status }}</div>
+        <div class="text-5xl font-black text-white mb-2">{{ match_score }}</div>
+        <p class="text-gray-400 text-sm">Main Stadium | Ref: M. Oliver</p>
     </div>
     
     <div class="text-center flex-1">

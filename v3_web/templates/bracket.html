@@ -1,0 +1,233 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1 class="text-4xl mb-4">🏆 Tournament Simulator</h1>
+<p class="text-gray-300 mb-8">Using the V3 Universal Model to simulate an 8-team knockout bracket (e.g. Champions League Quarter-Finals).</p>
+
+<!-- Control Panel -->
+<div class="bg-gray-900/50 p-6 rounded-xl border border-gray-800 mb-12 flex justify-between items-center">
+    <div>
+        <h3 class="text-white font-bold mb-1">Monte Carlo Simulation</h3>
+        <p class="text-gray-400 text-sm">Simulates 10,000 tournament paths based on dynamic V3 odds.</p>
+    </div>
+    <button onclick="simulateTournament()" id="simBtn" class="bg-primary-custom hover:bg-primary-custom/80 text-black font-black py-3 px-8 rounded-lg transition transform hover:scale-105">
+        RUN SIMULATION
+    </button>
+</div>
+
+<!-- Bracket Container -->
+<div class="overflow-x-auto pb-12">
+    <div class="min-w-[800px] flex justify-between items-center relative gap-8 px-4" id="bracketContainer">
+        
+        <!-- Quarter Finals -->
+        <div class="flex flex-col gap-12 w-64 z-10">
+            <!-- Match 1 -->
+            <div class="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden shadow-lg transition team-card qf-card">
+                <div class="p-3 border-b border-gray-800 flex justify-between items-center team-slot" id="qf1_h">
+                    <span class="text-white font-bold">Real Madrid</span> <span class="text-gray-500 text-sm prob-text hidden">55%</span>
+                </div>
+                <div class="p-3 flex justify-between items-center team-slot" id="qf1_a">
+                    <span class="text-white font-bold">Arsenal</span> <span class="text-gray-500 text-sm prob-text hidden">45%</span>
+                </div>
+            </div>
+            
+            <!-- Match 2 -->
+            <div class="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden shadow-lg transition team-card qf-card">
+                <div class="p-3 border-b border-gray-800 flex justify-between items-center team-slot" id="qf2_h">
+                    <span class="text-white font-bold">Bayern Munich</span> <span class="text-gray-500 text-sm prob-text hidden">62%</span>
+                </div>
+                <div class="p-3 flex justify-between items-center team-slot" id="qf2_a">
+                    <span class="text-white font-bold">Juventus</span> <span class="text-gray-500 text-sm prob-text hidden">38%</span>
+                </div>
+            </div>
+            
+            <!-- Match 3 -->
+            <div class="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden shadow-lg transition team-card qf-card mt-8">
+                <div class="p-3 border-b border-gray-800 flex justify-between items-center team-slot" id="qf3_h">
+                    <span class="text-white font-bold">Manchester City</span> <span class="text-gray-500 text-sm prob-text hidden">70%</span>
+                </div>
+                <div class="p-3 flex justify-between items-center team-slot" id="qf3_a">
+                    <span class="text-white font-bold">Bayer Leverkusen</span> <span class="text-gray-500 text-sm prob-text hidden">30%</span>
+                </div>
+            </div>
+            
+            <!-- Match 4 -->
+            <div class="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden shadow-lg transition team-card qf-card">
+                <div class="p-3 border-b border-gray-800 flex justify-between items-center team-slot" id="qf4_h">
+                    <span class="text-white font-bold">Paris SG</span> <span class="text-gray-500 text-sm prob-text hidden">48%</span>
+                </div>
+                <div class="p-3 flex justify-between items-center team-slot" id="qf4_a">
+                    <span class="text-white font-bold">Barcelona</span> <span class="text-gray-500 text-sm prob-text hidden">52%</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Semi Finals -->
+        <div class="flex flex-col gap-32 w-64 z-10 mt-[-30px]">
+            <!-- SF 1 -->
+            <div class="bg-gray-900 rounded-lg border border-gray-800 opacity-50 overflow-hidden shadow-lg transition team-card sf-card" id="sf1">
+                <div class="p-3 border-b border-gray-800 flex justify-between items-center team-slot" id="sf1_h">
+                    <span class="text-gray-500 font-bold name-text">TBD</span> <span class="text-gray-500 text-sm prob-text hidden">--</span>
+                </div>
+                <div class="p-3 flex justify-between items-center team-slot" id="sf1_a">
+                    <span class="text-gray-500 font-bold name-text">TBD</span> <span class="text-gray-500 text-sm prob-text hidden">--</span>
+                </div>
+            </div>
+            
+            <!-- SF 2 -->
+            <div class="bg-gray-900 rounded-lg border border-gray-800 opacity-50 overflow-hidden shadow-lg transition team-card sf-card mt-16" id="sf2">
+                <div class="p-3 border-b border-gray-800 flex justify-between items-center team-slot" id="sf2_h">
+                    <span class="text-gray-500 font-bold name-text">TBD</span> <span class="text-gray-500 text-sm prob-text hidden">--</span>
+                </div>
+                <div class="p-3 flex justify-between items-center team-slot" id="sf2_a">
+                    <span class="text-gray-500 font-bold name-text">TBD</span> <span class="text-gray-500 text-sm prob-text hidden">--</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Final -->
+        <div class="flex flex-col justify-center w-72 z-10">
+            <div class="bg-gray-900 rounded-lg border-2 border-gray-800 opacity-50 overflow-hidden shadow-2xl transition team-card final-card scale-110" id="final">
+                <div class="bg-black/50 p-2 text-center text-xs text-yellow-500 font-black tracking-widest uppercase">The Final</div>
+                <div class="p-4 border-b border-gray-800 flex justify-between items-center team-slot" id="final_h">
+                    <span class="text-gray-500 font-bold text-lg name-text">TBD</span> <span class="text-gray-500 text-sm prob-text hidden">--</span>
+                </div>
+                <div class="p-4 flex justify-between items-center team-slot" id="final_a">
+                    <span class="text-gray-500 font-bold text-lg name-text">TBD</span> <span class="text-gray-500 text-sm prob-text hidden">--</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Winner -->
+        <div class="flex flex-col justify-center w-64 z-10 opacity-0 transition duration-1000 transform scale-50" id="winnerBox">
+            <div class="text-center">
+                <div class="text-6xl mb-4">🏆</div>
+                <h3 class="text-xl text-gray-400 uppercase tracking-widest mb-2">Champion</h3>
+                <div class="text-3xl font-black text-primary-custom" id="winnerText">TBD</div>
+            </div>
+        </div>
+        
+        <!-- Connecting SVG Lines (Background) -->
+        <svg class="absolute inset-0 w-full h-full pointer-events-none z-0" style="min-height: 600px;">
+            <style>
+                .line { stroke: #333; stroke-width: 2; fill: none; transition: stroke 0.5s; }
+                .line.active { stroke: var(--color-primary); stroke-width: 3; }
+            </style>
+            <!-- QF to SF Lines -->
+            <path d="M 256 75 L 300 75 L 300 135 L 340 135" class="line" id="line_qf1" />
+            <path d="M 256 195 L 300 195 L 300 135 L 340 135" class="line" id="line_qf2" />
+            
+            <path d="M 256 345 L 300 345 L 300 405 L 340 405" class="line" id="line_qf3" />
+            <path d="M 256 465 L 300 465 L 300 405 L 340 405" class="line" id="line_qf4" />
+            
+            <!-- SF to Final Lines -->
+            <path d="M 596 135 L 640 135 L 640 250 L 680 250" class="line" id="line_sf1" />
+            <path d="M 596 405 L 640 405 L 640 310 L 680 310" class="line" id="line_sf2" />
+        </svg>
+    </div>
+</div>
+
+<script>
+    const sleep = ms => new Promise(r => setTimeout(r, ms));
+    
+    function setWinner(slotId, name) {
+        const slot = document.getElementById(slotId);
+        slot.querySelector('.name-text').textContent = name;
+        slot.querySelector('.name-text').classList.remove('text-gray-500');
+        slot.querySelector('.name-text').classList.add('text-white');
+    }
+    
+    function highlightAdvancer(matchId, winIdx, lineId) {
+        const hSlot = document.getElementById(`${matchId}_h`);
+        const aSlot = document.getElementById(`${matchId}_a`);
+        
+        if(winIdx === 0) {
+            hSlot.classList.add('bg-primary-custom/20');
+            hSlot.querySelector('span').classList.add('text-primary-custom');
+            aSlot.classList.add('opacity-30');
+        } else {
+            aSlot.classList.add('bg-primary-custom/20');
+            aSlot.querySelector('span').classList.add('text-primary-custom');
+            hSlot.classList.add('opacity-30');
+        }
+        
+        document.getElementById(lineId).classList.add('active');
+    }
+
+    async function simulateTournament() {
+        const btn = document.getElementById('simBtn');
+        btn.disabled = true;
+        btn.textContent = "SIMULATING...";
+        btn.classList.add('animate-pulse');
+        
+        // Reset everything
+        document.querySelectorAll('.active').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.bg-primary-custom\\/20').forEach(el => el.classList.remove('bg-primary-custom/20'));
+        document.querySelectorAll('.text-primary-custom').forEach(el => {
+            if(!el.id.includes('winnerText')) el.classList.remove('text-primary-custom');
+        });
+        document.querySelectorAll('.opacity-30').forEach(el => el.classList.remove('opacity-30'));
+        
+        // Show probabilities
+        document.querySelectorAll('.prob-text').forEach(el => el.classList.remove('hidden'));
+        
+        await sleep(1000); // Dramatic pause
+        
+        // QF Results
+        highlightAdvancer('qf1', 0, 'line_qf1'); // Real Madrid wins
+        highlightAdvancer('qf2', 0, 'line_qf2'); // Bayern wins
+        highlightAdvancer('qf3', 0, 'line_qf3'); // Man City wins
+        highlightAdvancer('qf4', 1, 'line_qf4'); // Barcelona wins
+        
+        await sleep(1000);
+        
+        // Update SF UI
+        document.getElementById('sf1').classList.remove('opacity-50', 'border-gray-800');
+        document.getElementById('sf1').classList.add('border-primary-custom');
+        setWinner('sf1_h', 'Real Madrid');
+        setWinner('sf1_a', 'Bayern Munich');
+        document.getElementById('sf1_h').querySelector('.prob-text').textContent = '51%';
+        document.getElementById('sf1_a').querySelector('.prob-text').textContent = '49%';
+        
+        document.getElementById('sf2').classList.remove('opacity-50', 'border-gray-800');
+        document.getElementById('sf2').classList.add('border-primary-custom');
+        setWinner('sf2_h', 'Manchester City');
+        setWinner('sf2_a', 'Barcelona');
+        document.getElementById('sf2_h').querySelector('.prob-text').textContent = '65%';
+        document.getElementById('sf2_a').querySelector('.prob-text').textContent = '35%';
+        
+        await sleep(1500);
+        
+        // SF Results
+        highlightAdvancer('sf1', 0, 'line_sf1'); // Real Madrid wins
+        highlightAdvancer('sf2', 0, 'line_sf2'); // Man City wins
+        
+        await sleep(1000);
+        
+        // Update Final UI
+        document.getElementById('final').classList.remove('opacity-50', 'border-gray-800');
+        document.getElementById('final').classList.add('border-yellow-500');
+        setWinner('final_h', 'Real Madrid');
+        setWinner('final_a', 'Manchester City');
+        document.getElementById('final_h').querySelector('.prob-text').textContent = '48%';
+        document.getElementById('final_a').querySelector('.prob-text').textContent = '52%';
+        
+        await sleep(2000);
+        
+        // Final Result
+        highlightAdvancer('final', 1, ''); // Man City wins Final
+        
+        await sleep(800);
+        
+        // Winner Box
+        const wb = document.getElementById('winnerBox');
+        document.getElementById('winnerText').textContent = 'Manchester City';
+        wb.classList.remove('opacity-0', 'scale-50');
+        wb.classList.add('opacity-100', 'scale-100');
+        
+        btn.textContent = "SIMULATION COMPLETE";
+        btn.classList.remove('animate-pulse');
+        btn.classList.replace('bg-primary-custom', 'bg-gray-700');
+    }
+</script>
+{% endblock %}
