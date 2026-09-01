@@ -109,14 +109,7 @@ def get_theme_for_team(team_name):
 
 def generate_pitch_svg_vertical(formation="4-3-3", team_color="#EF0107", players=None, team_name="Default"):
     """Generates a vertical half-pitch for the Team Profile page."""
-    if players is None:
-        players = [f"P{i}" for i in range(11)]
-        
-    def parse_formation(fmt_str):
-        if not fmt_str or fmt_str == "0-0": return []
-        return [1] + [int(x) for x in fmt_str.split("-")]
-        
-    lines = parse_formation(formation)
+    
     W, H = 160, 200  # Significantly widened and lengthened to prevent any overlapping
     
     svg = f"""<svg width="100%" style="max-width: 600px; display: block; margin: 0 auto;" viewBox="0 0 {W} {H}" xmlns="http://www.w3.org/2000/svg">
@@ -131,6 +124,20 @@ def generate_pitch_svg_vertical(formation="4-3-3", team_color="#EF0107", players
         <rect x="60" y="5" width="40" height="10" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="0.5"/>
         <line x1="72" y1="5" x2="88" y2="5" stroke="white" stroke-width="2" />
     """
+    
+    if not players:
+        # Render empty pitch gracefully if API hasn't synced yet
+        svg += f"""
+            <text x="80" y="100" fill="rgba(255,255,255,0.5)" font-family="'Trebuchet MS', sans-serif" font-size="10px" font-weight="bold" text-anchor="middle">Roster Data Pending API Sync</text>
+        """
+        svg += "</svg>"
+        return svg
+        
+    def parse_formation(fmt_str):
+        if not fmt_str or fmt_str == "0-0": return []
+        return [1] + [int(x) for x in fmt_str.split("-")]
+        
+    lines = parse_formation(formation)
     
     if lines:
         y_steps = len(lines)
@@ -154,18 +161,6 @@ def generate_pitch_svg_vertical(formation="4-3-3", team_color="#EF0107", players
 
 def generate_pitch_svg_horizontal(home_formation="4-3-3", away_formation="4-2-3-1", home_color="#6CABDD", away_color="#EF0107", home_players=None, away_players=None, home_team="Home", away_team="Away"):
     """Generates a native horizontal full-pitch for the Live Match and Hub pages."""
-    if home_players is None:
-        home_players = [f"H{i}" for i in range(11)]
-    if away_players is None:
-        away_players = [f"A{i}" for i in range(11)]
-        
-    def parse_formation(fmt_str):
-        if not fmt_str or fmt_str == "0-0": return []
-        return [1] + [int(x) for x in fmt_str.split("-")]
-        
-    h_lines = parse_formation(home_formation)
-    a_lines = parse_formation(away_formation)
-    
     W, H = 160, 100  # Made even wider so it expands beautifully when sidebar closes
     
     svg = f"""<svg width="100%" style="max-width: 100%; display: block; margin: 0 auto; transition: all 0.3s ease;" viewBox="0 0 {W} {H}" xmlns="http://www.w3.org/2000/svg">
@@ -190,8 +185,22 @@ def generate_pitch_svg_horizontal(home_formation="4-3-3", away_formation="4-2-3-
         <line x1="155" y1="44" x2="155" y2="56" stroke="white" stroke-width="2" />
     """
     
+    if not home_players and not away_players:
+        svg += f"""
+            <text x="80" y="50" fill="rgba(255,255,255,0.5)" font-family="'Trebuchet MS', sans-serif" font-size="8px" font-weight="bold" text-anchor="middle">Awaiting Live API Sync</text>
+        """
+        svg += "</svg>"
+        return svg
+        
+    def parse_formation(fmt_str):
+        if not fmt_str or fmt_str == "0-0": return []
+        return [1] + [int(x) for x in fmt_str.split("-")]
+        
+    h_lines = parse_formation(home_formation)
+    a_lines = parse_formation(away_formation)
+    
     # Draw Home Players
-    if h_lines:
+    if h_lines and home_players:
         x_steps = len(h_lines)
         p_idx = 0
         for col_idx, num_players in enumerate(h_lines):
@@ -208,7 +217,7 @@ def generate_pitch_svg_horizontal(home_formation="4-3-3", away_formation="4-2-3-
                 p_idx += 1
 
     # Draw Away Players
-    if a_lines:
+    if a_lines and away_players:
         x_steps = len(a_lines)
         p_idx = 0
         for col_idx, num_players in enumerate(a_lines):
