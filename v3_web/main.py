@@ -60,21 +60,24 @@ async def hub(request: Request):
     league = ctx["current_league"]
     avail = ctx["available_teams"]
     
-    if league == "Premier League":
-        home, away = "Manchester City", "Arsenal"
-    elif league == "La Liga":
-        home, away = "Real Madrid", "Barcelona"
-    elif league == "Serie A":
-        home, away = "Inter Milan", "Juventus"
-    elif league == "Bundesliga":
-        home, away = "Bayern Munich", "Bayer Leverkusen"
-    elif league == "Ligue 1":
-        home, away = "Paris SG", "Marseille"
+    home = avail[0] if avail else "Unknown"
+    history = get_dynamic_history(home, league)
+    
+    if history:
+        last_match = history[0]
+        away = last_match["opponent"]
+        raw_res = last_match["result"]
+        score = raw_res.split(" ")[1].replace("-", " - ") if " " in raw_res else "0 - 0"
+        status = "FULL TIME"
     else:
-        home, away = avail[0], avail[1]
+        away = avail[1] if len(avail) > 1 else "Unknown"
+        score = "0 - 0"
+        status = "UPCOMING"
         
     ctx["match_home"] = home
     ctx["match_away"] = away
+    ctx["match_score"] = score
+    ctx["match_status"] = status
     
     h_color = get_theme_for_team(home)["primary"]
     a_color = get_theme_for_team(away)["primary"]
@@ -103,21 +106,24 @@ async def match(request: Request):
     league = ctx["current_league"]
     avail = ctx["available_teams"]
     
-    if league == "Premier League":
-        home, away = "Manchester City", "Arsenal"
-    elif league == "La Liga":
-        home, away = "Real Madrid", "Barcelona"
-    elif league == "Serie A":
-        home, away = "Inter Milan", "Juventus"
-    elif league == "Bundesliga":
-        home, away = "Bayern Munich", "Bayer Leverkusen"
-    elif league == "Ligue 1":
-        home, away = "Paris SG", "Marseille"
+    home = avail[0] if avail else "Unknown"
+    history = get_dynamic_history(home, league)
+    
+    if history:
+        last_match = history[0]
+        away = last_match["opponent"]
+        raw_res = last_match["result"]
+        score = raw_res.split(" ")[1].replace("-", " - ") if " " in raw_res else "0 - 0"
+        status = "FULL TIME"
     else:
-        home, away = avail[0], avail[1]
+        away = avail[1] if len(avail) > 1 else "Unknown"
+        score = "0 - 0"
+        status = "UPCOMING"
         
     ctx["match_home"] = home
     ctx["match_away"] = away
+    ctx["match_score"] = score
+    ctx["match_status"] = status
     
     ctx["home_manager"] = TEAM_MANAGERS.get(home, "Head Coach")
     ctx["away_manager"] = TEAM_MANAGERS.get(away, "Head Coach")
@@ -184,6 +190,12 @@ async def player(request: Request):
     ctx["player_data"] = player_data
     
     return templates.TemplateResponse(request=request, name="player.html", context=ctx)
+
+@app.get("/bracket", response_class=HTMLResponse)
+async def bracket(request: Request):
+    ctx = get_common_context(request)
+    ctx["active_page"] = "bracket"
+    return templates.TemplateResponse(request=request, name="bracket.html", context=ctx)
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
