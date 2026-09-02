@@ -79,6 +79,5 @@ def run_scraper():
         print(f"❌ Error during extraction: {e}")
 
 if __name__ == "__main__":
-    print("Run this script locally to bulk-download FBref xG data into SQLite.")
-    # Uncomment to execute:
-    # run_scraper()
+    print("Running soccerdata scraper to bulk-download FBref xG data into SQLite...")
+    run_scraper()
