@@ -25,11 +25,24 @@ notebook = {
     "from pathlib import Path\n",
     "import sys\n",
     "\n",
-    "# Ensure we can import from the backend directory\n",
+    "# Ensure we can import from the backend directory regardless of cwd\n",
     "sys.path.append(str(Path.cwd().parent))\n",
+    "sys.path.append(str(Path.cwd() / 'v4_backend'))\n",
+    "sys.path.append(str(Path.cwd().parent.parent / 'v4_backend'))\n",
+    "\n",
     "from dixon_coles_xg import train_dixon_coles_prior\n",
     "\n",
-    "DB_PATH = Path(\"../v4_historical_data.sqlite\")\n"
+    "possible_db_paths = [\n",
+    "    Path(\"../../v4_historical_data.sqlite\"), # If running from v4_backend/notebooks/\n",
+    "    Path(\"v4_historical_data.sqlite\"),       # If running from root\n",
+    "    Path(\"../v4_historical_data.sqlite\")     # If running from v4_backend/\n",
+    "]\n",
+    "\n",
+    "DB_PATH = next((p for p in possible_db_paths if p.exists()), None)\n",
+    "if not DB_PATH:\n",
+    "    print(\"❌ Could not find v4_historical_data.sqlite in expected locations.\")\n",
+    "else:\n",
+    "    print(f\"✅ Found database at: {DB_PATH.resolve()}\")\n"
    ]
   },
   {
