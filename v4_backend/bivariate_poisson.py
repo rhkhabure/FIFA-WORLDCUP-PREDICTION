@@ -16,6 +16,10 @@ def generate_match_probabilities(alpha_h_adj, beta_a_adj, alpha_a_adj, beta_h_ad
     prob_home = poisson.pmf(goals_range, lambda_h)
     prob_away = poisson.pmf(goals_range, mu_a)
     
+    # Airtight Tail Capture: Force index 8 to represent "8 or more goals"
+    prob_home[-1] = poisson.sf(max_goals - 2, lambda_h)
+    prob_away[-1] = poisson.sf(max_goals - 2, mu_a)
+    
     # Outer product creates the base independent matrix: matrix[h, a] = P(H=h) * P(A=a)
     score_matrix = np.outer(prob_home, prob_away)
     
