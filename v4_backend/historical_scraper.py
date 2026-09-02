@@ -81,8 +81,13 @@ def run_scraper():
             df_finished['home_xg'] = 1.0
             df_finished['away_xg'] = 1.0
 
+        # Clean up the 'score' column
+        # Sometimes FBref includes penalty shootout results in parentheses, e.g., "(4) 1-1 (3)" or "1 (4)-1 (3)"
+        # We use a regex to strip out anything in parentheses before splitting
+        df_finished['score'] = df_finished['score'].astype(str).str.replace(r'\(.*?\)', '', regex=True).str.strip()
+        
         # Split the 'score' column (e.g., "2–1") into home and away goals
-        df_finished[['home_goals', 'away_goals']] = df_finished['score'].astype(str).str.split('–|-', expand=True).astype(float)
+        df_finished[['home_goals', 'away_goals']] = df_finished['score'].str.split('–|-', expand=True).astype(float)
         
         # Standardize column names for our V4 model
         df_clean = df_finished[[
