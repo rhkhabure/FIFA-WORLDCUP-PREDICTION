@@ -44,15 +44,40 @@ def run_scraper():
         # Flatten the MultiIndex (league, season, game)
         df = df_schedule.reset_index()
         
-        # FBref schedule data columns typically look like:
-        # ['league', 'season', 'game', 'date', 'time', 'home_team', 'home_xg', 'score', 'away_xg', 'away_team', 'attendance', 'venue', 'referee', 'match_report', 'notes']
+        # Determine actual column names (soccerdata sometimes names them 'xG' and 'xG.1' or 'home_xg' and 'away_xg')
+        col_map = {}
+        for col in df.columns:
+            col_lower = str(col).lower()
+            if col_lower == 'xg':
+                col_map[col] = 'home_xg'
+            elif col_lower in ['xg.1', 'xg_1', 'away_xg']:
+                col_map[col] = 'away_xg'
+            elif col_lower in ['home_team', 'home team']:
+                col_map[col] = 'home_team'
+            elif col_lower in ['away_team', 'away team']:
+                col_map[col] = 'away_team'
+            elif col_lower == 'score':
+                col_map[col] = 'score'
+                
+        df = df.rename(columns=col_map)
         
-        # Filter out matches that haven't happened yet (they won't have a score or xG)
-        df_finished = df.dropna(subset=['score', 'home_xg', 'away_xg']).copy()
+        # Fallback if the renaming didn't catch it
+        if 'home_xg' not in df.columns and 'xG' in df_schedule.columns:
+            # MultiIndex columns sometimes cause issues, let's just make sure we grab them
+            pass
+            
+        print("Available columns parsed:", df.columns.tolist())
         
+        # Filter out matches that haven't happened yet
+        df_finished = df.dropna(subset=['score']).copy()
+        
+        if 'home_xg' not in df_finished.columns or 'away_xg' not in df_finished.columns:
+            print("❌ Warning: xG columns missing from dataset. Check if the seasons selected have xG data available in FBref.")
+            return
+
         # Split the 'score' column (e.g., "2–1") into home and away goals
-        # Note: FBref uses an en-dash '–', not a standard hyphen '-'
-        df_finished[['home_goals', 'away_goals']] = df_finished['score'].str.split('–|-', expand=True).astype(float)
+        # Note: FBref uses an en-dash '–' or standard hyphen '-'
+        df_finished[['home_goals', 'away_goals']] = df_finished['score'].astype(str).str.split('–|-', expand=True).astype(float)
         
         # Standardize column names for our V4 model
         df_clean = df_finished[[
