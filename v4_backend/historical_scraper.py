@@ -76,10 +76,21 @@ def run_scraper():
         df_finished = df.dropna(subset=['score']).copy()
         
         if 'home_xg' not in df_finished.columns or 'away_xg' not in df_finished.columns:
-            print("❌ Warning: xG columns missing. FBref might require a specific season index.")
-            # Let's extract what we can
-            df_finished['home_xg'] = 1.0
-            df_finished['away_xg'] = 1.0
+            print("❌ Warning: xG columns missing. Attempting secondary extraction map...")
+            
+            # FBref sometimes stores xG directly under the team name column if nested deeply
+            try:
+                # If we flattened earlier, they might be named something extremely specific like 'Home_xG'
+                xg_cols = [c for c in df.columns if 'xg' in str(c).lower()]
+                if len(xg_cols) >= 2:
+                    df_finished['home_xg'] = df_finished[xg_cols[0]]
+                    df_finished['away_xg'] = df_finished[xg_cols[1]]
+                else:
+                    df_finished['home_xg'] = 1.0
+                    df_finished['away_xg'] = 1.0
+            except:
+                df_finished['home_xg'] = 1.0
+                df_finished['away_xg'] = 1.0
 
         # Clean up the 'score' column
         # Sometimes FBref includes penalty shootout results in parentheses, e.g., "(4) 1-1 (3)" or "1 (4)-1 (3)"
