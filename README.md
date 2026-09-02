@@ -1,220 +1,104 @@
-# ⚽ World Cup 2026 Live Win Probability
+# 🌍 V3 Universal Football Model
 
-A real-time win probability system for the 2026 FIFA World Cup — built using transfer
-learning from an NBA win probability neural network. Tracks live match state every 30
-seconds and outputs three probabilities: home win, draw, and away win.
+> **V3 Update:** This repository has been successfully upgraded from the *V2 World Cup 2026 Live Win Probability* model into the **V3 Universal Football Model**. It now supports continuous domestic league play across Europe's "Big 5" leagues, featuring a completely overhauled PyTorch architecture, robust Sofascore API integration, and a blazing-fast FastAPI + Tailwind web dashboard.
 
-> **Live dashboard →** *([Click to see model](https://fifa-worldcup-prediction-kc3azpj8tc2ynw4ylnjqv8.streamlit.app/))*  
-> **Related project →** [NBA Live Win Probability](https://github.com/rhkhabure/NBA-Live-Win-Probability)
+*(For the original World Cup 2026 Streamlit implementation, see `README_worldcup.md`)*
 
 ---
 
-## How it works
+## 🚀 Key V3 Features
 
-The model was originally trained on 962,000 NBA play-by-play snapshots to predict
-binary (win/lose) outcomes. For football, we:
+### 🧠 The Machine Learning Engine
+*   **League Embeddings:** The neural network takes `league_id` through an `nn.Embedding` layer, allowing it to natively learn the stylistic differences between leagues (e.g., a 1-0 lead in Serie A is statistically safer than a 1-0 lead in the Bundesliga).
+*   **Focal Loss:** Replaced static class weights with a dynamic Focal Loss module to specifically penalize the model for missing difficult outcomes like Draws and massive upsets.
+*   **Multi-Class Isotonic Calibration:** Neural networks are notoriously overconfident. V3 runs raw softmax probabilities through three independent Isotonic Regressors to guarantee statistically honest output percentages.
+*   **Dynamic Starting XI Value:** Instead of static FIFA ranks, the model evaluates live team strength based on the exact players stepping onto the pitch.
 
-1. Replace the output layer: `1 node sigmoid → 3 node softmax` (home win / draw / away win)
-2. Add a `is_knockout` flag that suppresses the draw output in elimination rounds
-3. Retrain using transfer learning on ~550,000 international football snapshots
-4. Feed live World Cup 2026 match data through the same inference pipeline
+### 💻 The Web App (FastAPI + Tailwind)
+*   **Zero-Slop UI:** Completely migrated away from Streamlit into a custom, deeply controllable FastAPI application using Jinja2 templates and Tailwind CSS.
+*   **Dynamic Theming:** The entire app instantly recolors its accents, borders, and charts to match the primary/secondary hex colors of the currently selected team.
+*   **Interactive SVG Pitch:** Real-time generation of horizontal and vertical football pitches. It plots formations (e.g., 4-3-3), renders jerseys, and displays real player names without using external image libraries.
+*   **Player Profiles:** Click on any player on the SVG pitch to view their profile, complete with a **Chart.js** radar chart mapping their Attacking, Technical, Tactical, Defending, and Creativity ratings.
+*   **Monte Carlo Tournament Simulator:** Simulates 10,000 knockout paths and features a step-by-step animated UI to visualize cup tournament predictions.
 
-The in-game probability updates every 30 seconds using the free
-[worldcup26.ir](https://worldcup26.ir) API — no authentication required.
-
----
-
-## Model architecture
-
-```
-Input (14 features)
-  ↓
-128 neurons  [BatchNorm → ReLU → Dropout 0.30]   ← transferred from NBA model
-  ↓
- 64 neurons  [BatchNorm → ReLU → Dropout 0.30]   ← transferred from NBA model
-  ↓
- 32 neurons  [BatchNorm → ReLU → Dropout 0.30]   ← transferred from NBA model
-  ↓
-  3 outputs  [Softmax]                            ← retrained for football
-    P(home win) · P(draw) · P(away win)
-```
-
-### Features
-
-| Feature | Description |
-|---|---|
-| `goal_diff` | Home score − Away score, clipped to ±5 |
-| `time_remaining_sec` | Seconds until 90 min (0–5400) |
-| `half` | 1 (first half) or 2 (second half) |
-| `match_time_pct` | Minutes elapsed / 90 |
-| `is_extra_time` | 1 if in extra time, else 0 |
-| `is_knockout` | 1 for Round of 16 onwards (draw suppressed) |
-| `lead_changes_norm` | Lead changes / total goal events |
-| `home_rank_norm` | Home team FIFA rank normalised [0, 1] |
-| `away_rank_norm` | Away team FIFA rank normalised [0, 1] |
-| `rank_diff` | home_rank_norm − away_rank_norm |
-| `home_group_pts` | Home team's group-stage points before this match |
-| `away_group_pts` | Away team's group-stage points before this match |
-| `is_neutral_venue` | 1 for World Cup (all neutral ground) |
-| `score_state` | 0=behind, 1=level, 2=ahead |
-
-### Training data sources
-
-| Source | Purpose | Matches |
-|---|---|---|
-| [football-data.org](https://www.football-data.org) | World Cup 1966–2022 | ~400 |
-| [football-data.org](https://www.football-data.org) | Top-5 leagues 2015–2024 | ~19,000 |
-| [Transfermarkt](https://www.transfermarkt.com) | Squad market values (one-time scrape) | lookup table |
+### 📊 The Data Pipeline (Sofascore API)
+*   Integrates natively with the **Sofascore API** (via RapidAPI) to extract pristine live play-by-play events, starting XIs, precise player ages (via timestamp calculation), and granular match histories.
+*   Includes a `sync_sofascore.py` script that safely pulls data into a local `data.json` cache, preventing API rate-limiting while allowing rapid UI development.
 
 ---
 
-## Project structure
+## 🏗️ Project Structure
 
-```
-world_cup_win_prob/
-├── model/
-│   ├── win_prob_net.pth        ← trained PyTorch weights
-│   ├── scaler.pkl              ← StandardScaler fitted on training data
-│   ├── temperature.json        ← calibrated temperature T
-│   └── squad_values.json       ← Transfermarkt squad values by team
-├── processed/
-│   └── features_raw.parquet    ← 14-feature training dataset
-├── raw/                        ← cached API responses (auto-generated)
-├── plots/                      ← post-match analysis charts
-├── game_history/               ← auto-saved completed match timelines
-│   └── <match_id>.json
-├── notebooks/
-│   ├── phase1_data_pipeline.ipynb      ← pull data, build features
-│   ├── phase2_transfer_learning.ipynb  ← retrain from NBA weights
-│   └── phase3_calibration.ipynb        ← temperature scaling, validation
-├── app.py                      ← Streamlit live dashboard
-├── requirements.txt
-├── runtime.txt                 ← python-3.12
-└── .streamlit/config.toml
+```text
+FIFA-WORLDCUP-PREDICTION/
+├── v3_web/                             # The FastAPI Web Application
+│   ├── main.py                         # Application routing and context engine
+│   ├── utils.py                        # Dynamic SVG generation and color theming
+│   ├── sync_sofascore.py               # Syncs live API data to local JSON cache
+│   ├── data.json                       # The local SQLite-alternative data cache
+│   └── templates/                      # Jinja2 HTML/Tailwind templates
+│       ├── base.html                   # Master layout and dynamic CSS variables
+│       ├── index.html                  # The League Hub 
+│       ├── match.html                  # Live Match center & Win Probability
+│       ├── team.html                   # Team Profiles & Match History
+│       ├── player.html                 # Player Radar Charts
+│       └── bracket.html                # Monte Carlo Tournament Simulator
+├── notebooks/                          # V3 Machine Learning Pipelines
+│   ├── phase1_v3_data_pipeline.ipynb      # Snapshot extraction and Leakage validation
+│   ├── phase2_v3_model_architecture.ipynb # Neural Net & Focal Loss definitions
+│   ├── phase3_v3_training_calibration.ipynb # PyTorch training loop & Isotonic scaling
+│   ├── phase4_v3_sofascore_ingestion.ipynb  # JSON flattening logic for Sofascore
+│   ├── phase5_real_data_sync.ipynb        # Jupyter-based interactive API syncer
+│   └── pl_opening_weekend_eval.ipynb      # Dynamic real-world evaluation script
+├── common.py                           # Legacy V2 Shared inference utilities
+├── generate_mock_db.py                 # Fills data.json with offline mock data
+└── .env                                # Environment variables (API Keys)
 ```
 
 ---
 
-## Quick start
+## ⚙️ Quick Start (Running Locally)
 
-### 1. Clone and install
-
+### 1. Install Dependencies
+Ensure you are using Python 3.11+. Create a virtual environment and install the requirements:
 ```bash
-git clone https://github.com/YOUR_USERNAME/worldcup-win-probability.git
-cd worldcup-win-probability
-pip install -r requirements.txt
+python -m venv .venv
+source .venv/bin/activate
+pip install fastapi uvicorn jinja2 requests pandas numpy torch scikit-learn python-dotenv
 ```
 
-### 2. Get a free API key
-
-Register at [football-data.org](https://www.football-data.org/client/register) — free,
-no credit card. Copy your token into a `.env` file:
-
-```
-FOOTBALL_DATA_API_KEY=your_token_here
+### 2. Configure the API Key
+Get a free API key from [Sofascore via RapidAPI](https://rapidapi.com/apidojo/api/sofascore).
+Create a `.env` file in the root directory:
+```env
+SOFASCORE_API_KEY=your_rapidapi_key_here
 ```
 
-### 3. Run the data pipeline
-
+### 3. Sync Real Data (Optional but Recommended)
+You can sync a specific team (e.g., Arsenal) to populate `data.json` with real live players, match histories, and stats.
 ```bash
-jupyter notebook notebooks/phase1_data_pipeline.ipynb
+cd v3_web
+python sync_sofascore.py "Arsenal"
 ```
+*(If you don't sync, the app will gracefully fall back to default mock data and empty pitch layouts).*
 
-This pulls ~19,000 matches and builds the training dataset. Cached after first run —
-subsequent runs are instant.
-
-### 4. Train the model
-
+### 4. Run the Web Dashboard
+Launch the FastAPI server:
 ```bash
-jupyter notebook notebooks/phase2_transfer_learning.ipynb
+cd v3_web
+python -m uvicorn main:app --reload
 ```
-
-Requires CUDA (RTX 4060 or better). Training takes ~5 minutes with transfer learning
-from the NBA model weights.
-
-### 5. Run the dashboard
-
-```bash
-streamlit run app.py
-```
+Open your browser and navigate to **`http://localhost:8000`**.
 
 ---
 
-## Live data API
-
-The dashboard uses [worldcup26.ir](https://worldcup26.ir) for live World Cup 2026 data.
-No authentication required.
-
-| Endpoint | Data |
-|---|---|
-| `GET /get/games` | All matches with scores and status |
-| `GET /get/groups` | Group standings |
-| `GET /get/teams` | All 48 teams |
-| `GET /get/stadiums` | All 16 stadiums |
-
-Live score updates activate from **June 11, 2026** (first World Cup match).
+## 📈 Supported Leagues (Soft Launch)
+V3 focuses on the highest fidelity data environments:
+1. **English Premier League** (England)
+2. **La Liga** (Spain)
+3. **Serie A** (Italy)
+4. **Bundesliga** (Germany)
+5. **Ligue 1** (France)
 
 ---
-
-## Key differences from the NBA model
-
-| Aspect | NBA model | Football model |
-|---|---|---|
-| Outcomes | Binary (win/loss) | 3-class (home/draw/away) |
-| Output | Sigmoid (1 node) | Softmax (3 nodes) |
-| Loss function | BCEWithLogitsLoss | CrossEntropyLoss |
-| Playoff/knockout | `is_playoffs` flag | `is_knockout` flag (suppresses draw) |
-| Team quality signal | NET rating | FIFA ranking (normalised) |
-| Scoring frequency | ~200 events/game | ~3 events/game |
-| Snapshot method | Every play | Every goal + halftime |
-| Training samples | 962,000 | ~550,000 |
-
----
-
-## Dashboard features
-
-- **Live 3-way gauge** — home win / draw / away win probabilities update every 30s
-- **Win probability chart** — full match timeline with goal markers
-- **Group standings panel** — auto-updates from worldcup26.ir
-- **Qualification simulator** — Monte Carlo for group advancement probability
-- **Knockout bracket** — probability of reaching each round
-- **Game selector** — choose which live match to track when multiple games are simultaneous
-- **Game history** — replay any completed match's win probability curve
-
----
-
-## Phases
-
-| Phase | Status | Description |
-|---|---|---|
-| Phase 1 | 🔄 In progress | Data pipeline — historical match collection |
-| Phase 2 | ⏳ Planned | Transfer learning — retrain NBA model for football |
-| Phase 3 | ⏳ Planned | Calibration — 3-class temperature scaling |
-| Phase 4 | ⏳ Planned | Live dashboard — worldcup26.ir integration |
-| Phase 5 | ⏳ Planned | Squad enrichment — Transfermarkt market values |
-
----
-
-## Requirements
-
-```
-torch
-numpy
-pandas
-scikit-learn
-scipy
-streamlit
-plotly
-requests
-python-dotenv
-pyarrow
-```
-
----
-
-## Acknowledgements
-
-- [football-data.org](https://www.football-data.org) — free historical match data
-- [worldcup26.ir](https://worldcup26.ir) — free live World Cup 2026 API  
-- [rezarahiminia/worldcup2026](https://github.com/rezarahiminia/worldcup2026) — open-source WC2026 API
-- [Transfermarkt](https://www.transfermarkt.com) — squad market values
+*Created as an evolution of the World Cup 2026 Win Probability model.*
