@@ -23,25 +23,18 @@ def init_db():
     return conn
 
 def run_scraper():
-    print(f"🚀 Initializing soccerdata scraper for FBref...")
+    print(f"🚀 Initializing soccerdata scraper for Understat (xG Native)...")
     print(f"Leagues: {TARGET_LEAGUES}")
     print(f"Seasons: {TARGET_SEASONS}\\n")
     
-    # Initialize the FBref scraper
-    # This automatically handles rate limiting, session management, and caching
     try:
-        fbref = sd.FBref(leagues=TARGET_LEAGUES, seasons=TARGET_SEASONS)
-    except Exception as e:
-        print(f"❌ Failed to initialize soccerdata: {e}")
-        return
-
-    print("⏳ Downloading schedule and match logs (This may take a moment on the first run to build the cache)...")
-    
-    try:
-        # Fallback to Understat which has cleaner multi-index structures for continuous xG
-        print("🚀 Initializing soccerdata scraper for Understat (xG Native)...")
+        import soccerdata as sd
+        
+        # Understat uses slightly different league names natively in the library
         understat_leagues = ['ENG-Premier League', 'ESP-La Liga', 'ITA-Serie A', 'GER-Bundesliga', 'FRA-Ligue 1']
         understat = sd.Understat(leagues=understat_leagues, seasons=TARGET_SEASONS)
+        
+        print("⏳ Downloading detailed xG match logs...")
         df_schedule = understat.read_schedule()
         
         df = df_schedule.reset_index()
@@ -53,20 +46,19 @@ def run_scraper():
         print("Available columns parsed:", df.columns.tolist())
         
         # Handle flattened column naming safely
+        # Understat natively returns 'home_team', 'away_team', 'home_team_id', etc.
+        # We must avoid renaming 'home_team_id' to 'home_team' causing duplicate columns!
         col_map = {}
         for col in df.columns:
             c = str(col).lower()
-            if 'home_team' in c or c == 'home': col_map[col] = 'home_team'
-            elif 'away_team' in c or c == 'away': col_map[col] = 'away_team'
-            elif 'score' in c or c == 'is_result': col_map[col] = 'score'
-            elif 'expected_xg' in c or c == 'home_xg' or c == 'xg':
-                if 'home_xg' not in col_map.values():
-                    col_map[col] = 'home_xg'
-                else:
-                    col_map[col] = 'away_xg'
-            elif c == 'away_xg' or c == 'xg.1' or c == 'xg_1':
-                col_map[col] = 'away_xg'
-                
+            if c == 'home_team': col_map[col] = 'home_team'
+            elif c == 'away_team': col_map[col] = 'away_team'
+            elif c == 'home_goal': col_map[col] = 'home_goals'
+            elif c == 'away_goal': col_map[col] = 'away_goals'
+            elif c == 'home_xg': col_map[col] = 'home_xg'
+            elif c == 'away_xg': col_map[col] = 'away_xg'
+            elif c == 'is_result': col_map[col] = 'score' # We use 'score' as the filter column
+            
         df = df.rename(columns=col_map)
         
         if 'score' not in df.columns:
