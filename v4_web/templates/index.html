@@ -45,7 +45,7 @@
                     <div class="w-full flex h-3 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
                         <div class="bg-cyan-500 h-full transition-all duration-500" style="width: {{ featured.prob_1 * 100 }}%"></div>
                         <div class="bg-amber-500 h-full transition-all duration-500" style="width: {{ featured.prob_x * 100 }}%"></div>
-                        <div class="bg-coral-500 h-full transition-all duration-500" style="width: {{ featured.prob_2 * 100 }}%"></div>
+                        <div class="bg-rose-500 h-full transition-all duration-500" style="width: {{ featured.prob_2 * 100 }}%"></div>
                     </div>
                 </div>
             </div>
@@ -79,7 +79,7 @@
                         <tr class="hover:bg-slate-800/30 transition-colors">
                             <td class="py-2.5 font-bold text-slate-500">{{ loop.index }}</td>
                             <td class="py-2.5 font-sans font-bold text-slate-200 truncate max-w-[100px]">
-                                <a href="/team?team_name={{ team.name }}" class="hover:text-cyan-400 transition">{{ team.name }}</a>
+                                <a href="/team?team={{ team.name }}" class="hover:text-cyan-400 transition">{{ team.name }}</a>
                             </td>
                             <td class="py-2.5 text-center">{{ team.played }}</td>
                             <td class="py-2.5 text-center {% if team.xg_diff >= 0 %}text-emerald-500{% else %}text-rose-500{% endif %}">
