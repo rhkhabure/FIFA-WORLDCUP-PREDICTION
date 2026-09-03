@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="space-y-6">
+    <!-- LEAGUE SELECTOR WIDGET -->
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+        {% for name, id in tournaments.items() %}
+        <a href="/?tournament_id={{ id }}" class="flex flex-col items-center justify-center p-4 bg-slate-900 border {% if current_tournament == id %}border-cyan-500 shadow-md shadow-cyan-950/30{% else %}border-slate-800{% endif %} rounded-lg hover:border-slate-700 transition">
+            <span class="text-xs font-mono font-bold text-slate-200 tracking-wide text-center">{{ name }}</span>
+        </a>
+        {% endfor %}
+    </div>
+
+    <!-- MAIN DASHBOARD SPLIT -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        <!-- FEATURED MATCH TERMINAL (2/3 WIDTH) -->
+        <div class="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-lg p-5 flex flex-col justify-between shadow-xl">
+            <div>
+                <div class="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
+                    <span class="text-xs font-bold text-slate-400 uppercase tracking-widest">🏆 FEATURED QUANT MATCHUP</span>
+                    <span class="px-2 py-0.5 bg-cyan-950 border border-cyan-800 text-cyan-400 font-mono text-[10px] rounded animate-pulse">LIVE TRACKING ACTIVE</span>
+                </div>
+                
+                <!-- Match Score Banner -->
+                <div class="flex items-center justify-between py-2 px-4 bg-slate-950/60 border border-slate-800/80 rounded-lg mb-6">
+                    <div class="flex items-center space-x-3 w-5/12">
+                        <span class="font-bold text-slate-200 truncate">{{ featured.home_name }}</span>
+                    </div>
+                    <div class="flex flex-col items-center justify-center font-mono w-2/12">
+                        <span class="text-xl font-black text-slate-100">{{ featured.home_score }} - {{ featured.away_score }}</span>
+                        <span class="text-[10px] text-cyan-400 font-bold mt-0.5">{{ featured.minute }}'</span>
+                    </div>
+                    <div class="flex items-center space-x-3 justify-end text-right w-5/12">
+                        <span class="font-bold text-slate-200 truncate">{{ featured.away_name }}</span>
+                    </div>
+                </div>
+
+                <!-- Three-Segment Probability Engine -->
+                <div class="mb-6 font-mono text-xs">
+                    <div class="flex justify-between text-[10px] text-slate-400 mb-1">
+                        <span>HOME WIN ({{ (featured.prob_1 * 100) | round(1) }}%)</span>
+                        <span>DRAW ({{ (featured.prob_x * 100) | round(1) }}%)</span>
+                        <span>AWAY WIN ({{ (featured.prob_2 * 100) | round(1) }}%)</span>
+                    </div>
+                    <div class="w-full flex h-3 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
+                        <div class="bg-cyan-500 h-full transition-all duration-500" style="width: {{ featured.prob_1 * 100 }}%"></div>
+                        <div class="bg-amber-500 h-full transition-all duration-500" style="width: {{ featured.prob_x * 100 }}%"></div>
+                        <div class="bg-coral-500 h-full transition-all duration-500" style="width: {{ featured.prob_2 * 100 }}%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Vectorized Pitch Container -->
+            <div class="w-full flex justify-center py-4 bg-slate-950/40 rounded-lg border border-slate-800/60 overflow-x-auto shadow-inner">
+                <div class="w-[600px] h-[350px] flex-shrink-0">
+                    {{ featured.svg_pitch | safe }}
+                </div>
+            </div>
+        </div>
+
+        <!-- LEAGUE STANDINGS TERMINAL (1/3 WIDTH) -->
+        <div class="bg-slate-900 border border-slate-800 rounded-lg p-5 shadow-xl">
+            <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest border-b border-slate-800 pb-3 mb-3">
+                📊 QUANT STANDINGS LEDGER
+            </h3>
+            <div class="overflow-x-auto">
+                <table class="w-full font-mono text-xs text-left">
+                    <thead>
+                        <tr class="text-slate-500 border-b border-slate-800">
+                            <th class="pb-2 font-normal">#</th>
+                            <th class="pb-2 font-normal font-sans">TEAM</th>
+                            <th class="pb-2 font-normal text-center">P</th>
+                            <th class="pb-2 font-normal text-center">xGD</th>
+                            <th class="pb-2 font-normal text-right">PTS</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-800/60 text-slate-300">
+                        {% for team in standings %}
+                        <tr class="hover:bg-slate-800/30 transition-colors">
+                            <td class="py-2.5 font-bold text-slate-500">{{ loop.index }}</td>
+                            <td class="py-2.5 font-sans font-bold text-slate-200 truncate max-w-[100px]">
+                                <a href="/team?team_name={{ team.name }}" class="hover:text-cyan-400 transition">{{ team.name }}</a>
+                            </td>
+                            <td class="py-2.5 text-center">{{ team.played }}</td>
+                            <td class="py-2.5 text-center {% if team.xg_diff >= 0 %}text-emerald-500{% else %}text-rose-500{% endif %}">
+                                {% if team.xg_diff > 0 %}+{% endif %}{{ team.xg_diff | round(1) }}
+                            </td>
+                            <td class="py-2.5 text-right font-bold text-slate-100">{{ team.points }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

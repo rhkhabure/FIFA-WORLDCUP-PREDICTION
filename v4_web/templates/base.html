@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>V4 Quant Terminal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;700&display=swap');
+        body { 
+            background-color: #0b0f19; 
+            color: #f8fafc; 
+            font-family: 'Inter', sans-serif; 
+            margin:0; 
+        }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 3px; }
+    </style>
+</head>
+<body class="flex flex-col h-screen overflow-hidden">
+    
+    <!-- SYSTEM BAR -->
+    <div class="border-b border-slate-800 bg-slate-950 flex justify-between items-center px-4 py-1.5 text-slate-500 font-mono text-[10px] uppercase tracking-wider">
+        <div class="flex gap-4 items-center">
+            <span class="flex items-center gap-1"><span class="text-cyan-500 text-xs">●</span> V4_ENGINE: ONLINE</span>
+            <span>DB_LATENCY: 12ms</span>
+            <span>MARKETS: 5</span>
+        </div>
+        <div class="flex gap-4 items-center">
+            <span class="text-cyan-400">Δ SYNC: OK</span>
+            <span class="text-amber-500 hover:text-white cursor-pointer transition">VIEW: QUANT</span>
+        </div>
+    </div>
+
+    <div class="flex flex-1 overflow-hidden relative">
+        <!-- SIDEBAR NAVIGATION -->
+        <div class="w-16 md:w-64 bg-slate-950 border-r border-slate-800 flex flex-col z-40 transition-all duration-300">
+            <div class="p-4 border-b border-slate-800 flex items-center justify-center md:justify-start h-14">
+                <div class="font-black tracking-widest text-sm hidden md:flex items-center gap-1 text-slate-300">
+                    <span class="text-slate-500 text-lg">⌬</span> V4_<span class="text-cyan-500">QUANT</span>
+                </div>
+                <span class="md:hidden text-slate-500 text-xl">⌬</span>
+            </div>
+            
+            <div class="flex-1 overflow-y-auto p-2 space-y-2 mt-4">
+                <a href="/" class="flex items-center gap-3 px-3 py-2.5 rounded font-mono transition-colors {% if request.url.path == '/' %}bg-cyan-900/20 text-cyan-400 border-l-2 border-cyan-500{% else %}text-slate-500 hover:text-slate-300 hover:bg-slate-900{% endif %}">
+                    <span class="text-lg">01</span>
+                    <span class="text-xs hidden md:block">LEAGUE_HUB</span>
+                </a>
+                <a href="/match" class="flex items-center gap-3 px-3 py-2.5 rounded font-mono transition-colors {% if request.url.path == '/match' %}bg-cyan-900/20 text-cyan-400 border-l-2 border-cyan-500{% else %}text-slate-500 hover:text-slate-300 hover:bg-slate-900{% endif %}">
+                    <span class="text-lg">02</span>
+                    <span class="text-xs hidden md:block">IN-PLAY_CONSOLE</span>
+                </a>
+                <a href="/team" class="flex items-center gap-3 px-3 py-2.5 rounded font-mono transition-colors {% if request.url.path == '/team' %}bg-cyan-900/20 text-cyan-400 border-l-2 border-cyan-500{% else %}text-slate-500 hover:text-slate-300 hover:bg-slate-900{% endif %}">
+                    <span class="text-lg">03</span>
+                    <span class="text-xs hidden md:block">ENTITY_PROFILE</span>
+                </a>
+                <a href="/player" class="flex items-center gap-3 px-3 py-2.5 rounded font-mono transition-colors {% if request.url.path == '/player' %}bg-cyan-900/20 text-cyan-400 border-l-2 border-cyan-500{% else %}text-slate-500 hover:text-slate-300 hover:bg-slate-900{% endif %}">
+                    <span class="text-lg">04</span>
+                    <span class="text-xs hidden md:block">ASSET_METRICS</span>
+                </a>
+                <a href="/bracket" class="flex items-center gap-3 px-3 py-2.5 rounded font-mono transition-colors {% if request.url.path == '/bracket' %}bg-cyan-900/20 text-cyan-400 border-l-2 border-cyan-500{% else %}text-slate-500 hover:text-slate-300 hover:bg-slate-900{% endif %}">
+                    <span class="text-lg">05</span>
+                    <span class="text-xs hidden md:block">MONTE_CARLO</span>
+                </a>
+            </div>
+        </div>
+        
+        <!-- MAIN CONTENT AREA -->
+        <div class="flex-1 overflow-y-auto bg-[#0b0f19] p-4 md:p-8">
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+</body>
+</html>
