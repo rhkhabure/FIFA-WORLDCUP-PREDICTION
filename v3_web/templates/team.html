@@ -1,60 +1,90 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h1 class="text-4xl mb-8">🏟️ Team Profile: {{ current_team }}</h1>
+<div class="mb-4 flex items-center justify-between">
+    <div class="font-mono text-[10px] text-[var(--text-muted)] uppercase tracking-widest">{{ current_league }} / {{ current_team }}</div>
+</div>
 
-<div class="grid grid-cols-1 lg:grid-cols-2 gap-12">
-    <!-- Left Col: Manager & Pitch -->
-    <div>
-        <h2 class="text-2xl mb-6">Manager & Standard XI</h2>
-        <div class="bg-gray-900/50 p-6 rounded-xl border border-gray-800 mb-6 inline-block w-full">
-            <span class="text-gray-400 uppercase text-sm tracking-wide">Manager</span>
-            <div class="text-xl font-bold text-white mt-1">
-                {{ manager }}
-            </div>
+<!-- TEAM DNA METRICS -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+    <div class="panel p-4 flex flex-col">
+        <div class="font-mono text-[10px] text-gray-500 uppercase tracking-widest mb-4">Alpha (Attack Potency)</div>
+        <div class="flex items-end gap-3 mb-2">
+            <div class="text-3xl font-black text-white">1.42</div>
+            <div class="text-[var(--home-color)] text-sm mb-1 font-mono">+42% Δ</div>
         </div>
-        
-        <div class="bg-gray-900/30 p-4 rounded-xl border border-gray-800 flex justify-center">
-            {{ pitch_svg | safe }}
+        <div class="w-full bg-gray-800 h-2 rounded-full overflow-hidden">
+            <div class="bg-gradient-to-r from-[var(--home-color)] to-[#0ea5e9] h-full" style="width: 75%"></div>
+        </div>
+        <div class="flex justify-between text-[9px] font-mono text-gray-500 mt-1">
+            <span>0.0</span><span>0.6</span><span>1.2</span><span>1.8</span>
         </div>
     </div>
     
-    <!-- Right Col: History & Next -->
-    <div>
-        <h2 class="text-2xl mb-6">Match History</h2>
-        <div class="overflow-x-auto rounded-lg border border-gray-800 mb-8">
-            <table class="w-full text-left border-collapse">
-                <thead>
-                    <tr class="bg-gray-900 text-gray-400 text-sm">
-                        <th class="p-3 border-b border-gray-800">Date</th>
-                        <th class="p-3 border-b border-gray-800">Opponent</th>
-                        <th class="p-3 border-b border-gray-800 text-center">Result</th>
-                        <th class="p-3 border-b border-gray-800 text-center">xG</th>
-                        <th class="p-3 border-b border-gray-800 text-center">Possession</th>
-                    </tr>
-                </thead>
-                <tbody class="bg-black/20 text-sm">
-                    {% for match in match_history %}
-                    <tr class="border-b border-gray-800/50 hover:bg-gray-800/50">
-                        <td class="p-3 text-gray-400">{{ match.date }}</td>
-                        <td class="p-3 font-bold text-white">{{ match.opponent }}</td>
-                        <td class="p-3 text-center font-bold {% if match.result.startswith('W') %}text-green-400{% elif match.result.startswith('L') %}text-red-400{% else %}text-yellow-400{% endif %}">{{ match.result }}</td>
-                        <td class="p-3 text-center">{{ match.xg }}</td>
-                        <td class="p-3 text-center">{{ match.possession }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+    <div class="panel p-4 flex flex-col">
+        <div class="font-mono text-[10px] text-gray-500 uppercase tracking-widest mb-4">Beta (Defensive Fragility)</div>
+        <div class="flex items-end gap-3 mb-2">
+            <div class="text-3xl font-black text-white">0.78</div>
+            <div class="text-[var(--draw-color)] text-sm mb-1 font-mono">-22% Δ</div>
+        </div>
+        <div class="w-full bg-gray-800 h-2 rounded-full overflow-hidden">
+            <div class="bg-[var(--draw-color)] h-full" style="width: 35%"></div>
+        </div>
+        <div class="flex justify-between text-[9px] font-mono text-gray-500 mt-1">
+            <span>0.0</span><span>0.6</span><span>1.2</span><span>1.8</span>
+        </div>
+    </div>
+    
+    <!-- MOCK FORM LEDGER -->
+    <div class="panel p-0 flex flex-col overflow-hidden">
+        <div class="font-mono text-[10px] text-gray-500 uppercase tracking-widest p-3 border-b border-[var(--border-color)] bg-[#0d121f]">
+            Performance Form Ledger
+        </div>
+        <div class="flex-1 overflow-y-auto font-mono text-[10px]">
+            {% for match in match_history %}
+            <div class="flex items-center justify-between p-2 border-b border-[var(--border-color)] hover:bg-gray-800/50">
+                <div class="w-16 truncate text-gray-300">{{ match.opponent[:3]|upper }}</div>
+                <div class="px-1.5 py-0.5 rounded {% if match.result.startswith('W') %}bg-green-900 text-green-400 border border-green-700{% elif match.result.startswith('L') %}bg-red-900 text-red-400 border border-red-700{% else %}bg-yellow-900 text-yellow-400 border border-yellow-700{% endif %}">
+                    {{ match.result[0] }}
+                </div>
+                <div class="text-white">{{ match.result.split(' ')[1] }}</div>
+                <div class="text-gray-400 w-24 text-right">xG: {{ match.xg }}</div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- DYNAMIC LINEUP MATRIX -->
+<div class="panel p-4 flex flex-col lg:flex-row gap-6">
+    <!-- Readouts -->
+    <div class="lg:w-1/3 flex flex-col justify-center space-y-6 px-4">
+        <div>
+            <div class="text-white text-lg font-bold mb-1">Dynamic Lineup Matrix</div>
+            <div class="text-[var(--text-muted)] text-xs mb-4">Starting Lineup vs Ideal Roster Comparison</div>
+            <div class="flex items-center gap-2 mb-2 text-sm font-mono">
+                <span class="text-white">Attack Delta (Δ<sub>att</sub>):</span> 
+                <span class="text-[var(--away-color)]">93.6% ↓</span>
+            </div>
+            <div class="text-[10px] text-gray-500 italic mb-4">→ Dampening α</div>
+            
+            <div class="flex items-center gap-2 mb-2 text-sm font-mono">
+                <span class="text-white">Defense Delta (Δ<sub>def</sub>):</span> 
+                <span class="text-[var(--home-color)]">106.4% ↑</span>
+            </div>
+            <div class="text-[10px] text-gray-500 italic">→ Dampening β</div>
         </div>
         
-        <h2 class="text-2xl mb-6">Upcoming Fixture</h2>
-        <div class="bg-primary-custom/10 p-6 rounded-xl border border-primary-custom/30 text-center">
-            <div class="text-gray-300 mb-2">Next Match</div>
-            <div class="text-2xl text-white font-bold mb-4">vs Everton (Away)</div>
-            <div class="inline-block bg-primary-custom text-white px-4 py-2 rounded-full font-bold shadow-lg">
-                Win Probability: 68%
-            </div>
+        <div class="bg-[#0b0f19] border border-[var(--border-color)] p-3 rounded text-xs font-mono">
+            <div class="text-gray-500 mb-2 border-b border-gray-700 pb-1">Legend</div>
+            <div class="flex items-center gap-2 mb-1"><span class="text-[var(--home-color)]">●</span> Confirmed Starter</div>
+            <div class="flex items-center gap-2"><span class="text-gray-500 border border-dashed border-gray-500 rounded-full w-2.5 h-2.5 inline-block"></span> Ideal Roster</div>
         </div>
+    </div>
+    
+    <!-- SVG Pitch -->
+    <div class="flex-1 flex justify-center items-center bg-[#070a10] rounded border border-[var(--border-color)] overflow-hidden p-4">
+        {{ pitch_svg | safe }}
     </div>
 </div>
 {% endblock %}

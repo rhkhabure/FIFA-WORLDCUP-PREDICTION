@@ -1,70 +1,117 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h1 class="text-4xl mb-6">🔴 Live Match Center</h1>
+<div class="mb-4 flex items-center justify-between">
+    <div class="font-mono text-[10px] text-[var(--text-muted)] uppercase tracking-widest">{{ current_league }} / {{ match_home }} VS {{ match_away }}</div>
+</div>
 
-<!-- Match Banner -->
-<div class="flex justify-between items-center bg-gray-900/50 p-6 rounded-xl border border-gray-800 mb-8 shadow-lg">
-    <div class="text-center flex-1">
-        <a href="/team?league={{ current_league }}&team={{ match_home }}" class="text-3xl text-primary-custom mb-1 hover:underline block font-bold transition-all duration-200 hover:scale-105">{{ match_home }}</a>
-        <p class="text-gray-400 text-sm">Home | 4-3-3</p>
+<!-- BAYESIAN TRI-STATE HEADER -->
+<div class="panel p-4 mb-6 flex justify-between items-center text-center font-mono text-[9px] sm:text-xs">
+    <div class="flex-1 px-2">
+        <div class="text-[var(--text-muted)] mb-3">Prior (Static Base)</div>
+        <div class="flex gap-1 h-2 rounded-full overflow-hidden opacity-50 mb-2">
+            <div class="bg-[var(--home-color)] w-[40%]"></div>
+            <div class="bg-[var(--draw-color)] w-[28%]"></div>
+            <div class="bg-[var(--away-color)] w-[32%]"></div>
+        </div>
+        <div class="flex justify-between text-gray-400"><span>40%</span><span>28%</span><span>32%</span></div>
     </div>
-    
-    <div class="text-center flex-1 px-4 border-x border-gray-800">
-        <div class="inline-block {% if match_status == 'FULL TIME' %}bg-gray-600{% else %}bg-red-600 animate-pulse{% endif %} text-white px-3 py-1 rounded text-sm font-bold mb-2">{{ match_status }}</div>
-        <div class="text-5xl font-black text-white mb-2">{{ match_score }}</div>
-        <p class="text-gray-400 text-sm">Main Stadium | Ref: M. Oliver</p>
+    <div class="text-[var(--text-muted)] mx-2 text-lg">➔</div>
+    <div class="flex-1 px-2">
+        <div class="text-[var(--text-muted)] mb-3 relative">
+            Likelihood (Lineup Adj.)
+            <span class="absolute -top-3 left-1/2 -translate-x-1/2 text-[8px] text-[var(--away-color)] bg-black px-1 border border-gray-800 rounded">Δ +6% Away</span>
+        </div>
+        <div class="flex gap-1 h-2 rounded-full overflow-hidden opacity-80 mb-2">
+            <div class="bg-[var(--home-color)] w-[35%]"></div>
+            <div class="bg-[var(--draw-color)] w-[29%]"></div>
+            <div class="bg-[var(--away-color)] w-[36%]"></div>
+        </div>
+        <div class="flex justify-between text-gray-300"><span>35%</span><span>29%</span><span class="text-[var(--away-color)] font-bold">36%</span></div>
     </div>
-    
-    <div class="text-center flex-1">
-        <a href="/team?league={{ current_league }}&team={{ match_away }}" class="text-3xl text-white mb-1 hover:text-gray-300 hover:underline block font-bold transition-all duration-200 hover:scale-105">{{ match_away }}</a>
-        <p class="text-gray-400 text-sm">Away | 4-2-3-1</p>
+    <div class="text-[var(--text-muted)] mx-2 text-lg">➔</div>
+    <div class="flex-1 px-2">
+        <div class="text-[var(--text-muted)] mb-3 relative">
+            Posterior (In-Play Live)
+            <span class="absolute -top-3 left-1/2 -translate-x-1/2 text-[8px] text-white bg-red-600 px-1 rounded animate-pulse">68:45</span>
+        </div>
+        <div class="flex gap-1 h-3 rounded-full overflow-hidden mb-2 shadow-[0_0_10px_rgba(20,184,166,0.3)]">
+            <div class="bg-[var(--home-color)] w-[29%]"></div>
+            <div class="bg-[var(--draw-color)] w-[31%]"></div>
+            <div class="bg-[var(--away-color)] w-[40%]"></div>
+        </div>
+        <div class="flex justify-between text-white font-bold"><span>29%</span><span>31%</span><span class="text-[var(--away-color)]">40%</span></div>
     </div>
 </div>
 
-<!-- Win Probability Bar -->
-<h3 class="text-xl mb-4 text-white">Live Win Probability</h3>
-<div class="grid grid-cols-3 gap-4 mb-8">
-    <div class="metric-card bg-primary-custom/10 border-primary-custom">
-        <div class="text-gray-400 text-sm">{{ match_home }}</div>
-        <div class="text-3xl font-black mt-1 text-primary-custom">72% <span class="text-green-400 text-sm ml-1">+15%</span></div>
-    </div>
-    <div class="metric-card border-gray-700">
-        <div class="text-gray-400 text-sm">Draw</div>
-        <div class="text-3xl font-black mt-1 text-gray-300">18% <span class="text-red-400 text-sm ml-1">-10%</span></div>
-    </div>
-    <div class="metric-card border-gray-700">
-        <div class="text-gray-400 text-sm">{{ match_away }}</div>
-        <div class="text-3xl font-black mt-1 text-gray-300">10% <span class="text-red-400 text-sm ml-1">-5%</span></div>
-    </div>
-</div>
-
-<hr>
-
-<h3 class="text-2xl mb-6">Live Formations & Events</h3>
-<div class="flex flex-col lg:flex-row gap-8">
-    <div class="flex-[2] bg-gray-900/30 p-4 rounded-xl border border-gray-800 flex justify-center">
-        <!-- SVG Pitch -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <!-- SVG PITCH -->
+    <div class="lg:col-span-2 panel p-4 relative min-h-[300px] flex items-center justify-center">
+        <!-- Overlay scores -->
+        <div class="absolute top-4 left-4 flex items-center gap-2 font-mono text-xs z-10">
+            <div class="bg-[var(--home-color)] text-[#0b0f19] px-2 py-0.5 rounded font-bold">{{ match_home[:3]|upper }}</div>
+            <div class="bg-gray-800 text-white px-2 py-0.5 border border-gray-600 rounded">{{ match_score }}</div>
+            <div class="bg-[var(--away-color)] text-[#0b0f19] px-2 py-0.5 rounded font-bold">{{ match_away[:3]|upper }}</div>
+        </div>
         {{ pitch_svg | safe }}
     </div>
-    
-    <div class="flex-1">
-        <div class="bg-gray-900/50 p-6 rounded-xl border border-gray-800 mb-6">
-            <h4 class="text-lg text-white border-b border-gray-800 pb-3 mb-4">Match Events</h4>
-            <ul class="space-y-4 text-gray-300">
-                <li class="flex gap-3"><span class="text-xl">⚽</span> <div><strong>15'</strong> - Goal ({{ match_away }}) - Saka</div></li>
-                <li class="flex gap-3"><span class="text-xl">⚽</span> <div><strong>40'</strong> - Goal ({{ match_home }}) - De Bruyne</div></li>
-                <li class="flex gap-3"><span class="text-xl">🟥</span> <div><strong>45'</strong> - Red Card ({{ match_away }}) - Gabriel</div></li>
-                <li class="flex gap-3"><span class="text-xl">⚽</span> <div><strong>88'</strong> - Goal ({{ match_home }}) - Haaland</div></li>
-            </ul>
-        </div>
+
+    <!-- SIDEBAR PANELS -->
+    <div class="flex flex-col gap-6">
         
-        <div class="bg-gray-900/50 p-6 rounded-xl border border-gray-800">
-            <h4 class="text-lg text-white border-b border-gray-800 pb-3 mb-4">Managers</h4>
-            <div class="mb-2"><strong class="text-gray-400">Home:</strong> <span class="text-white">{{ home_manager }}</span></div>
-            <div><strong class="text-gray-400">Away:</strong> <span class="text-white">{{ away_manager }}</span></div>
+        <!-- EVENT TICKER -->
+        <div class="panel flex flex-col h-[200px]">
+            <div class="font-mono text-[10px] text-gray-500 uppercase tracking-widest p-3 border-b border-[var(--border-color)] bg-[#0d121f]">
+                Live xG Log
+            </div>
+            <div class="flex-1 overflow-y-auto p-3 space-y-2 font-mono text-[9px] text-gray-400">
+                <div><span class="text-white">65:12</span> - K. De Bruyne (MCI) - Shot on Target, <span class="text-[var(--away-color)]">0.78 xG</span></div>
+                <div><span class="text-white">65:12</span> - K. De Bruyne (MCI) - Shot on Target, <span class="text-[var(--away-color)]">0.78 xG</span></div>
+                <div><span class="text-white">65:12</span> - K. De Bruyne (MCI) - Shot on Target, <span class="text-[var(--away-color)]">0.78 xG</span></div>
+                <div><span class="text-white">65:12</span> - K. De Bruyne (MCI) - Shot on Target, <span class="text-[var(--away-color)]">0.78 xG</span></div>
+                <div><span class="text-white">65:12</span> - K. De Bruyne (MCI) - Shot on Target, <span class="text-[var(--away-color)]">0.78 xG</span></div>
+                <div><span class="text-white">65:12</span> - K. De Bruyne (MCI) - Shot on Target, <span class="text-[var(--away-color)]">0.78 xG</span></div>
+            </div>
+        </div>
+
+        <!-- MATRIX -->
+        <div class="panel p-0 overflow-hidden">
+            <div class="font-mono text-[10px] text-gray-500 uppercase tracking-widest p-3 border-b border-[var(--border-color)] bg-[#0d121f]">
+                Remainder Probability Matrix
+            </div>
+            <table class="w-full text-center font-mono text-[10px]">
+                <tbody class="text-gray-300">
+                    <tr class="border-b border-gray-800">
+                        <td class="p-2 border-r border-gray-800">1-3</td>
+                        <td class="p-2 bg-[var(--home-color)]/20 text-[var(--home-color)]">5%</td>
+                        <td class="p-2 border-l border-r border-gray-800 bg-gray-800">6%</td>
+                        <td class="p-2 bg-[var(--away-color)]/20 text-[var(--away-color)]">14%</td>
+                        <td class="p-2 border-l border-gray-800">0%</td>
+                    </tr>
+                    <tr class="border-b border-gray-800">
+                        <td class="p-2 border-r border-gray-800">1-4</td>
+                        <td class="p-2 bg-[var(--home-color)]/30 text-[var(--home-color)]">6%</td>
+                        <td class="p-2 border-l border-r border-gray-800 bg-gray-800">1%</td>
+                        <td class="p-2 bg-[var(--away-color)]/30 text-[var(--away-color)] font-bold">24%</td>
+                        <td class="p-2 border-l border-gray-800">0%</td>
+                    </tr>
+                    <tr class="border-b border-gray-800">
+                        <td class="p-2 border-r border-gray-800">1-5</td>
+                        <td class="p-2 bg-[var(--home-color)]/10 text-[var(--home-color)]">3%</td>
+                        <td class="p-2 border-l border-r border-gray-800 bg-gray-800">1%</td>
+                        <td class="p-2 bg-[var(--away-color)]/20 text-[var(--away-color)]">9%</td>
+                        <td class="p-2 border-l border-gray-800">0%</td>
+                    </tr>
+                    <tr>
+                        <td class="p-2 border-r border-gray-800">1-6</td>
+                        <td class="p-2 bg-[var(--home-color)]/40 text-[var(--home-color)]">8%</td>
+                        <td class="p-2 border-l border-r border-gray-800 bg-gray-800">3%</td>
+                        <td class="p-2 bg-[var(--away-color)]/10 text-[var(--away-color)]">4%</td>
+                        <td class="p-2 border-l border-gray-800">6%</td>
+                    </tr>
+                </tbody>
+            </table>
         </div>
     </div>
 </div>
-
 {% endblock %}
