@@ -6,8 +6,10 @@ import uvicorn
 from utils import TEAM_THEMES, LEAGUE_TEAMS, TEAM_MANAGERS, get_theme_for_team, generate_pitch_svg_horizontal, generate_pitch_svg_vertical
 import os
 from pathlib import Path
+from api import router as api_router
 
 app = FastAPI(title="V3 Universal Football Model")
+app.include_router(api_router, prefix="/api")
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 
 # Load the comprehensive mock DB generated earlier
@@ -18,21 +20,23 @@ if DB_PATH.exists():
 else:
     db = {"teams": {}, "players": {}, "match_history": {}}
 
-def get_common_context(request: Request):
+def get_common_context(request: Request, active_page: str):
     league = request.query_params.get("league", "Premier League")
     if league not in LEAGUE_TEAMS:
         league = "Premier League"
     
     available_teams = LEAGUE_TEAMS[league]
-    team = request.query_params.get("team", "Default")
+    team = request.query_params.get("team", available_teams[0])
     
-    if team not in available_teams and team != "Default":
-        team = "Default"
+    if team not in available_teams:
+        team = available_teams[0]
 
-    theme = get_theme_for_team(team)
+    # V4: Dropped dynamic theming. Always use Default universal theme.
+    theme = TEAM_THEMES["Default"]
     
     return {
         "request": request,
+        "active_page": active_page,
         "current_league": league,
         "current_team": team,
         "available_teams": available_teams,
@@ -54,8 +58,7 @@ def get_dynamic_history(team_name, league):
 
 @app.get("/", response_class=HTMLResponse)
 async def hub(request: Request):
-    ctx = get_common_context(request)
-    ctx["active_page"] = "hub"
+    ctx = get_common_context(request, "hub")
     
     league = ctx["current_league"]
     avail = ctx["available_teams"]
@@ -100,8 +103,7 @@ async def hub(request: Request):
 
 @app.get("/match", response_class=HTMLResponse)
 async def match(request: Request):
-    ctx = get_common_context(request)
-    ctx["active_page"] = "match"
+    ctx = get_common_context(request, "match")
     
     league = ctx["current_league"]
     avail = ctx["available_teams"]
@@ -149,8 +151,7 @@ async def match(request: Request):
 
 @app.get("/team", response_class=HTMLResponse)
 async def team(request: Request):
-    ctx = get_common_context(request)
-    ctx["active_page"] = "team"
+    ctx = get_common_context(request, "team")
     
     team_name = ctx["current_team"]
     if team_name == "Default" and len(ctx["available_teams"]) > 0:
@@ -175,8 +176,7 @@ async def team(request: Request):
 
 @app.get("/player", response_class=HTMLResponse)
 async def player(request: Request):
-    ctx = get_common_context(request)
-    ctx["active_page"] = "team" # highlight team tab
+    ctx = get_common_context(request, "player")
     
     player_name = request.query_params.get("name", "Unknown Player")
     team_name = request.query_params.get("team", "Unknown Team")
@@ -193,8 +193,7 @@ async def player(request: Request):
 
 @app.get("/bracket", response_class=HTMLResponse)
 async def bracket(request: Request):
-    ctx = get_common_context(request)
-    ctx["active_page"] = "bracket"
+    ctx = get_common_context(request, "bracket")
     return templates.TemplateResponse(request=request, name="bracket.html", context=ctx)
 
 if __name__ == "__main__":
