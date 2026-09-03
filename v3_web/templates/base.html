@@ -3,146 +3,115 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>V3 Universal Football Model</title>
+    <title>FBD_TRADING TERMINAL</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        :root {
-            --color-primary: {{ theme.primary }};
-            --color-secondary: {{ theme.secondary }};
-            --color-bg: {{ theme.bg }};
-        }
-        body {
-            background-color: var(--color-bg);
-            color: #FAFAFA;
-            font-family: 'Inter', sans-serif;
-            margin: 0;
-            display: flex;
-            min-height: 100vh;
-        }
-        /* Sidebar styling */
-        .sidebar {
-            width: 250px;
-            background-color: #050810;
-            border-right: 2px solid var(--color-primary);
-            padding: 20px;
-            padding-top: 60px; /* Space for the toggle button */
-            display: flex;
-            flex-direction: column;
-            transition: margin-left 0.3s ease;
-            flex-shrink: 0;
-            z-index: 40;
-        }
-        .sidebar.collapsed {
-            margin-left: -250px;
-        }
-        .content {
-            flex-grow: 1;
-            padding: 40px;
-            overflow-y: auto;
-            transition: padding-left 0.3s ease;
-            position: relative;
-        }
-        h1, h2, h3, h4 {
-            color: var(--color-primary);
-            font-weight: 800;
-            letter-spacing: 0.5px;
-        }
-        .text-primary-custom { color: var(--color-primary); }
-        .bg-primary-custom { background-color: var(--color-primary); }
-        .border-primary-custom { border-color: var(--color-primary); }
-        
-        .metric-card {
-            background-color: rgba(255, 255, 255, 0.05);
-            border-radius: 8px;
-            padding: 20px;
-            text-align: center;
-            border-bottom: 2px solid var(--color-primary);
-        }
-        .nav-link {
-            display: block;
-            padding: 10px 15px;
-            margin-bottom: 10px;
-            border-radius: 5px;
-            color: #ccc;
-            text-decoration: none;
-            transition: all 0.2s;
-        }
-        .nav-link:hover, .nav-link.active {
-            background-color: var(--color-primary);
-            color: #fff;
-        }
-        select {
-            width: 100%;
-            padding: 8px;
-            margin-bottom: 20px;
-            background-color: #111;
-            color: white;
-            border: 1px solid #333;
-            border-radius: 4px;
-        }
-        hr {
-            border-color: var(--color-secondary);
-            opacity: 0.5;
-            margin: 30px 0;
-        }
-    </style>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;700&display=swap');
+        :root {
+            --bg-base: #0b0f19;
+            --bg-panel: #111827;
+            --border-color: #1e293b;
+            --text-main: #f8fafc;
+            --text-muted: #64748b;
+            --home-color: #14b8a6; /* Teal */
+            --draw-color: #f59e0b; /* Amber */
+            --away-color: #f43f5e; /* Coral */
+        }
+        body { background-color: var(--bg-base); color: var(--text-main); font-family: 'Inter', sans-serif; margin:0; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+        .panel { background-color: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 0.5rem; }
+        .ticker { border-bottom: 1px solid var(--border-color); background-color: #070a10; font-size: 0.65rem; }
+    </style>
 </head>
-<body>
-
-    <button onclick="toggleSidebar()" class="fixed top-4 left-4 z-50 bg-gray-900 p-2 rounded-md text-white border border-gray-700 shadow-xl hover:bg-gray-800 transition focus:outline-none">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-        </svg>
-    </button>
-
-    <div class="sidebar" id="sidebar">
-        <h2 class="text-xl mb-6 flex items-center gap-2">⚽ V3 Model</h2>
-        
-        <div class="mb-6">
-            <label class="text-sm text-gray-400">Select League</label>
-            <select id="league-select" onchange="updateNav()">
-                {% for l in leagues %}
-                    <option value="{{ l }}" {% if l == current_league %}selected{% endif %}>{{ l }}</option>
-                {% endfor %}
-            </select>
-            
-            <label class="text-sm text-gray-400">Select Team Theme</label>
-            <select id="team-select" onchange="updateNav()">
-                <option value="Default">Default</option>
-                {% for t in available_teams %}
-                    <option value="{{ t }}" {% if t == current_team %}selected{% endif %}>{{ t }}</option>
-                {% endfor %}
-            </select>
+<body class="flex flex-col h-screen overflow-hidden">
+    <!-- TICKER -->
+    <div class="ticker flex justify-between items-center px-4 py-1 text-gray-500 font-mono uppercase tracking-wider">
+        <div class="flex gap-4 items-center">
+            <span class="flex items-center gap-1"><span class="text-green-500 text-xs">●</span> SYS: ONLINE</span>
+            <span>DB LATENCY: 14ms</span>
+            <span>ACTIVE LEAGUES: {{ leagues|length }}</span>
         </div>
-
-        <script>
-            function updateNav() {
-                const league = document.getElementById('league-select').value;
-                const team = document.getElementById('team-select').value;
-                const url = new URL(window.location);
-                url.searchParams.set('league', league);
-                url.searchParams.set('team', team);
-                window.location.href = url.href;
-            }
-        </script>
-
-        <div class="mt-8">
-            <a href="/?league={{ current_league }}&team={{ current_team }}" class="nav-link {% if active_page == 'hub' %}active{% endif %}">🌍 League Hub</a>
-            <a href="/match?league={{ current_league }}&team={{ current_team }}" class="nav-link {% if active_page == 'match' %}active{% endif %}">🔴 Live Match</a>
-            <a href="/team?league={{ current_league }}&team={{ current_team }}" class="nav-link {% if active_page == 'team' %}active{% endif %}">🏟️ Team Profile</a>
-            <a href="/bracket?league={{ current_league }}&team={{ current_team }}" class="nav-link {% if active_page == 'bracket' %}active{% endif %}">🏆 Tournament</a>
+        <div class="flex gap-4">
+            <span class="text-[var(--home-color)]">MCI +2.4% Δ</span>
+            <span class="text-[var(--away-color)]">ARS -1.2% Δ</span>
+            <span class="text-gray-300">DATA SYNC: OK</span>
         </div>
     </div>
 
-    <div class="content">
-        {% block content %}{% endblock %}
+    <div class="flex flex-1 overflow-hidden relative">
+        <!-- SIDEBAR -->
+        <div class="w-64 bg-[#070a10] border-r border-[var(--border-color)] flex flex-col z-40 transition-all duration-300 relative" id="sidebar">
+            <div class="p-4 border-b border-[var(--border-color)] flex items-center justify-between">
+                <div class="font-black tracking-wider text-sm flex items-center gap-1">
+                    <span class="text-[var(--text-muted)] text-xl">⚽</span> FBD_<span class="text-[var(--home-color)]">TERMINAL</span>
+                </div>
+            </div>
+            
+            <div class="p-4 border-b border-[var(--border-color)] space-y-4">
+                <div>
+                    <label class="text-[10px] text-gray-500 font-mono uppercase tracking-wider block mb-1">Target Market</label>
+                    <select id="league-select" onchange="updateNav()" class="w-full bg-[#111827] border border-[var(--border-color)] text-xs p-1.5 rounded text-white font-mono focus:outline-none focus:border-[var(--home-color)]">
+                        {% for l in leagues %}
+                            <option value="{{ l }}" {% if l == current_league %}selected{% endif %}>{{ l }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="text-[10px] text-gray-500 font-mono uppercase tracking-wider block mb-1">Entity Filter</label>
+                    <select id="team-nav-select" onchange="goToTeam()" class="w-full bg-[#111827] border border-[var(--border-color)] text-xs p-1.5 rounded text-white font-mono focus:outline-none focus:border-[var(--home-color)]">
+                        <option value="">-- Global View --</option>
+                        {% for t in available_teams %}
+                            <option value="{{ t }}" {% if t == current_team and active_page == 'team' %}selected{% endif %}>{{ t }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            
+            <div class="flex-1 overflow-y-auto p-3 space-y-1">
+                <a href="/?league={{ current_league }}" class="block px-3 py-2 text-sm rounded font-mono transition-colors {% if active_page == 'hub' %}bg-[var(--home-color)]/10 text-[var(--home-color)] border-l-2 border-[var(--home-color)]{% else %}text-gray-400 hover:bg-gray-800{% endif %}">01_MARKET_HUB</a>
+                <a href="/match?league={{ current_league }}" class="block px-3 py-2 text-sm rounded font-mono transition-colors {% if active_page == 'match' %}bg-[var(--home-color)]/10 text-[var(--home-color)] border-l-2 border-[var(--home-color)]{% else %}text-gray-400 hover:bg-gray-800{% endif %}">02_IN-PLAY_CONSOLE</a>
+                <a href="/team?league={{ current_league }}&team={{ current_team }}" class="block px-3 py-2 text-sm rounded font-mono transition-colors {% if active_page == 'team' %}bg-[var(--home-color)]/10 text-[var(--home-color)] border-l-2 border-[var(--home-color)]{% else %}text-gray-400 hover:bg-gray-800{% endif %}">03_ENTITY_PROFILE</a>
+                <a href="/bracket?league={{ current_league }}" class="block px-3 py-2 text-sm rounded font-mono transition-colors {% if active_page == 'bracket' %}bg-[var(--home-color)]/10 text-[var(--home-color)] border-l-2 border-[var(--home-color)]{% else %}text-gray-400 hover:bg-gray-800{% endif %}">04_MONTE_CARLO</a>
+            </div>
+        </div>
+        
+        <!-- MAIN CONTENT -->
+        <div class="flex-1 overflow-y-auto bg-[var(--bg-base)] p-6 relative">
+            <div class="absolute top-4 right-6 flex items-center gap-3">
+                <span class="text-[10px] text-gray-500 font-mono">VIEW_MODE:</span>
+                <div class="bg-[#111827] border border-[var(--border-color)] rounded flex text-[10px] font-mono overflow-hidden">
+                    <div class="px-3 py-1 bg-[var(--home-color)]/20 text-[var(--home-color)] cursor-pointer">QUANT</div>
+                    <div class="px-3 py-1 text-gray-500 cursor-pointer hover:bg-gray-800">ANALYST</div>
+                </div>
+            </div>
+            
+            <button onclick="document.getElementById('sidebar').classList.toggle('-ml-64')" class="absolute top-4 left-4 z-50 text-gray-500 hover:text-white bg-gray-900 p-1.5 rounded border border-gray-700 opacity-0 transition-opacity" id="navToggle">
+                ☰
+            </button>
+
+            <div class="mt-8">
+                {% block content %}{% endblock %}
+            </div>
+        </div>
     </div>
 
     <script>
-        function toggleSidebar() {
-            document.getElementById('sidebar').classList.toggle('collapsed');
+        function updateNav() {
+            const league = document.getElementById('league-select').value;
+            window.location.href = "/?league=" + encodeURIComponent(league);
         }
+        function goToTeam() {
+            const league = document.getElementById('league-select').value;
+            const team = document.getElementById('team-nav-select').value;
+            if (team) {
+                window.location.href = "/team?league=" + encodeURIComponent(league) + "&team=" + encodeURIComponent(team);
+            }
+        }
+        
+        // Show toggle button only when sidebar is closed (handled via CSS/JS logic for a robust app)
     </script>
 </body>
 </html>

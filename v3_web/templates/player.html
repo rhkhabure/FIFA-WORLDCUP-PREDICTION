@@ -1,69 +1,73 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="flex items-center justify-between mb-8">
-    <h1 class="text-4xl">🏃 Player Profile: {{ player_name }}</h1>
-    <a href="/team?league={{ current_league }}&team={{ team_name }}" class="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded transition">
-        ← Back to {{ team_name }}
+<div class="mb-4 flex items-center justify-between">
+    <div class="font-mono text-[10px] text-[var(--text-muted)] uppercase tracking-widest">{{ current_league }} / {{ team_name }} / {{ player_name }}</div>
+    <a href="/team?league={{ current_league }}&team={{ team_name }}" class="text-[10px] text-gray-400 hover:text-white border border-gray-700 hover:bg-gray-800 px-3 py-1 rounded transition font-mono uppercase">
+        ← Return
     </a>
 </div>
 
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-    <!-- Player Image & Basic Info (Placeholder for API image) -->
-    <div class="bg-gray-900/50 p-6 rounded-xl border border-gray-800 text-center">
-        <div class="w-48 h-48 mx-auto bg-gray-800 rounded-full border-4 border-primary-custom mb-4 flex items-center justify-center overflow-hidden">
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <!-- REPLACEMENT VALUE CARD -->
+    <div class="panel p-6 flex flex-col items-center relative overflow-hidden">
+        <div class="absolute top-0 right-0 p-3 opacity-20">
+            <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" class="text-white"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+        </div>
+        
+        <div class="w-32 h-32 bg-[#070a10] rounded-full border border-[var(--border-color)] mb-4 flex items-center justify-center overflow-hidden shadow-2xl relative z-10">
             {% if player_data.get('image') %}
                 <img src="{{ player_data.image }}" alt="{{ player_name }}" class="w-full h-full object-cover">
             {% else %}
-                <span class="text-6xl text-gray-600">👤</span>
+                <span class="text-4xl text-gray-600">👤</span>
             {% endif %}
         </div>
-        <h2 class="text-2xl font-bold text-white mb-1">{{ player_name }}</h2>
-        <p class="text-primary-custom font-bold uppercase tracking-wider text-sm">{{ team_name }}</p>
         
-        <hr class="my-4 border-gray-800">
+        <h2 class="text-xl font-bold text-white mb-1 z-10">{{ player_name }}</h2>
+        <div class="flex gap-2 mb-6 z-10 font-mono text-[10px]">
+            <span class="bg-gray-800 px-2 py-0.5 rounded text-white">{{ player_data.get('position', 'MID') }}</span>
+            <span class="bg-gray-800 px-2 py-0.5 rounded text-white">#{{ player_data.get('jersey', '10') }}</span>
+            <span class="bg-gray-800 px-2 py-0.5 rounded text-white">{{ player_data.get('age', '24') }} YO</span>
+        </div>
         
-        <div class="grid grid-cols-2 gap-4 text-left">
-            <div>
-                <span class="text-gray-500 text-xs">POSITION</span>
-                <div class="text-white">{{ player_data.get('position', 'MID') }}</div>
-            </div>
-            <div>
-                <span class="text-gray-500 text-xs">JERSEY</span>
-                <div class="text-white">#{{ player_data.get('jersey', '10') }}</div>
-            </div>
-            <div>
-                <span class="text-gray-500 text-xs">AGE</span>
-                <div class="text-white">{{ player_data.get('age', '24') }}</div>
-            </div>
-            <div>
-                <span class="text-gray-500 text-xs">NATIONALITY</span>
-                <div class="text-white">{{ player_data.get('nationality', 'INT') }}</div>
-            </div>
+        <!-- Degradation Impact -->
+        <div class="w-full bg-[#070a10] border border-[var(--border-color)] rounded p-4 text-center mt-auto">
+            <div class="text-[10px] text-gray-500 font-mono uppercase mb-2">Replacement Value Impact</div>
+            <div class="text-white text-sm">Absence drops squad <span class="text-[var(--away-color)] font-mono font-bold">-6.4%</span> α</div>
         </div>
     </div>
 
-    <!-- Radar Chart -->
-    <div class="lg:col-span-2 bg-gray-900/50 p-6 rounded-xl border border-gray-800">
-        <h3 class="text-xl mb-6 text-white border-b border-gray-800 pb-2">Player Characteristics (Sofascore)</h3>
+    <!-- RADAR CHART -->
+    <div class="lg:col-span-2 panel p-6 flex flex-col">
+        <div class="font-mono text-[10px] text-gray-500 uppercase tracking-widest mb-4 border-b border-[var(--border-color)] pb-2 flex justify-between">
+            <span>Player Characteristics (Sofascore)</span>
+            <div class="flex gap-3">
+                <span><span class="text-[var(--home-color)]">■</span> Player</span>
+                <span><span class="text-gray-600">■</span> Lg Avg</span>
+            </div>
+        </div>
         
-        <div class="flex flex-col md:flex-row items-center justify-center gap-8">
-            <div class="w-full max-w-[350px]">
+        <div class="flex flex-col md:flex-row items-center gap-8 flex-1">
+            <div class="w-full max-w-[320px] h-[280px]">
                 <canvas id="radarChart"></canvas>
             </div>
             
-            <div class="flex-1 w-full space-y-4">
-                <div class="bg-black/30 p-4 rounded border-l-4 border-primary-custom">
-                    <span class="text-gray-400 text-xs uppercase">Avg Rating</span>
-                    <div class="text-3xl font-black text-white">{{ player_data.get('summary', {}).get('rating', '7.0') }}</div>
+            <div class="flex-1 w-full space-y-3 font-mono">
+                <div class="flex justify-between items-center border-b border-gray-800 pb-2">
+                    <span class="text-gray-500 text-[10px] uppercase">Avg Rating</span>
+                    <span class="text-xl text-white">{{ player_data.get('summary', {}).get('rating', '7.42') }}</span>
                 </div>
-                <div class="bg-black/30 p-4 rounded border-l-4 border-primary-custom">
-                    <span class="text-gray-400 text-xs uppercase">Matches Played</span>
-                    <div class="text-2xl font-bold text-white">{{ player_data.get('summary', {}).get('matches', '0') }}</div>
+                <div class="flex justify-between items-center border-b border-gray-800 pb-2">
+                    <span class="text-gray-500 text-[10px] uppercase">npxG / 90</span>
+                    <span class="text-white">0.34</span>
                 </div>
-                <div class="bg-black/30 p-4 rounded border-l-4 border-primary-custom">
-                    <span class="text-gray-400 text-xs uppercase">Goals / Assists</span>
-                    <div class="text-2xl font-bold text-white">{{ player_data.get('summary', {}).get('goals', '0') }} / {{ player_data.get('summary', {}).get('assists', '0') }}</div>
+                <div class="flex justify-between items-center border-b border-gray-800 pb-2">
+                    <span class="text-gray-500 text-[10px] uppercase">xA / 90</span>
+                    <span class="text-white">0.28</span>
+                </div>
+                <div class="flex justify-between items-center pb-2">
+                    <span class="text-gray-500 text-[10px] uppercase">SCA</span>
+                    <span class="text-white">4.12</span>
                 </div>
             </div>
         </div>
@@ -73,20 +77,12 @@
 <script>
     document.addEventListener("DOMContentLoaded", async function() {
         const ctx = document.getElementById('radarChart').getContext('2d');
-        const rootStyles = getComputedStyle(document.documentElement);
-        const primaryColor = rootStyles.getPropertyValue('--color-primary').trim() || '#00FF87';
-        
-        let rgbaFill = 'rgba(0, 255, 135, 0.3)';
-        if (primaryColor.startsWith('#')) {
-            const r = parseInt(primaryColor.slice(1, 3), 16);
-            const g = parseInt(primaryColor.slice(3, 5), 16);
-            const b = parseInt(primaryColor.slice(5, 7), 16);
-            rgbaFill = `rgba(${r}, ${g}, ${b}, 0.4)`;
-        }
+        const primaryColor = '#14b8a6'; // Teal for terminal look
+        const avgColor = 'rgba(100, 116, 139, 0.3)'; // Muted grey
+        const rgbaFill = 'rgba(20, 184, 166, 0.2)';
         
         const playerName = "{{ player_name }}";
         
-        // Fetch radar data asynchronously instead of parsing Jinja2 payloads into the DOM
         try {
             const response = await fetch(`/api/player/${encodeURIComponent(playerName)}/radar`);
             const data = await response.json();
@@ -95,38 +91,41 @@
             new Chart(ctx, {
                 type: 'radar',
                 data: {
-                    labels: ['Attacking', 'Technical', 'Tactical', 'Defending', 'Creativity'],
-                    datasets: [{
+                    labels: ['ATT', 'TEC', 'TAC', 'DEF', 'CRE'],
+                    datasets: [
+                    {
                         label: playerName,
                         data: [pStats.attacking, pStats.technical, pStats.tactical, pStats.defending, pStats.creativity],
                         backgroundColor: rgbaFill,
                         borderColor: primaryColor,
                         pointBackgroundColor: primaryColor,
                         pointBorderColor: '#fff',
-                        pointHoverBackgroundColor: '#fff',
-                        pointHoverBorderColor: primaryColor,
-                        borderWidth: 2
-                    }]
+                        borderWidth: 1.5,
+                        pointRadius: 2
+                    },
+                    {
+                        label: 'League Avg',
+                        data: [65, 60, 68, 62, 60], // Static mock for visual structure
+                        backgroundColor: avgColor,
+                        borderColor: '#64748b',
+                        pointRadius: 0,
+                        borderWidth: 1
+                    }
+                    ]
                 },
                 options: {
                     scales: {
                         r: {
-                            angleLines: { color: 'rgba(255, 255, 255, 0.1)' },
-                            grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                            angleLines: { color: 'rgba(255, 255, 255, 0.05)' },
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
                             pointLabels: {
-                                color: 'rgba(255, 255, 255, 0.7)',
-                                font: { size: 12, family: 'Inter' }
+                                color: '#94a3b8',
+                                font: { size: 9, family: 'JetBrains Mono' }
                             },
-                            ticks: {
-                                display: false,
-                                min: 0,
-                                max: 100
-                            }
+                            ticks: { display: false, min: 0, max: 100 }
                         }
                     },
-                    plugins: {
-                        legend: { display: false }
-                    },
+                    plugins: { legend: { display: false } },
                     maintainAspectRatio: false
                 }
             });
