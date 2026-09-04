@@ -3,74 +3,108 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>V4 Quant Terminal</title>
+    <title>FBD_TRADING TERMINAL</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;700&display=swap');
-        body { 
-            background-color: #0b0f19; 
-            color: #f8fafc; 
-            font-family: 'Inter', sans-serif; 
-            margin:0; 
+        :root {
+            --bg-base: #0b0f19;
+            --bg-panel: #111827;
+            --border-color: #1e293b;
+            --text-main: #f8fafc;
+            --text-muted: #64748b;
+            --home-color: #14b8a6; /* Teal */
+            --draw-color: #f59e0b; /* Amber */
+            --away-color: #f43f5e; /* Coral */
         }
+        body { background-color: var(--bg-base); color: var(--text-main); font-family: 'Inter', sans-serif; margin:0; }
         .font-mono { font-family: 'JetBrains Mono', monospace; }
         ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+        .panel { background-color: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 0.5rem; }
+        .ticker { border-bottom: 1px solid var(--border-color); background-color: #070a10; font-size: 0.65rem; }
     </style>
 </head>
 <body class="flex flex-col h-screen overflow-hidden">
-    
-    <!-- SYSTEM BAR -->
-    <div class="border-b border-slate-800 bg-slate-950 flex justify-between items-center px-4 py-1.5 text-slate-500 font-mono text-[10px] uppercase tracking-wider">
+    <!-- TICKER -->
+    <div class="ticker flex justify-between items-center px-4 py-1 text-gray-500 font-mono uppercase tracking-wider">
         <div class="flex gap-4 items-center">
-            <span class="flex items-center gap-1"><span class="text-cyan-500 text-xs">●</span> V4_ENGINE: ONLINE</span>
-            <span>DB_LATENCY: 12ms</span>
-            <span>MARKETS: 5</span>
+            <span class="flex items-center gap-1"><span class="text-green-500 text-xs">●</span> SYS: ONLINE</span>
+            <span>DB LATENCY: 14ms</span>
+            <span>ACTIVE LEAGUES: 5</span>
         </div>
-        <div class="flex gap-4 items-center">
-            <span class="text-cyan-400">Δ SYNC: OK</span>
-            <span class="text-amber-500 hover:text-white cursor-pointer transition">VIEW: QUANT</span>
+        <div class="flex gap-4">
+            <span class="text-[var(--home-color)]">MCI +2.4% Δ</span>
+            <span class="text-[var(--away-color)]">ARS -1.2% Δ</span>
+            <span class="text-gray-300">DATA SYNC: OK</span>
         </div>
     </div>
 
     <div class="flex flex-1 overflow-hidden relative">
-        <!-- SIDEBAR NAVIGATION -->
-        <div class="w-16 md:w-64 bg-slate-950 border-r border-slate-800 flex flex-col z-40 transition-all duration-300">
-            <div class="p-4 border-b border-slate-800 flex items-center justify-center md:justify-start h-14">
-                <div class="font-black tracking-widest text-sm hidden md:flex items-center gap-1 text-slate-300">
-                    <span class="text-slate-500 text-lg">⌬</span> V4_<span class="text-cyan-500">QUANT</span>
+        <!-- SIDEBAR -->
+        <div class="w-64 bg-[#070a10] border-r border-[var(--border-color)] flex flex-col z-40 transition-all duration-300 relative" id="sidebar">
+            <div class="p-4 border-b border-[var(--border-color)] flex items-center justify-between">
+                <div class="font-black tracking-wider text-sm flex items-center gap-1">
+                    <span class="text-[var(--text-muted)] text-xl">⚽</span> FBD_<span class="text-[var(--home-color)]">TERMINAL</span>
                 </div>
-                <span class="md:hidden text-slate-500 text-xl">⌬</span>
             </div>
             
-            <div class="flex-1 overflow-y-auto p-2 space-y-2 mt-4">
-                <a href="/" class="flex items-center gap-3 px-3 py-2.5 rounded font-mono transition-colors {% if request.url.path == '/' %}bg-cyan-900/20 text-cyan-400 border-l-2 border-cyan-500{% else %}text-slate-500 hover:text-slate-300 hover:bg-slate-900{% endif %}">
-                    <span class="text-lg">01</span>
-                    <span class="text-xs hidden md:block">LEAGUE_HUB</span>
-                </a>
-                <a href="/match" class="flex items-center gap-3 px-3 py-2.5 rounded font-mono transition-colors {% if request.url.path == '/match' %}bg-cyan-900/20 text-cyan-400 border-l-2 border-cyan-500{% else %}text-slate-500 hover:text-slate-300 hover:bg-slate-900{% endif %}">
-                    <span class="text-lg">02</span>
-                    <span class="text-xs hidden md:block">IN-PLAY_CONSOLE</span>
-                </a>
-                <a href="/team" class="flex items-center gap-3 px-3 py-2.5 rounded font-mono transition-colors {% if request.url.path == '/team' %}bg-cyan-900/20 text-cyan-400 border-l-2 border-cyan-500{% else %}text-slate-500 hover:text-slate-300 hover:bg-slate-900{% endif %}">
-                    <span class="text-lg">03</span>
-                    <span class="text-xs hidden md:block">ENTITY_PROFILE</span>
-                </a>
-                <a href="/player" class="flex items-center gap-3 px-3 py-2.5 rounded font-mono transition-colors {% if request.url.path == '/player' %}bg-cyan-900/20 text-cyan-400 border-l-2 border-cyan-500{% else %}text-slate-500 hover:text-slate-300 hover:bg-slate-900{% endif %}">
-                    <span class="text-lg">04</span>
-                    <span class="text-xs hidden md:block">ASSET_METRICS</span>
-                </a>
-                <a href="/bracket" class="flex items-center gap-3 px-3 py-2.5 rounded font-mono transition-colors {% if request.url.path == '/bracket' %}bg-cyan-900/20 text-cyan-400 border-l-2 border-cyan-500{% else %}text-slate-500 hover:text-slate-300 hover:bg-slate-900{% endif %}">
-                    <span class="text-lg">05</span>
-                    <span class="text-xs hidden md:block">MONTE_CARLO</span>
-                </a>
+            <div class="p-4 border-b border-[var(--border-color)] space-y-4">
+                <div>
+                    <label class="text-[10px] text-gray-500 font-mono uppercase tracking-wider block mb-1">Target Market</label>
+                    <select id="league-select" onchange="updateNav()" class="w-full bg-[#111827] border border-[var(--border-color)] text-xs p-1.5 rounded text-white font-mono focus:outline-none focus:border-[var(--home-color)]">
+                        {% for l in leagues %}
+                            <option value="{{ l }}" {% if l == current_league %}selected{% endif %}>{{ l }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="text-[10px] text-gray-500 font-mono uppercase tracking-wider block mb-1">Entity Filter</label>
+                    <select id="team-nav-select" onchange="goToTeam()" class="w-full bg-[#111827] border border-[var(--border-color)] text-xs p-1.5 rounded text-white font-mono focus:outline-none focus:border-[var(--home-color)]">
+                        <option value="">-- Global View --</option>
+                        {% for t in available_teams %}
+                            <option value="{{ t }}" {% if t == current_team and active_page == 'team' %}selected{% endif %}>{{ t }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            
+            <div class="flex-1 overflow-y-auto p-3 space-y-1">
+                <a href="/?league={{ current_league }}" class="block px-3 py-2 text-sm rounded font-mono transition-colors {% if active_page == 'hub' %}bg-[var(--home-color)]/10 text-[var(--home-color)] border-l-2 border-[var(--home-color)]{% else %}text-gray-400 hover:bg-gray-800{% endif %}">01_MARKET_HUB</a>
+                <a href="/match?league={{ current_league }}" class="block px-3 py-2 text-sm rounded font-mono transition-colors {% if active_page == 'match' %}bg-[var(--home-color)]/10 text-[var(--home-color)] border-l-2 border-[var(--home-color)]{% else %}text-gray-400 hover:bg-gray-800{% endif %}">02_IN-PLAY_CONSOLE</a>
+                <a href="/team?league={{ current_league }}&team={{ current_team }}" class="block px-3 py-2 text-sm rounded font-mono transition-colors {% if active_page == 'team' %}bg-[var(--home-color)]/10 text-[var(--home-color)] border-l-2 border-[var(--home-color)]{% else %}text-gray-400 hover:bg-gray-800{% endif %}">03_ENTITY_PROFILE</a>
             </div>
         </div>
         
-        <!-- MAIN CONTENT AREA -->
-        <div class="flex-1 overflow-y-auto bg-[#0b0f19] p-4 md:p-8">
-            {% block content %}{% endblock %}
+        <!-- MAIN CONTENT -->
+        <div class="flex-1 overflow-y-auto bg-[var(--bg-base)] p-6 relative">
+            <div class="absolute top-4 right-6 flex items-center gap-3">
+                <span class="text-[10px] text-gray-500 font-mono">VIEW_MODE:</span>
+                <div class="bg-[#111827] border border-[var(--border-color)] rounded flex text-[10px] font-mono overflow-hidden">
+                    <div class="px-3 py-1 bg-[var(--home-color)]/20 text-[var(--home-color)] cursor-pointer">QUANT</div>
+                    <div class="px-3 py-1 text-gray-500 cursor-pointer hover:bg-gray-800">ANALYST</div>
+                </div>
+            </div>
+
+            <div class="mt-8">
+                {% block content %}{% endblock %}
+            </div>
         </div>
     </div>
+
+    <script>
+        function updateNav() {
+            const league = document.getElementById('league-select').value;
+            window.location.href = "/?league=" + encodeURIComponent(league);
+        }
+        function goToTeam() {
+            const league = document.getElementById('league-select').value;
+            const team = document.getElementById('team-nav-select').value;
+            if (team) {
+                window.location.href = "/team?league=" + encodeURIComponent(league) + "&team=" + encodeURIComponent(team);
+            }
+        }
+    </script>
 </body>
 </html>
