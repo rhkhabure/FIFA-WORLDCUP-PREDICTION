@@ -103,51 +103,72 @@ def get_theme_for_team(team_name):
     return {"primary": primary, "secondary": "#FFFFFF", "bg": bg}
 
 
+
+# Sample default starting lineups so pitches render immediately without external API sync
+DEFAULT_SQUADS = {
+    "Arsenal": ["Raya", "White", "Saliba", "Gabriel", "Timber", "Partey", "Rice", "Odegaard", "Saka", "Havertz", "Martinelli"],
+    "Manchester City": ["Ederson", "Walker", "Dias", "Akanji", "Gvardiol", "Rodri", "Kovacic", "De Bruyne", "Silva", "Haaland", "Foden"],
+    "Liverpool": ["Alisson", "Alexander-Arnold", "Konate", "Van Dijk", "Robertson", "Gravenberch", "Mac Allister", "Szoboszlai", "Salah", "Jota", "Diaz"],
+    "Aston Villa": ["Martinez", "Cash", "Konsa", "Torres", "Digne", "Onana", "Tielemans", "McGinn", "Bailey", "Watkins", "Rogers"],
+    "Chelsea": ["Sanchez", "Gusto", "Fofana", "Colwill", "Cucurella", "Caicedo", "Lavia", "Palmer", "Madueke", "Jackson", "Neto"],
+    "Real Madrid": ["Courtois", "Carvajal", "Militao", "Rudiger", "Mendy", "Valverde", "Tchouameni", "Bellingham", "Rodrygo", "Mbappe", "Vinicius Jr"],
+    "Barcelona": ["Ter Stegen", "Kounde", "Cubarsi", "Martinez", "Balde", "Casado", "Pedri", "Yamal", "Olmo", "Raphinha", "Lewandowski"]
+}
+def get_squad_for_team(team_name):
+    if team_name in DEFAULT_SQUADS:
+        return DEFAULT_SQUADS[team_name]
+    # Generic fallback: P1 through P11
+    return [f"{team_name[:3]}_{i+1}" for i in range(11)]
+
 def generate_pitch_svg_vertical(formation="4-3-3", team_color="#14b8a6", players=None, team_name="Default"):
     """Generates a vertical half-pitch for the Team Profile page. Quant Theme."""
-    if players is None: players = [f"P{i}" for i in range(11)]
+    if players is None or len(players) == 0:
+        players = get_squad_for_team(team_name)
         
     def parse_formation(fmt_str):
-        if not fmt_str or fmt_str == "0-0": return []
+        if not fmt_str or fmt_str == "0-0": return [1, 4, 3, 3]
         return [1] + [int(x) for x in fmt_str.split("-")]
         
     lines = parse_formation(formation)
     W, H = 160, 200
     
-    svg = f"""<svg width="100%" style="max-width: 600px; display: block; margin: 0 auto;" viewBox="0 0 {W} {H}" xmlns="http://www.w3.org/2000/svg">
+    svg = f"""<svg width="100%" style="max-width: 450px; display: block; margin: 0 auto;" viewBox="0 0 {W} {H}" xmlns="http://w3.org">
         <defs>
-            <circle id="jersey-vert" cx="0" cy="0" r="5" stroke="#1e293b" stroke-width="1.5"/>
+            <circle id="jersey-vert" cx="0" cy="0" r="5" stroke="#1e293b" stroke-width="1.2"/>
             <circle id="jersey-ghost" cx="0" cy="0" r="5" stroke="#64748b" stroke-dasharray="2,2" stroke-width="1" fill="none"/>
         </defs>
-        <rect width="{W}" height="{H}" fill="#111827" rx="4" ry="4" stroke="#1e293b" stroke-width="2"/>
-        <rect x="5" y="5" width="150" height="190" fill="none" stroke="#334155" stroke-width="0.5"/>
-        <line x1="5" y1="195" x2="155" y2="195" stroke="#334155" stroke-width="0.5"/>
-        <circle cx="80" cy="195" r="20" fill="none" stroke="#334155" stroke-width="0.5"/>
-        <circle cx="80" cy="195" r="1.5" fill="#334155" />
-        <rect x="35" y="5" width="90" height="30" fill="none" stroke="#334155" stroke-width="0.5"/>
-        <rect x="60" y="5" width="40" height="10" fill="none" stroke="#334155" stroke-width="0.5"/>
-        <line x1="72" y1="5" x2="88" y2="5" stroke="#64748b" stroke-width="2" />
+        <rect width="{W}" height="{H}" fill="#0b0f19" rx="6" ry="6" stroke="#1e293b" stroke-width="1.5"/>
+        <rect x="6" y="6" width="148" height="188" fill="none" stroke="#1e293b" stroke-width="0.75"/>
+        
+        <!-- Penalty Box & Goal -->
+        <rect x="35" y="6" width="90" height="32" fill="none" stroke="#1e293b" stroke-width="0.75"/>
+        <rect x="58" y="6" width="44" height="12" fill="none" stroke="#1e293b" stroke-width="0.75"/>
+        <circle cx="80" cy="24" r="1.5" fill="#334155"/>
+        
+        <!-- Halfway line & Center Circle -->
+        <line x1="6" y1="194" x2="154" y2="194" stroke="#1e293b" stroke-width="0.75"/>
+        <path d="M 60 194 A 20 20 0 0 1 100 194" fill="none" stroke="#1e293b" stroke-width="0.75"/>
+        <circle cx="80" cy="194" r="1.5" fill="#334155"/>
     """
     
-    if not players:
-        svg += f"""<text x="80" y="100" fill="#64748b" font-family="'JetBrains Mono', monospace" font-size="8px" text-anchor="middle">AWAITING ROSTER SYNC</text></svg>"""
-        return svg
-        
     if lines:
         y_steps = len(lines)
         p_idx = 0
         for row_idx, num_players in enumerate(lines):
-            y = 20 + (160 / max(1, y_steps - 1)) * row_idx
+            # Goalkeeper at the top, attackers towards halfway line
+            y = 22 + (150 / max(1, y_steps - 1)) * row_idx
             for col_idx in range(num_players):
-                x = 10 + (140 / (num_players + 1)) * (col_idx + 1)
-                name = players[p_idx] if p_idx < len(players) else ""
-                # Draw Ghost (Ideal XI) slightly offset
-                svg += f'<use href="#jersey-ghost" x="{x+4}" y="{y-4}" />'
-                # Draw Starter
+                x = 12 + (136 / (num_players + 1)) * (col_idx + 1)
+                name = players[p_idx] if p_idx < len(players) else f"P{p_idx+1}"
+                
+                # Draw Ideal-XI ghost node slightly offset
+                svg += f'<use href="#jersey-ghost" x="{x+3}" y="{y-3}" />'
+                
+                # Active Starter node
                 svg += f"""
                     <a href="/player?name={name}&team={team_name}" style="cursor: pointer;">
                         <use href="#jersey-vert" x="{x}" y="{y}" fill="{team_color}" />
-                        <text x="{x}" y="{y+9}" fill="#f8fafc" font-family="'JetBrains Mono', monospace" font-size="5px" text-anchor="middle">{name}</text>
+                        <text x="{x}" y="{y+9}" fill="#94a3b8" font-family="'JetBrains Mono', monospace" font-size="4.5px" text-anchor="middle">{name}</text>
                     </a>
                 """
                 p_idx += 1
@@ -155,83 +176,85 @@ def generate_pitch_svg_vertical(formation="4-3-3", team_color="#14b8a6", players
     svg += "</svg>"
     return svg
 
-
 def generate_pitch_svg_horizontal(home_formation="4-3-3", away_formation="4-2-3-1", home_color="#14b8a6", away_color="#f43f5e", home_players=None, away_players=None, home_team="Home", away_team="Away"):
     """Generates a native horizontal full-pitch. Quant Theme."""
+    # Ensure players default to team rosters rather than leaving pitch blank
+    if home_players is None or len(home_players) == 0:
+        home_players = get_squad_for_team(home_team)
+    if away_players is None or len(away_players) == 0:
+        away_players = get_squad_for_team(away_team)
+
     W, H = 160, 100
     
-    svg = f"""<svg width="100%" style="max-width: 100%; display: block; margin: 0 auto; transition: all 0.3s ease;" viewBox="0 0 {W} {H}" xmlns="http://www.w3.org/2000/svg">
+    svg = f"""<svg width="100%" style="max-width: 100%; display: block; margin: 0 auto;" viewBox="0 0 {W} {H}" xmlns="http://w3.org">
         <defs>
-            <circle id="jersey-home" cx="0" cy="0" r="3" fill="#14b8a6" stroke="#0b0f19" stroke-width="0.8"/>
-            <circle id="jersey-away" cx="0" cy="0" r="3" fill="#f43f5e" stroke="#0b0f19" stroke-width="0.8"/>
             <filter id="glow-h" x="-50%" y="-50%" width="200%" height="200%">
-                <feGaussianBlur stdDeviation="1.5" result="blur" />
+                <feGaussianBlur stdDeviation="1.2" result="blur" />
                 <feComposite in="SourceGraphic" in2="blur" operator="over" />
             </filter>
             <filter id="glow-a" x="-50%" y="-50%" width="200%" height="200%">
-                <feGaussianBlur stdDeviation="1.5" result="blur" />
+                <feGaussianBlur stdDeviation="1.2" result="blur" />
                 <feComposite in="SourceGraphic" in2="blur" operator="over" />
             </filter>
         </defs>
-        <rect width="{W}" height="{H}" fill="#111827" rx="4" ry="4" stroke="#1e293b" stroke-width="1.5"/>
-        <rect x="5" y="5" width="150" height="90" fill="none" stroke="#334155" stroke-width="0.5"/>
+        <rect width="{W}" height="{H}" fill="#0b0f19" rx="6" ry="6" stroke="#1e293b" stroke-width="1.5"/>
+        <rect x="5" y="5" width="150" height="90" fill="none" stroke="#1e293b" stroke-width="0.75"/>
         
-        <line x1="80" y1="5" x2="80" y2="95" stroke="#334155" stroke-width="0.5"/>
-        <circle cx="80" cy="50" r="15" fill="none" stroke="#334155" stroke-width="0.5"/>
-        <circle cx="80" cy="50" r="1" fill="#334155" />
+        <!-- Pitch Markings -->
+        <line x1="80" y1="5" x2="80" y2="95" stroke="#1e293b" stroke-width="0.75"/>
+        <circle cx="80" cy="50" r="14" fill="none" stroke="#1e293b" stroke-width="0.75"/>
+        <circle cx="80" cy="50" r="1" fill="#334155"/>
         
-        <rect x="5" y="22" width="22" height="56" fill="none" stroke="#334155" stroke-width="0.5"/>
-        <rect x="133" y="22" width="22" height="56" fill="none" stroke="#334155" stroke-width="0.5"/>
-        <rect x="5" y="37" width="8" height="26" fill="none" stroke="#334155" stroke-width="0.5"/>
-        <rect x="147" y="37" width="8" height="26" fill="none" stroke="#334155" stroke-width="0.5"/>
-        <line x1="5" y1="44" x2="5" y2="56" stroke="#64748b" stroke-width="1.5" />
-        <line x1="155" y1="44" x2="155" y2="56" stroke="#64748b" stroke-width="1.5" />
+        <!-- Home Box (Left) -->
+        <rect x="5" y="22" width="22" height="56" fill="none" stroke="#1e293b" stroke-width="0.75"/>
+        <rect x="5" y="36" width="8" height="28" fill="none" stroke="#1e293b" stroke-width="0.75"/>
+        <circle cx="16" cy="50" r="1" fill="#334155"/>
+        
+        <!-- Away Box (Right) -->
+        <rect x="133" y="22" width="22" height="56" fill="none" stroke="#1e293b" stroke-width="0.75"/>
+        <rect x="147" y="36" width="8" height="28" fill="none" stroke="#1e293b" stroke-width="0.75"/>
+        <circle cx="144" cy="50" r="1" fill="#334155"/>
     """
     
-    if not home_players and not away_players:
-        svg += f"""<text x="80" y="50" fill="#64748b" font-family="'JetBrains Mono', monospace" font-size="6px" text-anchor="middle">AWAITING LIVE DATA SYNC</text></svg>"""
-        return svg
-        
     def parse_formation(fmt_str):
-        if not fmt_str or fmt_str == "0-0": return []
+        if not fmt_str or fmt_str == "0-0": return [1, 4, 3, 3]
         return [1] + [int(x) for x in fmt_str.split("-")]
         
     h_lines = parse_formation(home_formation)
     a_lines = parse_formation(away_formation)
     
-    # Home
+    # Home Team (Left -> Right)
     if h_lines and home_players:
         x_steps = len(h_lines)
         p_idx = 0
         for col_idx, num_players in enumerate(h_lines):
-            x = 15 + (60 / max(1, x_steps - 1)) * col_idx
+            x = 12 + (58 / max(1, x_steps - 1)) * col_idx
             for row_idx in range(num_players):
-                y = 10 + (80 / (num_players + 1)) * (row_idx + 1)
-                name = home_players[p_idx] if p_idx < len(home_players) else ""
-                glow = 'filter="url(#glow-h)"' if (p_idx % 3 == 0) else '' # Mock heat rating
+                y = 8 + (84 / (num_players + 1)) * (row_idx + 1)
+                name = home_players[p_idx] if p_idx < len(home_players) else f"H{p_idx+1}"
+                glow = 'filter="url(#glow-h)"' if (p_idx % 3 == 0) else ''
                 svg += f"""
                     <a href="/player?name={name}&team={home_team}" style="cursor: pointer;">
-                        <circle cx="{x}" cy="{y}" r="3.5" fill="#14b8a6" stroke="#0b0f19" stroke-width="0.8" {glow}/>
-                        <text x="{x}" y="{y+6}" fill="#94a3b8" font-family="'JetBrains Mono', monospace" font-size="2.8px" text-anchor="middle">{name}</text>
-                        <text x="{x+4.5}" y="{y-2}" fill="#14b8a6" font-family="'JetBrains Mono', monospace" font-size="2.2px" text-anchor="start">{round(0.05 + p_idx*0.02, 2)} xT</text>
+                        <circle cx="{x}" cy="{y}" r="3.2" fill="{home_color}" stroke="#0b0f19" stroke-width="0.8" {glow}/>
+                        <text x="{x}" y="{y+6}" fill="#94a3b8" font-family="'JetBrains Mono', monospace" font-size="2.6px" text-anchor="middle">{name}</text>
                     </a>
                 """
                 p_idx += 1
 
-    # Away
+    # Away Team (Right -> Left)
     if a_lines and away_players:
         x_steps = len(a_lines)
         p_idx = 0
         for col_idx, num_players in enumerate(a_lines):
-            x = 145 - (60 / max(1, x_steps - 1)) * col_idx
+            x = 148 - (58 / max(1, x_steps - 1)) * col_idx
             for row_idx in range(num_players):
-                y = 10 + (80 / (num_players + 1)) * (row_idx + 1)
-                name = away_players[p_idx] if p_idx < len(away_players) else ""
+                y = 8 + (84 / (num_players + 1)) * (row_idx + 1)
+                name = away_players[p_idx] if p_idx < len(away_players) else f"A{p_idx+1}"
                 glow = 'filter="url(#glow-a)"' if (p_idx % 4 == 0) else ''
                 svg += f"""
                     <a href="/player?name={name}&team={away_team}" style="cursor: pointer;">
-                        <circle cx="{x}" cy="{y}" r="3.5" fill="#f43f5e" stroke="#0b0f19" stroke-width="0.8" {glow}/>
-                        <text x="{x}" y="{y+6}" fill="#94a3b8" font-family="'JetBrains Mono', monospace" font-size="2.8px" text-anchor="middle">{name}</text>
+                        <circle cx="{x}" cy="{y}" r="3.2" fill="{away_color}" stroke="#0b0f19" stroke-width="0.8" {glow}/>
+                        <text x="{x}" y="{y+6}" fill="#94a3b8" font-family="'JetBrains Mono', monospace" font-size="2.6px" text-anchor="middle">{name}</text>
                     </a>
                 """
                 p_idx += 1
