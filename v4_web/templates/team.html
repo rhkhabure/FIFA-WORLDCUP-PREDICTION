@@ -6,9 +6,8 @@
     <!-- HEADER BAR: QUANT DATA ANCHOR -->
     <div class="flex flex-col md:flex-row md:items-center md:justify-between border-b border-slate-800 pb-4">
         <div class="flex items-center space-x-4">
-            <!-- Placeholder for Team Logo if API supports it, otherwise text fallback -->
-            <div class="w-12 h-12 bg-slate-900 border border-slate-700 rounded-full flex items-center justify-center shadow-lg">
-                <span class="text-xl font-black text-white">{{ current_team[:3]|upper }}</span>
+            <div class="w-12 h-12 bg-slate-900 border border-slate-700 rounded-full flex items-center justify-center shadow-lg" style="border-color: {{ team_color }};">
+                <span class="text-lg font-black text-white">{{ current_team[:3]|upper }}</span>
             </div>
             <div>
                 <h1 class="text-2xl font-bold text-slate-100 uppercase tracking-wide">{{ current_team }}</h1>
@@ -19,7 +18,7 @@
         <div class="flex items-center space-x-3 mt-4 md:mt-0 font-mono text-xs">
             <div class="bg-slate-800 border border-slate-700 px-3 py-1.5 rounded shadow-inner">
                 <span class="text-slate-400">LEAGUE POSITION:</span> 
-                <span class="text-slate-100 font-bold ml-1">#4</span>
+                <span class="text-slate-100 font-bold ml-1">#2</span>
             </div>
             <div class="bg-slate-800 border border-slate-700 px-3 py-1.5 rounded shadow-inner">
                 <span class="text-slate-400">ROSTER STATUS:</span> 
@@ -35,9 +34,6 @@
         <div class="space-y-6 lg:col-span-1">
             <!-- Team DNA Barometers -->
             <div class="bg-slate-900 border border-slate-800 rounded-lg p-5 shadow-xl relative overflow-hidden">
-                <!-- Glowing accent orb -->
-                <div class="absolute top-0 right-0 w-32 h-32 bg-cyan-500 opacity-5 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none"></div>
-
                 <h3 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center">
                     📊 Team DNA Metrics
                 </h3>
@@ -45,93 +41,86 @@
                     <!-- Attack Alpha -->
                     <div>
                         <div class="flex justify-between text-xs font-mono mb-1">
-                            <span class="text-slate-300">Attack Potency (α)</span>
+                            <span class="text-slate-300">Attack Potency (&alpha;)</span>
                             <span class="text-cyan-400 font-bold">{{ "%.2f"|format(prior_alpha) }}</span>
                         </div>
                         <div class="w-full bg-slate-950 rounded-full h-2 border border-slate-800 overflow-hidden shadow-inner">
-                            <div class="bg-cyan-500 h-2 rounded-full w-1/2"></div>
+                            <div class="bg-cyan-500 h-2 rounded-full" style="width: {{ [((prior_alpha / 2.0) * 100), 100]|min }}%;"></div>
                         </div>
-                        <p class="text-[9px] text-slate-500 mt-1 font-mono uppercase tracking-wider">League baseline: 1.00. Higher = greater scoring threat.</p>
+                        <p class="text-[9px] text-slate-500 mt-1 font-mono uppercase tracking-wider">League baseline: 1.00. Higher = greater threat.</p>
                     </div>
 
                     <!-- Defense Beta -->
                     <div class="pt-3 border-t border-slate-800/50">
                         <div class="flex justify-between text-xs font-mono mb-1">
-                            <span class="text-slate-300">Defensive Fragility (β)</span>
+                            <span class="text-slate-300">Defensive Fragility (&beta;)</span>
                             <span class="text-amber-500 font-bold">{{ "%.2f"|format(prior_beta) }}</span>
                         </div>
                         <div class="w-full bg-slate-950 rounded-full h-2 border border-slate-800 overflow-hidden shadow-inner">
-                            <div class="bg-amber-500 h-2 rounded-full w-1/2"></div>
+                            <!-- Inverted scale: lower beta is better defense -->
+                            <div class="bg-amber-500 h-2 rounded-full" style="width: {{ [(((2.0 - prior_beta) / 2.0) * 100), 100]|min }}%;"></div>
                         </div>
-                        <p class="text-[9px] text-slate-500 mt-1 font-mono uppercase tracking-wider">League baseline: 1.00. Lower = stronger low-block protection.</p>
+                        <p class="text-[9px] text-slate-500 mt-1 font-mono uppercase tracking-wider">League baseline: 1.00. Lower = stronger defense.</p>
                     </div>
                 </div>
             </div>
 
-            <!-- Form Ledger with xG Variance Badges -->
+            <!-- Form Ledger -->
             <div class="bg-slate-900 border border-slate-800 rounded-lg p-5 shadow-xl">
                 <h3 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center">
                     🗒️ Performance Form Ledger
                 </h3>
                 <div class="divide-y divide-slate-800/60 font-mono text-[10px] sm:text-xs">
                     {% for match in match_history %}
-                    <div class="py-2.5 flex items-center justify-between hover:bg-slate-800/30 transition px-1 rounded -mx-1">
+                    <div class="py-2.5 flex items-center justify-between hover:bg-slate-800/30 transition px-1 rounded">
                         <div class="flex items-center space-x-2">
-                            <!-- W/D/L Visual State Indicator -->
                             {% if match.result.startswith('W') %}
-                            <span class="w-5 h-5 flex items-center justify-center bg-cyan-950/50 border border-cyan-800 text-cyan-400 font-bold text-[9px] rounded shadow-inner">W</span>
+                            <span class="w-5 h-5 flex items-center justify-center bg-cyan-950/50 border border-cyan-800 text-cyan-400 font-bold text-[9px] rounded">W</span>
                             {% elif match.result.startswith('D') %}
-                            <span class="w-5 h-5 flex items-center justify-center bg-amber-950/50 border border-amber-800 text-amber-400 font-bold text-[9px] rounded shadow-inner">D</span>
+                            <span class="w-5 h-5 flex items-center justify-center bg-amber-950/50 border border-amber-800 text-amber-400 font-bold text-[9px] rounded">D</span>
                             {% else %}
-                            <span class="w-5 h-5 flex items-center justify-center bg-rose-950/50 border border-rose-800 text-rose-400 font-bold text-[9px] rounded shadow-inner" style="color: #f43f5e;">L</span>
+                            <span class="w-5 h-5 flex items-center justify-center bg-rose-950/50 border border-rose-800 text-rose-400 font-bold text-[9px] rounded">L</span>
                             {% endif %}
                             <span class="text-slate-300 font-sans font-bold truncate w-24">{{ match.opponent }}</span>
                         </div>
-                        <!-- Goal / xG Ledger Metrics -->
                         <div class="text-right">
                             <div class="text-white font-bold">{{ match.result.split(' ')[1] }}</div>
                             <div class="text-[9px] text-slate-500 mt-0.5">
-                                xG <span class="{% if match.result.startswith('W') %}text-cyan-500/80{% else %}text-rose-500/80{% endif %}">{{ match.xg }}</span>
+                                xG <span class="{% if match.result.startswith('W') %}text-cyan-400{% else %}text-rose-400{% endif %}">{{ match.xg }}</span>
                             </div>
                         </div>
                     </div>
                     {% endfor %}
-                    {% if not match_history %}
-                    <div class="py-4 text-center text-slate-500 italic">No historical matches synced.</div>
-                    {% endif %}
                 </div>
             </div>
         </div>
 
         <!-- RIGHT COLUMN: ROSTER METRIC PITCH & DELTAS (2/3 Width) -->
-        <div class="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-lg p-5 shadow-xl flex flex-col justify-between overflow-hidden relative">
-            
-            <div class="relative z-10">
+        <div class="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-lg p-5 shadow-xl flex flex-col justify-between overflow-hidden">
+            <div>
                 <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-slate-800 pb-3 mb-4">
                     <h3 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center">
                         📋 Dynamic Lineup Matrix & Roster Deltas
                     </h3>
-                    <!-- Roster Delta Displays -->
                     <div class="flex items-center space-x-4 mt-2 sm:mt-0 font-mono text-[10px]">
-                        <div class="bg-slate-950 border border-slate-800 px-2 py-1 rounded shadow-inner">
-                            <span class="text-slate-500">ATTACK Δ:</span>
-                            <span class="ml-1 font-bold text-slate-300">100.0%</span>
+                        <div class="bg-slate-950 border border-slate-800 px-2.5 py-1 rounded shadow-inner">
+                            <span class="text-slate-500">ATTACK &Delta;:</span>
+                            <span class="ml-1 font-bold text-cyan-400">{{ (roster_delta.att * 100)|round(1) }}%</span>
                         </div>
-                        <div class="bg-slate-950 border border-slate-800 px-2 py-1 rounded shadow-inner">
-                            <span class="text-slate-500">DEFENSE Δ:</span>
-                            <span class="ml-1 font-bold text-slate-300">100.0%</span>
+                        <div class="bg-slate-950 border border-slate-800 px-2.5 py-1 rounded shadow-inner">
+                            <span class="text-slate-500">DEFENSE &Delta;:</span>
+                            <span class="ml-1 font-bold text-amber-400">{{ (roster_delta.def * 100)|round(1) }}%</span>
                         </div>
                     </div>
                 </div>
                 <p class="text-[10px] font-mono text-slate-500 mb-6 uppercase tracking-wider">
-                    Solid node markers represent current active matchday selection. Faded shadow shapes map rolling season ideal baseline metrics. Click nodes to run player metric profiles.
+                    Solid nodes: active matchday starter. Dashed ghost nodes: season ideal baseline. Click node to inspect player profile.
                 </p>
             </div>
 
-            <!-- Vectorized Pitch Injection Container -->
-            <div class="w-full flex justify-center items-center py-6 bg-slate-950 rounded border border-slate-800/80 shadow-inner overflow-x-auto relative z-10">
-                <div class="w-full max-w-[450px]">
-                    <!-- Render dynamic responsive SVG pitch generated from utils.py -->
+            <!-- Pitch Container -->
+            <div class="w-full flex justify-center items-center py-4 bg-slate-950 rounded border border-slate-800/80 shadow-inner">
+                <div class="w-full max-w-[420px]">
                     {{ pitch_svg | safe }}
                 </div>
             </div>
