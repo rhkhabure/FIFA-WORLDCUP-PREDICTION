@@ -1,97 +1,330 @@
 {% extends "base.html" %}
+
 {% block content %}
-<div class="space-y-6">
-    <!-- LEAGUE SELECTOR WIDGET -->
-    <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
-        {% for name, id in tournaments.items() %}
-        <a href="/?tournament_id={{ id }}" class="flex flex-col items-center justify-center p-4 bg-slate-900 border {% if current_tournament == id %}border-cyan-500 shadow-md shadow-cyan-950/30{% else %}border-slate-800{% endif %} rounded-lg hover:border-slate-700 transition">
-            <span class="text-xs font-mono font-bold text-slate-200 tracking-wide text-center">{{ name }}</span>
-        </a>
-        {% endfor %}
+<div class="space-y-4 max-w-7xl mx-auto">
+    <!-- TOP HEADER -->
+    <div class="flex items-center text-slate-300 font-bold uppercase tracking-wider mb-2 text-sm">
+        <span class="mr-2 text-xl">⚽</span>
+        PREMIER LEAGUE: {{ featured.home_name|upper }} vs {{ featured.away_name|upper }}
     </div>
 
-    <!-- MAIN DASHBOARD SPLIT -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        <!-- FEATURED MATCH TERMINAL (2/3 WIDTH) -->
-        <div class="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-lg p-5 flex flex-col justify-between shadow-xl">
-            <div>
-                <div class="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
-                    <span class="text-xs font-bold text-slate-400 uppercase tracking-widest">🏆 FEATURED QUANT MATCHUP</span>
-                    <span class="px-2 py-0.5 bg-cyan-950 border border-cyan-800 text-cyan-400 font-mono text-[10px] rounded animate-pulse">LIVE TRACKING ACTIVE</span>
+    <!-- TOP SECTION: 3 STAGES -->
+    <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl grid grid-cols-1 md:grid-cols-3 gap-6 relative">
+        <!-- Stage 1 -->
+        <div class="flex flex-col items-center">
+            <h3 class="text-sm font-bold text-slate-200">Prior (Static Base)</h3>
+            <span class="text-[10px] text-cyan-400/80 mb-2">Base Model (5-Day Avg)</span>
+            <div class="flex items-end justify-center h-20 w-full space-x-6">
+                <!-- Home Bar -->
+                <div class="flex flex-col items-center justify-end h-full">
+                    <span class="text-xs text-teal-500 font-mono mb-1">40%</span>
+                    <div class="w-10 bg-[#1f6b70]" style="height: 60%;"></div>
+                    <span class="text-[10px] text-slate-400 mt-1">Home</span>
                 </div>
-                
-                <!-- Match Score Banner -->
-                <div class="flex items-center justify-between py-2 px-4 bg-slate-950/60 border border-slate-800/80 rounded-lg mb-6">
-                    <div class="flex items-center space-x-3 w-5/12">
-                        <span class="font-bold text-slate-200 truncate">{{ featured.home_name }}</span>
-                    </div>
-                    <div class="flex flex-col items-center justify-center font-mono w-2/12">
-                        <span class="text-xl font-black text-slate-100">{{ featured.home_score }} - {{ featured.away_score }}</span>
-                        <span class="text-[10px] text-cyan-400 font-bold mt-0.5">{{ featured.minute }}'</span>
-                    </div>
-                    <div class="flex items-center space-x-3 justify-end text-right w-5/12">
-                        <span class="font-bold text-slate-200 truncate">{{ featured.away_name }}</span>
-                    </div>
+                <!-- Draw Bar -->
+                <div class="flex flex-col items-center justify-end h-full">
+                    <span class="text-xs text-slate-400 font-mono mb-1">28%</span>
+                    <div class="w-10 bg-[#475569]" style="height: 40%;"></div>
+                    <span class="text-[10px] text-slate-400 mt-1">Draw</span>
                 </div>
+                <!-- Away Bar -->
+                <div class="flex flex-col items-center justify-end h-full">
+                    <span class="text-xs text-[#a16207] font-mono mb-1">32%</span>
+                    <div class="w-10 bg-[#854d0e]" style="height: 50%;"></div>
+                    <span class="text-[10px] text-slate-400 mt-1">Away</span>
+                </div>
+            </div>
+            <!-- Arrow -->
+            <div class="absolute top-1/2 left-[31%] text-slate-500 text-2xl -translate-y-1/2 opacity-70 hidden md:block">&rarr;</div>
+        </div>
 
-                <!-- Three-Segment Probability Engine -->
-                <div class="mb-6 font-mono text-xs">
-                    <div class="flex justify-between text-[10px] text-slate-400 mb-1">
-                        <span>HOME WIN ({{ (featured.prob_1 * 100) | round(1) }}%)</span>
-                        <span>DRAW ({{ (featured.prob_x * 100) | round(1) }}%)</span>
-                        <span>AWAY WIN ({{ (featured.prob_2 * 100) | round(1) }}%)</span>
+        <!-- Stage 2 -->
+        <div class="flex flex-col items-center relative">
+            <h3 class="text-sm font-bold text-slate-200">Likelihood (Lineup Adj.)</h3>
+            <div class="flex items-center text-[10px] mb-2">
+                <span class="text-cyan-400/80 mr-2">Post Lineup Release</span>
+                <span class="text-amber-400 font-bold">▲ +4% Away Win</span>
+            </div>
+            <div class="flex items-end justify-center h-20 w-full space-x-6">
+                <!-- Home Bar -->
+                <div class="flex flex-col items-center justify-end h-full">
+                    <span class="text-xs text-teal-500 font-mono mb-1">35%</span>
+                    <div class="w-10 bg-[#1f6b70]" style="height: 50%;"></div>
+                    <span class="text-[10px] text-slate-400 mt-1">Home</span>
+                </div>
+                <!-- Draw Bar -->
+                <div class="flex flex-col items-center justify-end h-full">
+                    <span class="text-xs text-slate-400 font-mono mb-1">29%</span>
+                    <div class="w-10 bg-[#475569]" style="height: 45%;"></div>
+                    <span class="text-[10px] text-slate-400 mt-1">Draw</span>
+                </div>
+                <!-- Away Bar -->
+                <div class="flex flex-col items-center justify-end h-full">
+                    <span class="text-xs text-[#a16207] font-mono mb-1">36%</span>
+                    <div class="w-10 bg-[#854d0e]" style="height: 55%;"></div>
+                    <span class="text-[10px] text-slate-400 mt-1">Away</span>
+                </div>
+            </div>
+            <!-- Arrow -->
+            <div class="absolute top-1/2 right-[-12%] text-slate-500 text-2xl -translate-y-1/2 opacity-70 hidden md:block">&rarr;</div>
+        </div>
+
+        <!-- Stage 3 -->
+        <div class="flex flex-col items-center">
+            <h3 class="text-sm font-bold text-slate-200">Posterior (In-Play Live)</h3>
+            <div class="flex items-center text-[10px] mb-2 relative w-full justify-center">
+                <span class="text-amber-400 bg-slate-900 border border-slate-700 px-1.5 py-0.5 rounded mr-2 font-mono">{{ featured.minute }}:45</span>
+                <span class="text-cyan-400/80">Live xG Adjusted</span>
+            </div>
+            <div class="flex items-end justify-center h-20 w-full space-x-6 relative">
+                <!-- Fake wavy line overlay -->
+                <svg class="absolute top-2 left-0 w-full h-16 opacity-90 pointer-events-none" viewBox="0 0 100 40" preserveAspectRatio="none">
+                    <path d="M0,25 Q15,5 30,20 T60,15 T85,30 T100,5" fill="none" stroke="#f59e0b" stroke-width="1.5" />
+                </svg>
+                <!-- Home Bar -->
+                <div class="flex flex-col items-center justify-end h-full z-10">
+                    <span class="text-xs text-teal-500 font-mono mb-1">29%</span>
+                    <div class="w-10 bg-[#1f6b70]/70" style="height: 40%;"></div>
+                    <span class="text-[10px] text-slate-400 mt-1">Home</span>
+                </div>
+                <!-- Draw Bar -->
+                <div class="flex flex-col items-center justify-end h-full z-10">
+                    <span class="text-xs text-slate-400 font-mono mb-1">31%</span>
+                    <div class="w-10 bg-[#475569]/70" style="height: 45%;"></div>
+                    <span class="text-[10px] text-slate-400 mt-1">Draw</span>
+                </div>
+                <!-- Away Bar -->
+                <div class="flex flex-col items-center justify-end h-full z-10">
+                    <span class="text-xs text-[#a16207] font-mono mb-1">40%</span>
+                    <div class="w-10 bg-[#854d0e]/70" style="height: 60%;"></div>
+                    <span class="text-[10px] text-slate-400 mt-1">Away</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN DASHBOARD SPLIT (3 columns: Left, Pitch, Right) -->
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
+        
+        <!-- LEFT COLUMN (1/4 Width) -->
+        <div class="flex flex-col gap-4">
+            
+            <!-- TEAM RATINGS & PARAMETERS -->
+            <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl">
+                <h3 class="text-[10px] font-bold text-slate-300 uppercase tracking-widest mb-4">TEAM RATINGS & PARAMETERS</h3>
+                <div class="flex justify-between items-start">
+                    <div class="flex flex-col items-center w-1/2">
+                        <span class="text-rose-500 font-bold text-lg mb-2">{{ featured.home_name[:3]|upper }}</span>
+                        <!-- Custom Gauge Arc -->
+                        <div class="relative w-12 h-6 overflow-hidden mb-2">
+                            <div class="absolute top-0 left-0 w-12 h-12 rounded-full border-4 border-slate-700"></div>
+                            <div class="absolute top-0 left-0 w-12 h-12 rounded-full border-4 border-rose-500 border-t-transparent border-r-transparent rotate-[25deg]"></div>
+                        </div>
+                        <span class="text-[9px] text-slate-400 font-mono">Alpha (Attack)</span>
+                        <span class="text-rose-400 font-mono text-sm mt-1">&alpha;: 1.65</span>
+                        <span class="text-rose-400 font-mono text-sm">&beta;: 0.92</span>
                     </div>
-                    <div class="w-full flex h-3 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
-                        <div class="bg-cyan-500 h-full transition-all duration-500" style="width: {{ '%.1f'|format(featured.prob_1 * 100) }}%;"></div>
-                        <div class="bg-amber-500 h-full transition-all duration-500" style="width: {{ '%.1f'|format(featured.prob_x * 100) }}%;"></div>
-                        <div class="bg-rose-500 h-full transition-all duration-500" style="width: {{ '%.1f'|format(featured.prob_2 * 100) }}%;"></div>
+                    
+                    <div class="flex flex-col items-center w-1/2 border-l border-slate-800">
+                        <span class="text-blue-400 font-bold text-lg mb-2">{{ featured.away_name[:3]|upper }}</span>
+                        <!-- Custom Gauge Arc -->
+                        <div class="relative w-12 h-6 overflow-hidden mb-2">
+                            <div class="absolute top-0 left-0 w-12 h-12 rounded-full border-4 border-slate-700"></div>
+                            <div class="absolute top-0 left-0 w-12 h-12 rounded-full border-4 border-blue-400 border-t-transparent border-r-transparent rotate-[-65deg]"></div>
+                        </div>
+                        <span class="text-[9px] text-slate-400 font-mono">Beta (Defense)</span>
+                        <span class="text-blue-400 font-mono text-sm mt-1">&alpha;: 1.88</span>
+                        <span class="text-blue-400 font-mono text-sm">&beta;: 0.75</span>
                     </div>
                 </div>
             </div>
 
-            <!-- Vectorized Pitch Container -->
-            <div class="w-full flex justify-center py-4 bg-slate-950/40 rounded-lg border border-slate-800/60 overflow-x-auto shadow-inner">
-                <div class="w-[600px] h-[350px] flex-shrink-0">
+            <!-- MATCH MOMENTUM -->
+            <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl flex-1 flex flex-col min-h-[220px]">
+                <h3 class="text-[10px] font-bold text-slate-300 uppercase tracking-widest mb-3">MATCH MOMENTUM</h3>
+                <div class="flex-1 relative border-l border-b border-slate-700 pt-2 pb-6 pl-2 mt-2">
+                    <span class="absolute -left-5 top-1/2 -translate-y-1/2 -rotate-90 text-[8px] text-slate-400 font-mono">xG difference</span>
+                    <span class="absolute bottom-1 left-1/2 -translate-x-1/2 text-[8px] text-slate-400 font-mono">Time / Chance</span>
+                    <!-- Y Axis Labels -->
+                    <span class="absolute left-1 top-0 text-[8px] text-slate-500">0</span>
+                    <span class="absolute left-1 bottom-6 text-[8px] text-slate-500">-1</span>
+                    <!-- Fake Line Chart -->
+                    <svg class="w-full h-full" viewBox="0 0 100 50" preserveAspectRatio="none">
+                        <!-- Chart Line -->
+                        <path d="M0,45 L5,42 L10,44 L15,35 L20,38 L25,32 L30,34 L35,28 L40,30 L45,20 L50,22 L55,18 L60,15 L65,18 L70,10 L75,12 L80,5 L85,8 L90,2 L95,4 L100,0" fill="none" stroke="#38bdf8" stroke-width="1.2" />
+                        <!-- Soccer ball icons as events (represented as small circles with inner details) -->
+                        <g transform="translate(20, 5)">
+                            <circle cx="0" cy="0" r="2.5" fill="#1e293b" stroke="#fff" stroke-width="0.5"/>
+                            <path d="M-1,-1 L1,-1 L1.5,0 L0,1 L-1.5,0 Z" fill="#fff" opacity="0.6"/>
+                        </g>
+                        <g transform="translate(30, 5)">
+                            <circle cx="0" cy="0" r="2.5" fill="#1e293b" stroke="#fff" stroke-width="0.5"/>
+                            <path d="M-1,-1 L1,-1 L1.5,0 L0,1 L-1.5,0 Z" fill="#fff" opacity="0.6"/>
+                        </g>
+                        <g transform="translate(65, 5)">
+                            <circle cx="0" cy="0" r="2.5" fill="#1e293b" stroke="#fff" stroke-width="0.5"/>
+                            <path d="M-1,-1 L1,-1 L1.5,0 L0,1 L-1.5,0 Z" fill="#fff" opacity="0.6"/>
+                        </g>
+                        <!-- Bottom row events -->
+                        <g transform="translate(20, 48)">
+                            <circle cx="0" cy="0" r="2.5" fill="#1e293b" stroke="#fff" stroke-width="0.5"/>
+                        </g>
+                        <g transform="translate(45, 48)">
+                            <circle cx="0" cy="0" r="2.5" fill="#1e293b" stroke="#fff" stroke-width="0.5"/>
+                        </g>
+                        <g transform="translate(75, 48)">
+                            <circle cx="0" cy="0" r="2.5" fill="#1e293b" stroke="#fff" stroke-width="0.5"/>
+                        </g>
+                    </svg>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- CENTER COLUMN (Pitch - 2/4 Width) -->
+        <div class="lg:col-span-2 bg-[#0f172a] border border-slate-800 rounded-xl p-0 shadow-xl overflow-hidden relative flex flex-col">
+            <!-- Overlay Scoreboard -->
+            <div class="absolute top-3 left-3 z-10 flex bg-[#1e293b] rounded text-[10px] font-mono overflow-hidden shadow">
+                <div class="bg-rose-600 px-2 py-1 text-white font-bold">{{ featured.home_name }}</div>
+                <div class="px-2 py-1 text-white font-bold border-r border-slate-700">{{ featured.home_score }} - {{ featured.away_score }}</div>
+                <div class="bg-blue-500 px-2 py-1 text-white font-bold">{{ featured.away_name }}</div>
+                <div class="px-2 py-1 text-white font-bold">{{ featured.minute }}:45</div>
+            </div>
+            
+            <div class="w-full flex-1 flex justify-center items-center relative min-h-[400px]">
+                <div class="w-full h-full absolute inset-0 pitch-container flex items-center justify-center opacity-80" style="padding: 10px;">
+                    <!-- Original base pitch SVG -->
                     {{ featured.svg_pitch | safe }}
+                    
+                    <!-- Advanced Passing Network Overlay (Hardcoded matching the user's screenshot style) -->
+                    <svg class="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 160 100" preserveAspectRatio="none">
+                        <!-- RED HEATMAP BLOBS (Arsenal) -->
+                        <circle cx="25" cy="40" r="14" fill="#ef4444" opacity="0.2" filter="blur(6px)" />
+                        <circle cx="45" cy="65" r="18" fill="#ef4444" opacity="0.2" filter="blur(8px)" />
+                        <circle cx="75" cy="50" r="22" fill="#ef4444" opacity="0.25" filter="blur(10px)" />
+                        <circle cx="60" cy="20" r="16" fill="#ef4444" opacity="0.15" filter="blur(7px)" />
+                        
+                        <!-- BLUE HEATMAP BLOBS (Man City) -->
+                        <circle cx="110" cy="35" r="15" fill="#3b82f6" opacity="0.2" filter="blur(6px)" />
+                        <circle cx="125" cy="65" r="18" fill="#3b82f6" opacity="0.2" filter="blur(8px)" />
+                        <circle cx="95" cy="75" r="14" fill="#3b82f6" opacity="0.15" filter="blur(6px)" />
+                        
+                        <!-- Passing Network Lines (Red) -->
+                        <g stroke="#ef4444" stroke-width="0.3" opacity="0.6" fill="none">
+                            <line x1="25" y1="40" x2="45" y2="65" />
+                            <line x1="45" y1="65" x2="75" y2="50" stroke-width="0.6" opacity="0.8" />
+                            <line x1="75" y1="50" x2="60" y2="20" />
+                            <line x1="60" y1="20" x2="85" y2="35" />
+                            <line x1="45" y1="65" x2="55" y2="80" />
+                            <line x1="25" y1="40" x2="40" y2="25" />
+                            <line x1="40" y1="25" x2="60" y2="20" />
+                            <line x1="75" y1="50" x2="85" y2="65" />
+                        </g>
+
+                        <!-- Passing Network Lines (Blue) -->
+                        <g stroke="#60a5fa" stroke-width="0.3" opacity="0.6" fill="none">
+                            <line x1="140" y1="50" x2="110" y2="35" />
+                            <line x1="140" y1="50" x2="125" y2="65" stroke-width="0.5" opacity="0.8" />
+                            <line x1="110" y1="35" x2="95" y2="75" />
+                            <line x1="125" y1="65" x2="95" y2="75" />
+                            <line x1="110" y1="35" x2="85" y2="45" stroke-width="0.6" opacity="0.8" />
+                            <line x1="125" y1="65" x2="105" y2="55" />
+                            <line x1="105" y1="55" x2="85" y2="45" />
+                        </g>
+                    </svg>
                 </div>
             </div>
         </div>
 
-        <!-- LEAGUE STANDINGS TERMINAL (1/3 WIDTH) -->
-        <div class="bg-slate-900 border border-slate-800 rounded-lg p-5 shadow-xl">
-            <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest border-b border-slate-800 pb-3 mb-3">
-                📊 QUANT STANDINGS LEDGER
-            </h3>
-            <div class="overflow-x-auto">
-                <table class="w-full font-mono text-xs text-left">
-                    <thead>
-                        <tr class="text-slate-500 border-b border-slate-800">
-                            <th class="pb-2 font-normal">#</th>
-                            <th class="pb-2 font-normal font-sans">TEAM</th>
-                            <th class="pb-2 font-normal text-center">P</th>
-                            <th class="pb-2 font-normal text-center">xGD</th>
-                            <th class="pb-2 font-normal text-right">PTS</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-800/60 text-slate-300">
-                        {% for team in standings %}
-                        <tr class="hover:bg-slate-800/30 transition-colors">
-                            <td class="py-2.5 font-bold text-slate-500">{{ loop.index }}</td>
-                            <td class="py-2.5 font-sans font-bold text-slate-200 truncate max-w-[100px]">
-                                <a href="/team?league={{ current_league }}&team={{ team.name }}" class="hover:text-cyan-400 transition">{{ team.name }}</a>
-                            </td>
-                            <td class="py-2.5 text-center">{{ team.played }}</td>
-                            <td class="py-2.5 text-center {% if team.xg_diff >= 0 %}text-emerald-500{% else %}text-rose-500{% endif %}">
-                                {% if team.xg_diff > 0 %}+{% endif %}{{ team.xg_diff | round(1) }}
-                            </td>
-                            <td class="py-2.5 text-right font-bold text-slate-100">{{ team.points }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+        <!-- RIGHT COLUMN (1/4 Width) -->
+        <div class="flex flex-col gap-4">
+            
+            <!-- LIVE XG LOG -->
+            <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl flex-1 max-h-[220px] overflow-hidden flex flex-col">
+                <h3 class="text-[10px] font-bold text-slate-300 uppercase tracking-widest mb-3">LIVE XG LOG</h3>
+                <div class="flex-1 overflow-y-auto font-mono text-[9px] text-slate-300 space-y-1.5 custom-scrollbar leading-tight tracking-tight">
+                    <p>65:12 - K. De Bruyne (MCI) - Shot on Target, 0.78 xG</p>
+                    <p>65:12 - K. De Bruyne (MCI) - Shot on Target, 0.78 xG</p>
+                    <p>65:12 - K. De Bruyne (MCI) - Shot on Target, 0.78 xG</p>
+                    <p>66:12 - K. De Bruyne (MCI) - Shot on Target, 0.78 xG</p>
+                    <p>66:12 - K. De Bruyne (MCI) - Shot on Target, 0.78 xG</p>
+                    <p>66:14 - K. De Bruyne (MCI) - Shot on Target, 0.78 xS</p>
+                    <p>67:19 - K. De Bruyne (MCI) - Shot on Target, 0.78 xG</p>
+                    <p>68:12 - K. De Bruyne (MCI) - Shot on Target, 0.28 xG</p>
+                    <p>65:12 - K. De Bruyne (MCI) - Shot on Target, 0.78 xG</p>
+                </div>
             </div>
+
+            <!-- REMAINDER GOAL PROBABILITY MATRIX -->
+            <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl flex-1">
+                <h3 class="text-[10px] font-bold text-slate-300 uppercase tracking-widest mb-3">REMAINDER GOAL PROBABILITY MATRIX</h3>
+                
+                <div class="w-full grid grid-cols-5 font-mono text-[10px] text-center border border-slate-700 bg-[#0b0f19] rounded-sm overflow-hidden">
+                    <!-- Row 1 -->
+                    <div class="col-span-1 border-r border-b border-slate-700 py-2 text-slate-400 bg-slate-800/40">1-3</div>
+                    <div class="col-span-1 border-r border-b border-slate-700 py-2 text-teal-400 bg-teal-900/30">5</div>
+                    <div class="col-span-1 border-r border-b border-slate-700 py-2 text-slate-400 bg-slate-800/60">6</div>
+                    <div class="col-span-1 border-r border-b border-slate-700 py-2 text-slate-500 bg-slate-900/50">1-4</div>
+                    <div class="col-span-1 border-b border-slate-700 py-2 text-slate-500 bg-slate-900">0</div>
+                    
+                    <!-- Row 2 -->
+                    <div class="col-span-1 border-r border-b border-slate-700 py-2 text-slate-400 bg-slate-800/40">1-4</div>
+                    <div class="col-span-1 border-r border-b border-slate-700 py-2 text-teal-400 bg-teal-900/30">6</div>
+                    <div class="col-span-1 border-r border-b border-slate-700 py-2 text-slate-400 bg-slate-800/80">1</div>
+                    <div class="col-span-1 border-r border-b border-slate-700 py-2 text-slate-500 bg-slate-900/50">-4</div>
+                    <div class="col-span-1 border-b border-slate-700 py-2 text-slate-500 bg-slate-900">0</div>
+                    
+                    <!-- Row 3 -->
+                    <div class="col-span-1 border-r border-b border-slate-700 py-2 text-slate-400 bg-slate-800/40">1-3</div>
+                    <div class="col-span-1 border-r border-b border-slate-700 py-2 text-slate-400 bg-slate-800/60">3</div>
+                    <div class="col-span-1 border-r border-b border-slate-700 py-2 text-teal-400 bg-teal-900/40">1</div>
+                    <div class="col-span-1 border-r border-b border-slate-700 py-2 text-slate-500 bg-slate-900/50">9</div>
+                    <div class="col-span-1 border-b border-slate-700 py-2 text-slate-500 bg-slate-900">0</div>
+                    
+                    <!-- Row 4 -->
+                    <div class="col-span-1 border-r border-b border-slate-700 py-2 text-slate-400 bg-slate-800/40">1-6</div>
+                    <div class="col-span-1 border-r border-b border-slate-700 py-2 text-slate-400 bg-slate-800/50">8</div>
+                    <div class="col-span-1 border-r border-b border-slate-700 py-2 text-slate-400 bg-slate-800/70">3</div>
+                    <div class="col-span-1 border-r border-b border-slate-700 py-2 text-slate-500 bg-slate-900/50">4</div>
+                    <div class="col-span-1 border-b border-slate-700 py-2 text-slate-400 bg-slate-800/40">6</div>
+                    
+                    <!-- Row 5 -->
+                    <div class="col-span-1 border-r border-slate-700 py-2 text-slate-400 bg-slate-800/40">1-8</div>
+                    <div class="col-span-1 border-r border-slate-700 py-2 text-slate-400 bg-slate-800/50">6</div>
+                    <div class="col-span-1 border-r border-slate-700 py-2 text-slate-400 bg-slate-800/70">3</div>
+                    <div class="col-span-1 border-r border-slate-700 py-2 text-slate-500 bg-slate-900/50">5</div>
+                    <div class="col-span-1 border-slate-700 py-2 text-slate-500 bg-slate-900">0</div>
+                </div>
+            </div>
+
         </div>
     </div>
 </div>
+
+<style>
+/* Reset base styles to dark elegant palette */
+body {
+    background-color: #0b0f19 !important;
+}
+
+/* Ensure pitch SVG correctly bounds itself */
+.pitch-container svg {
+    max-width: 100%;
+    max-height: 100%;
+    width: auto !important;
+    height: 100% !important;
+}
+
+/* Smooth custom scrollbars for the log */
+.custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background-color: #334155;
+    border-radius: 4px;
+}
+</style>
 {% endblock %}
