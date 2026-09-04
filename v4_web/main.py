@@ -1,5 +1,6 @@
 import json
 import numpy as np
+import random
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
@@ -7,7 +8,6 @@ import uvicorn
 from pathlib import Path
 import sys
 
-# Ensure import works
 sys.path.append(str(Path(__file__).resolve().parent))
 from utils import generate_pitch_svg_horizontal, generate_pitch_svg_vertical, TEAM_THEMES, LEAGUE_TEAMS, TEAM_MANAGERS, get_theme_for_team
 
@@ -22,7 +22,6 @@ TOURNAMENTS = {
     "Ligue 1": 34
 }
 
-# Locate prior db dynamically
 def find_file(filename):
     for p in Path(__file__).resolve().parent.parent.rglob(filename):
         return p
@@ -35,9 +34,7 @@ if PRIORS_PATH and PRIORS_PATH.exists():
 else:
     priors_db = {}
 
-# Simple fallback probability generator if models aren't loaded
 def mock_probs(alpha_h, beta_a, alpha_a, beta_h):
-    # Dummy calculation for display
     h_pow = alpha_h * beta_a * 1.15
     a_pow = alpha_a * beta_h
     total = h_pow + a_pow + 0.8
@@ -45,76 +42,62 @@ def mock_probs(alpha_h, beta_a, alpha_a, beta_h):
 
 @app.get("/", response_class=HTMLResponse)
 async def hub(request: Request):
-    t_id = request.query_params.get("tournament_id")
-    try:
-        t_id = int(t_id) if t_id else 17
-    except ValueError:
-        t_id = 17
+    t_id = request.query_params.get("tournament_id", 17)
+    try: t_id = int(t_id)
+    except: t_id = 17
         
     current_league_name = next((name for name, i in TOURNAMENTS.items() if i == t_id), "Premier League")
-    
-    league_key = f"ENG-{current_league_name}" if current_league_name == "Premier League" else \
-                 f"ESP-{current_league_name}" if current_league_name == "La Liga" else \
-                 f"ITA-{current_league_name}" if current_league_name == "Serie A" else \
-                 f"GER-{current_league_name}" if current_league_name == "Bundesliga" else \
-                 f"FRA-{current_league_name}"
-    
-    league_priors = priors_db.get(league_key, {}).get("teams", {})
-    if not league_priors:
-        league_priors = priors_db.get(current_league_name, {}).get("teams", {})
-        
-    teams = list(league_priors.keys())
-    if not teams:
-        teams = LEAGUE_TEAMS.get(current_league_name, ["Arsenal", "Aston Villa", "Liverpool", "Manchester City"])
+    teams = LEAGUE_TEAMS.get(current_league_name, ["Arsenal", "Manchester City", "Liverpool", "Aston Villa", "Chelsea", "Tottenham Hotspur"])
 
-    standings = []
-    for idx, team in enumerate(teams[:10]):
-        standings.append({
-            "name": team,
-            "played": 38,
-            "xg_diff": round(float(np.random.uniform(-15, 25)), 1),
-            "points": 88 - (idx * 4)
+    # 1. Generate Scatter Plot Data
+    scatter_data = []
+    for t in teams:
+        a = random.uniform(0.7, 1.4)
+        b = random.uniform(0.7, 1.4)
+        scatter_data.append({
+            "team": t, 
+            "short": t[:3].upper(), 
+            "alpha": round(a, 2), 
+            "beta": round(b, 2)
         })
-        
-    home_name = teams[0]
-    away_name = teams[1] if len(teams) > 1 else "Aston Villa"
-    
-    h_theme = get_theme_for_team(home_name)
-    a_theme = get_theme_for_team(away_name)
-    
-    h_alpha = league_priors.get(home_name, {}).get('alpha', 1.42)
-    a_beta = league_priors.get(away_name, {}).get('beta', 0.88)
-    a_alpha = league_priors.get(away_name, {}).get('alpha', 1.05)
-    h_beta = league_priors.get(home_name, {}).get('beta', 0.78)
-    
-    p1, px, p2 = mock_probs(h_alpha, a_beta, a_alpha, h_beta)
-    
-    featured = {
-        "home_name": home_name,
-        "away_name": away_name,
-        "home_score": 2,
-        "away_score": 1,
-        "minute": 68,
-        "prob_1": p1,
-        "prob_x": px,
-        "prob_2": p2,
-        # PASS TEAMS AND COLORS DIRECTLY
-        "svg_pitch": generate_pitch_svg_horizontal(
-            home_formation="4-3-3",
-            away_formation="4-2-3-1",
-            home_color=h_theme["primary"],
-            away_color=a_theme["primary"],
-            home_team=home_name,
-            away_team=away_name
-        )
-    }
+
+    # 2. Generate Quant Fixtures
+    fixtures = []
+    for i in range(0, min(len(teams), 10), 2):
+        if i+1 < len(teams):
+            h, a = teams[i], teams[i+1]
+            ha, hb = random.uniform(1.0, 1.4), random.uniform(0.7, 1.1)
+            aa, ab = random.uniform(0.9, 1.3), random.uniform(0.8, 1.2)
+            p1, px, p2 = mock_probs(ha, ab, aa, hb)
+            
+            fixtures.append({
+                "home": h, "away": a,
+                "h_alpha": ha, "h_beta": hb,
+                "a_alpha": aa, "a_beta": ab,
+                "prob_1": round(p1*100, 1), "prob_x": round(px*100, 1), "prob_2": round(p2*100, 1),
+                "odds_1": round(1/p1, 2) if p1>0 else 0,
+                "odds_x": round(1/px, 2) if px>0 else 0,
+                "odds_2": round(1/p2, 2) if p2>0 else 0,
+                "ev": "HOME +EV" if p1 > 0.45 else ("AWAY +EV" if p2 > 0.4 else "NO EDGE")
+            })
+
+    # 3. Generate Compact Standings Table
+    standings = []
+    for idx, t in enumerate(teams[:10]):
+        xg = random.uniform(30, 60)
+        xga = random.uniform(20, 50)
+        standings.append({
+            "name": t, "played": 25,
+            "xg": round(xg, 1), "xga": round(xga, 1),
+            "xgd_90": (xg - xga)/25,
+            "points": 50 - idx*3
+        })
     
     ctx = {
         "request": request,
-        "tournaments": TOURNAMENTS,
-        "current_tournament": t_id,
         "current_league": current_league_name,
-        "featured": featured,
+        "fixtures": fixtures,
+        "scatter_data": scatter_data,
         "standings": standings
     }
     return templates.TemplateResponse(request=request, name="index.html", context=ctx)
@@ -122,48 +105,65 @@ async def hub(request: Request):
 
 @app.get("/match", response_class=HTMLResponse)
 async def match(request: Request):
-    t_id = request.query_params.get("tournament_id")
-    try:
-        t_id = int(t_id) if t_id else 17
-    except ValueError:
-        t_id = 17
-        
-    current_league_name = next((name for name, i in TOURNAMENTS.items() if i == t_id), "Premier League")
-    teams = LEAGUE_TEAMS.get(current_league_name, ["Arsenal", "Aston Villa"])
-    
-    home_name = teams[0]
-    away_name = teams[1] if len(teams) > 1 else "Aston Villa"
+    home_name = request.query_params.get("home", "Arsenal")
+    away_name = request.query_params.get("away", "Manchester City")
     
     h_theme = get_theme_for_team(home_name)
     a_theme = get_theme_for_team(away_name)
     
+    # Base Probabilities (Prior, Likelihood, Posterior)
     p1, px, p2 = mock_probs(1.42, 0.88, 1.05, 0.78)
     
-    # 4x4 Remainder Matrix for the UI Grid
-    sample_matrix = [
-        [0.15, 0.12, 0.05, 0.01],
-        [0.18, 0.14, 0.06, 0.02],
-        [0.08, 0.07, 0.04, 0.01],
-        [0.03, 0.02, 0.01, 0.01]
-    ]
+    prior = [round(p1*100, 1), round(px*100, 1), round(p2*100, 1)]
+    likelihood = [max(0, prior[0]-5), prior[1]+1, min(100, prior[2]+4)] # example shift
+    posterior = [max(0, likelihood[0]-6), likelihood[1]+2, min(100, likelihood[2]+4)] # example live shift
     
+    # Dynamic Match Momentum Path
+    pts = []
+    x_step = 100 / 20
+    x, y = 0, 25
+    for i in range(21):
+        pts.append(f"{x},{y}")
+        x += x_step
+        y += random.uniform(-5, 5)
+        y = max(5, min(45, y))
+    momentum_path = "M" + " L".join(pts)
+    
+    # Dynamic Remainder Matrix
+    matrix = []
+    for h in range(4):
+        row = []
+        for a in range(4):
+            base = 0.05
+            if h > a: base += p1 * 0.15
+            elif a > h: base += p2 * 0.15
+            else: base += px * 0.15
+            base = base / (h+a+1)
+            row.append(base)
+        matrix.append(row)
+        
+    total = sum(sum(r) for r in matrix)
+    matrix = [[round((c/total)*100, 0) for c in r] for r in matrix]
+
+    # Dynamic xG Events Log
+    events = [
+        {"time": "15:12", "detail": f"{home_name} - Shot on Target, {round(random.uniform(0.1, 0.8),2)} xG"},
+        {"time": "32:45", "detail": f"{away_name} - Blocked Shot, {round(random.uniform(0.1, 0.4),2)} xG"},
+        {"time": "42:10", "detail": f"{home_name} - Goal, {round(random.uniform(0.5, 0.9),2)} xG"},
+        {"time": "55:05", "detail": f"{away_name} - Missed Header, {round(random.uniform(0.2, 0.6),2)} xG"},
+        {"time": "68:45", "detail": f"{away_name} - Shot on Target, {round(random.uniform(0.3, 0.9),2)} xG"}
+    ]
+
     ctx = {
         "request": request,
-        "active_page": "match",
-        "current_league": current_league_name,
-        "current_team": home_name,
-        "available_teams": teams,
-        "leagues": list(TOURNAMENTS.keys()),
-        "tournaments": TOURNAMENTS,
-        "current_tournament": t_id,
-        "match": {
+        "featured": {
             "home_name": home_name,
             "away_name": away_name,
-            "home_score": 2,
-            "away_score": 1,
+            "home_score": 1,
+            "away_score": 2,
             "minute": 68,
-            "stadium": "Emirates Stadium",
-            "referee": "Michael Oliver",
+            "h_alpha": 1.65, "h_beta": 0.92,
+            "a_alpha": 1.88, "a_beta": 0.75,
             "svg_pitch": generate_pitch_svg_horizontal(
                 home_formation="4-3-3",
                 away_formation="4-2-3-1",
@@ -173,64 +173,29 @@ async def match(request: Request):
                 away_team=away_name
             )
         },
-        "probs": {"home_win": p1, "draw": px, "away_win": p2},
-        "fair_odds": {'1': round(1/p1, 2), 'X': round(1/px, 2), '2': round(1/p2, 2)},
-        "matrix": sample_matrix,
-        "events": [
-            {"time": "15", "detail": "Goal (Arsenal) - Saka shot on target (0.78 xG)"},
-            {"time": "42", "detail": "Yellow Card (Aston Villa) - Cash"},
-            {"time": "54", "detail": "Goal (Aston Villa) - Watkins (0.42 xG)"},
-            {"time": "65", "detail": "Goal (Arsenal) - Havertz (0.64 xG)"}
-        ]
+        "prior": prior,
+        "likelihood": likelihood,
+        "posterior": posterior,
+        "momentum_path": momentum_path,
+        "matrix": matrix,
+        "events": events
     }
     return templates.TemplateResponse(request=request, name="match.html", context=ctx)
 
 
-@app.get("/team", response_class=HTMLResponse)
-async def team(request: Request):
-    t_id = request.query_params.get("tournament_id", 17)
-    try:
-        t_id = int(t_id)
-    except ValueError:
-        t_id = 17
-        
-    current_league_name = next((name for name, i in TOURNAMENTS.items() if i == t_id), "Premier League")
-    team_name = request.query_params.get("team_name", "Arsenal")
-    
-    theme = get_theme_for_team(team_name)
-    manager = TEAM_MANAGERS.get(team_name, "Head Coach")
-    
-    # Generate the actual vertical pitch SVG
-    pitch_svg = generate_pitch_svg_vertical(
-        formation="4-3-3",
-        team_color=theme["primary"],
-        team_name=team_name
-    )
-    
-    ctx = {
-        "request": request,
-        "active_page": "team",
-        "current_league": current_league_name,
-        "current_team": team_name,
-        "team_color": theme["primary"],
-        "available_teams": LEAGUE_TEAMS.get(current_league_name, ["Arsenal", "Aston Villa"]),
-        "leagues": list(TOURNAMENTS.keys()),
-        "tournaments": TOURNAMENTS,
-        "current_tournament": t_id,
-        "manager": manager,
-        "prior_alpha": 1.42,
-        "prior_beta": 0.78,
-        "roster_delta": {"att": 0.936, "def": 1.064},
-        "match_history": [
-            {"result": "W 2-1", "opponent": "Aston Villa", "xg": "1.88 - 0.92"},
-            {"result": "D 1-1", "opponent": "Manchester City", "xg": "0.95 - 1.20"},
-            {"result": "W 2-0", "opponent": "Chelsea", "xg": "2.10 - 0.80"},
-            {"result": "L 0-1", "opponent": "Liverpool", "xg": "0.85 - 1.40"}
-        ],
-        # KEY MATCHES EXPECTATION IN team.html
-        "pitch_svg": pitch_svg
-    }
-    return templates.TemplateResponse(request=request, name="team.html", context=ctx)
+@app.get("/player", response_class=HTMLResponse)
+async def player(request: Request):
+    name = request.query_params.get("name", "Player")
+    team = request.query_params.get("team", "Unknown")
+    html = f"""
+    <div style='background:#0b0f19; color:white; height:100vh; font-family:monospace; padding:2rem;'>
+        <h1 style='color:#14b8a6;'>PLAYER LOG: {name} ({team})</h1>
+        <p>Quantitative Profile Syncing...</p>
+        <br><br>
+        <a href='javascript:history.back()' style='color:#38bdf8; text-decoration:none;'>&larr; Return to Active Dashboard</a>
+    </div>
+    """
+    return HTMLResponse(html)
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8001, reload=True)
