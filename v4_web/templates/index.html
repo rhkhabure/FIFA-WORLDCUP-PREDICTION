@@ -43,7 +43,7 @@
                         <span>AWAY WIN ({{ (featured.prob_2 * 100) | round(1) }}%)</span>
                     </div>
                     <div class="w-full flex h-3 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
-                        <div class="bg-cyan-500 h-full transition-all duration-500" style="width: {{ featured.prob_1 * 100 }}%"></div>
+                        <div class="bg-cyan-500 h-full transition-all duration-500" style="width: {{ (featured.prob_1 * 100) | round(2) }}%;"></div>
                         <div class="bg-amber-500 h-full transition-all duration-500" style="width: {{ featured.prob_x * 100 }}%"></div>
                         <div class="bg-rose-500 h-full transition-all duration-500" style="width: {{ featured.prob_2 * 100 }}%"></div>
                     </div>
