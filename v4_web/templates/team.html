@@ -1,14 +1,14 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="space-y-6" style="--team-accent: {{ theme.primary }};">
+<div class="space-y-6">
     
     <!-- HEADER BAR: QUANT DATA ANCHOR -->
     <div class="flex flex-col md:flex-row md:items-center md:justify-between border-b border-slate-800 pb-4">
         <div class="flex items-center space-x-4">
             <!-- Placeholder for Team Logo if API supports it, otherwise text fallback -->
             <div class="w-12 h-12 bg-slate-900 border border-slate-700 rounded-full flex items-center justify-center shadow-lg">
-                <span class="text-xl font-black text-[var(--team-accent)]">{{ current_team[:3]|upper }}</span>
+                <span class="text-xl font-black text-white">{{ current_team[:3]|upper }}</span>
             </div>
             <div>
                 <h1 class="text-2xl font-bold text-slate-100 uppercase tracking-wide">{{ current_team }}</h1>
@@ -36,7 +36,7 @@
             <!-- Team DNA Barometers -->
             <div class="bg-slate-900 border border-slate-800 rounded-lg p-5 shadow-xl relative overflow-hidden">
                 <!-- Glowing accent orb -->
-                <div class="absolute top-0 right-0 w-32 h-32 bg-[var(--team-accent)] opacity-5 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none"></div>
+                <div class="absolute top-0 right-0 w-32 h-32 bg-cyan-500 opacity-5 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none"></div>
 
                 <h3 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center">
                     📊 Team DNA Metrics
@@ -49,7 +49,7 @@
                             <span class="text-cyan-400 font-bold">{{ "%.2f"|format(prior_alpha) }}</span>
                         </div>
                         <div class="w-full bg-slate-950 rounded-full h-2 border border-slate-800 overflow-hidden shadow-inner">
-                            <div class="bg-cyan-500 h-2 rounded-full" style="width: {{ (prior_alpha / 2.5) * 100 }}%"></div>
+                            <div class="bg-cyan-500 h-2 rounded-full w-1/2"></div>
                         </div>
                         <p class="text-[9px] text-slate-500 mt-1 font-mono uppercase tracking-wider">League baseline: 1.00. Higher = greater scoring threat.</p>
                     </div>
@@ -61,8 +61,7 @@
                             <span class="text-amber-500 font-bold">{{ "%.2f"|format(prior_beta) }}</span>
                         </div>
                         <div class="w-full bg-slate-950 rounded-full h-2 border border-slate-800 overflow-hidden shadow-inner">
-                            <!-- Inverted scale logic: lower is better defense, width maps strength -->
-                            <div class="bg-amber-500 h-2 rounded-full" style="width: {{ ((3.0 - prior_beta) / 2.5) * 100 }}%"></div>
+                            <div class="bg-amber-500 h-2 rounded-full w-1/2"></div>
                         </div>
                         <p class="text-[9px] text-slate-500 mt-1 font-mono uppercase tracking-wider">League baseline: 1.00. Lower = stronger low-block protection.</p>
                     </div>
