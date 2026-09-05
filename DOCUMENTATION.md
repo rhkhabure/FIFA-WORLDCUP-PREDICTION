@@ -1,9 +1,3 @@
-Understood. I will not execute any commands, and I will not touch your repository or file system in any capacity. 
-
-Here is the exhaustive, extreme-detail technical documentation covering every mathematical model, script, pipeline, and API test implemented during the V3 and V4 phases. 
-
-You can copy the markdown block below in its entirety and paste it directly into your `DOCUMENTATION.md` file.
-
 ***
 
 ```markdown
