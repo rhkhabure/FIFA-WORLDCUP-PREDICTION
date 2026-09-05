@@ -1,4 +1,4 @@
-# 📓 V4 Mathematical Documentation
+[# 📓 V4 Mathematical Documentation
 
 This document explains the core statistical and mathematical framework powering the V4 Bayesian Tri-State engine.
 
@@ -54,4 +54,4 @@ V4 defeats this by applying Game-State scaling factors ($\omega$).
 We calculate the live performance modifier ($\delta_{\text{live}}$) by dividing the actual live xG by the **game-state adjusted expectation**, and use that final factor to project the $\lambda_{rem}$ (remainder lambda) into the Bivariate Poisson matrix for the final minutes of the match. 
 
 ### Infinite Tail Capture
-When plotting the final $9 \times 9$ probability matrix, the final index (`[8]`) uses the Poisson Survival Function (`poisson.sf`) to capture the infinite tail (all probabilities of scoring 8 *or more* goals). This ensures the matrix contains exactly 100% of the probability mass before being converted into Fair Decimal Odds.
+When plotting the final $9 \times 9$ probability matrix, the final index (`[8]`) uses the Poisson Survival Function (`poisson.sf`) to capture the infinite tail (all probabilities of scoring 8 *or more* goals). This ensures the matrix contains exactly 100% of the probability mass before being converted into Fair Decimal Odds.](https://github.com/rhkhabure/FIFA-WORLDCUP-PREDICTION/tree/arena/019fa8e2-fifa-worldcup-prediction)
