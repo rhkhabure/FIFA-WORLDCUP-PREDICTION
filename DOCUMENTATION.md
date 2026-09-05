@@ -1,6 +1,3 @@
-***
-
-```markdown
 # V3 & V4 System Architecture & Mathematical Engine Documentation
 
 This document provides a highly granular, component-by-component breakdown of the codebase, mathematical models, API ingestion pipelines, and UI reconstructions developed during the V3 and V4 iterations of the Quantitative Match Terminal.
@@ -141,4 +138,4 @@ The frontend was completely rebuilt to enforce strict compliance with real-time 
   * **Stage 1 (Prior):** Uses Jinja2 conditional `{% if prior %}`. Binds Tailwind progress bar widths directly to the mathematical array outputs of the NLL engine. Falls back to a red `NO PRIOR DATA` badge if the teams are missing from the DB.
   * **Stage 2 (Likelihood):** Hardcoded to output an amber `NO LINEUP DATA - AWAITING XI` badge, as API starting XI ingestion is not yet complete.
   * **Stage 3 (Posterior):** Uses Jinja2 conditional `{% if posterior %}`. Binds directly to the live outputs of the Bivariate Poisson matrix adjusting for time decay. Outputs a red `NO LIVE API DATA` badge if the API drops or the match hasn't started.
-```
+
