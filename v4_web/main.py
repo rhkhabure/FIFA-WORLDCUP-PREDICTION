@@ -3,13 +3,14 @@ import numpy as np
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
+from fastapi.responses import RedirectResponse
 import uvicorn
 from pathlib import Path
 import sys, os
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from v4_backend.in_play_posterior import generate_live_in_play_odds
-from footballdata import get_live_match_data
+from footballdata import get_live_match_data, get_last_completed_pl_match
 
 app = FastAPI(title="V4 Quant Terminal")
 templates = Jinja2Templates(directory=Path(__file__).resolve().parent / "templates")
@@ -35,9 +36,14 @@ async def hub(request: Request):
 @app.get("/match", response_class=HTMLResponse)
 async def match(request: Request):
     match_id = request.query_params.get("match_id")
-    home_override = request.query_params.get("home")
-    away_override = request.query_params.get("away")
     
+    # SAFE FALLBACK: If no match_id is provided, automatically fetch the most recently completed PL match
+    if not match_id:
+        match_id = get_last_completed_pl_match()
+        if match_id:
+            # Redirect to explicitly show the fetched match ID in the URL
+            return RedirectResponse(url=f"/match?match_id={match_id}")
+
     # Base states
     prior = None
     likelihood = None
@@ -47,7 +53,7 @@ async def match(request: Request):
     home_name = None
     away_name = None
 
-    # Fetch live match data if we have an ID
+    # Fetch live match data
     if match_id:
         live_data = get_live_match_data(match_id)
         if live_data and live_data.get("home_team") != "Unknown Home":
@@ -69,18 +75,8 @@ async def match(request: Request):
                 "h_xg": h_xg,
                 "a_xg": a_xg
             }
-    elif home_override and away_override:
-        # Allow testing the Prior Model without a live API match_id
-        home_name = home_override
-        away_name = away_override
-        featured = {
-            "home_name": home_name,
-            "away_name": away_name,
-            "minute": 0,
-            "status": "Not Started"
-        }
 
-    # If we have teams to evaluate, run the Prior math engine
+    # If we successfully parsed a real match from the API, run the math engine
     if home_name and away_name:
         league_priors = priors_db.get("ENG-Premier League", {}).get("teams", {})
         if not league_priors:
@@ -100,7 +96,6 @@ async def match(request: Request):
             likelihood = None
             
             # Posterior Calculation strictly from Model
-            # ONLY RUN IF WE HAVE A LIVE MATCH WITH ACTUAL DATA
             if featured.get("status") and featured.get("status") not in ["Not Started"]:
                 minute = featured["minute"]
                 if isinstance(minute, int): safe_min = minute
