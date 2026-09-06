@@ -31,25 +31,23 @@ import numpy as np
 from pathlib import Path
 
 
-# Team-name aliases: soccerdata/Understat sometimes uses different spellings
-# from what the live feed or the old FIFA_RANK table uses.
-# Add entries here as they're discovered rather than in multiple places.
 TEAM_NAME_ALIASES = {
-    # Understat name          -> canonical name in v4_priors.json
-    "Manchester United"       : "Manchester Utd",
-    "Manchester City"         : "Manchester City",
-    "Wolverhampton Wanderers" : "Wolves",
-    "Tottenham Hotspur"       : "Tottenham",
-    "Nottingham Forest"       : "Nott'ham Forest",
-    "Leicester City"          : "Leicester",
-    "West Bromwich Albion"    : "West Brom",
-    "Newcastle United"        : "Newcastle Utd",
-    "West Ham United"         : "West Ham",
-    "Paris Saint Germain"     : "Paris Saint-Germain",
-    "PSG"                     : "Paris Saint-Germain",
-    "Atletico Madrid"         : "Atlético Madrid",
-    "Atletico de Madrid"      : "Atlético Madrid",
-    "Athletic Club"           : "Athletic Club",
+    # Only aliases where the DATA SOURCE uses a different name
+    # than what the PRIORS store. Verified against v4_priors.json.
+    #
+    # These were REMOVED because the priors use the raw name directly:
+    #   'Manchester United'       -> 'Manchester Utd'    (WRONG)
+    #   'Newcastle United'        -> 'Newcastle Utd'     (WRONG)
+    #   'Nottingham Forest'       -> "Nott'ham Forest"   (WRONG)
+    #   'Wolverhampton Wanderers' -> 'Wolves'            (WRONG)
+    #   'Paris Saint Germain'     -> 'Paris Saint-Germain' (WRONG)
+    #   'Atletico Madrid'         -> 'Atlético Madrid'   (WRONG)
+    #
+    # These are KEPT because they resolve to names that exist in priors:
+    "Atletico de Madrid" : "Atletico Madrid",    # alternate spelling
+    "PSG"                : "Paris Saint Germain", # abbreviation
+    "Tottenham Hotspur"  : "Tottenham",           # Sofascore vs Understat
+    "Leicester City"     : "Leicester",           # Sofascore vs Understat
 }
 
 
