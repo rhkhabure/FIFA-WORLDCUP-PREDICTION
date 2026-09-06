@@ -3,3 +3,5 @@ timestamp,phase,test_acc,baseline_acc,test_logloss,draw_recall,temperature
 2026-09-06 14:33 UTC,phase3_holdout_v4,0.4384,0.4201,1.0317,0.4201
 2026-09-06 14:40 UTC,phase3_train_v4,0.7105,0.445,0.6049,0.5208,0.924
 2026-09-06 14:40 UTC,phase3_holdout_v4,0.4829,0.4201,1.0274,0.0
+2026-09-06 15:07 UTC,phase3_train_v4,0.6956,0.445,0.6103,0.7264,0.966
+2026-09-06 15:30 UTC,phase3_holdout_v4,0.4572,0.4201,1.0198,0.4726
