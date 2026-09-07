@@ -17,7 +17,8 @@ import soccerdata as sd
 
 ROOT       = Path(__file__).parent.parent
 DB_PATH    = ROOT / "v4_historical_data.sqlite"
-NEW_SEASON = "2526"
+NEW_SEASON    = "2526"      # label stored in the database
+SCRAPE_SEASON = "2025"      # format soccerdata/Understat expects
 
 TARGET_LEAGUES = [
     "ENG-Premier League",
@@ -64,7 +65,7 @@ def main():
     # Scrape
     print(f"Downloading {NEW_SEASON} from Understat via soccerdata...")
     try:
-        understat = sd.Understat(leagues=TARGET_LEAGUES, seasons=[NEW_SEASON])
+        understat = sd.Understat(leagues=TARGET_LEAGUES, seasons=[SCRAPE_SEASON])
         df_raw = understat.read_schedule()
     except Exception as e:
         raise RuntimeError(f"soccerdata failed: {e}") from e
