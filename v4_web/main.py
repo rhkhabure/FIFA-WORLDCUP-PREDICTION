@@ -228,8 +228,8 @@ async def match(request: Request):
                 "away_name": away_name,
                 "minute"   : minute,
                 "status"   : status,
-                "h_score"  : h_score,
-                "a_score"  : a_score,
+                "h_score"  : live_data.get("h_score", h_score),
+                "a_score"  : live_data.get("a_score", a_score),
                 "h_xg"     : live_data["live_xg"]["home"],
                 "a_xg"     : live_data["live_xg"]["away"],
             }

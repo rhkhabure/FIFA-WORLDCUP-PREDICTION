@@ -1,106 +1,205 @@
-import os
+"""
+footballdata.py  —  V4.2
+=========================
+Live match data from API-Football v3 (api-football.com / api-sports.io).
+
+Free tier: 100 requests/day, all endpoints, Premier League included.
+Auth header: x-apisports-key  (NOT Bearer token like footballdata.io)
+
+Previously used footballdata.io which gave 403 on every endpoint for the
+free plan. This replaces it entirely with the API-Football v3 endpoints
+which are confirmed to work on the free tier.
+
+Environment variable: API_FOOTBALL_KEY in project root .env
+"""
+
 import json
+import os
 import urllib.request
 import urllib.error
 
-# Since dotenv isn't in requirements.txt and this environment might not have it installed natively,
-# we'll read the .env file manually.
-def get_api_key():
-    env_path = os.path.join(os.path.dirname(__file__), '..', '.env')
-    try:
-        with open(env_path, 'r') as f:
-            for line in f:
-                if line.startswith("FOOTBALLDATA_API_KEY="):
-                    return line.strip().split("=")[1]
-    except Exception:
-        pass
-    return ""
+BASE_URL   = "https://v3.football.api-sports.io"
+PL_LEAGUE  = 39       # Premier League league ID in API-Football
+PL_SEASON  = 2025     # 2025/26 season is stored as 2025 in API-Football
 
-API_KEY = get_api_key()
-BASE_URL = "https://footballdata.io/api/v1"
 
-def fetch_api(endpoint):
+def _get_api_key() -> str:
+    # Walk up from this file's location to find the .env in the project root
+    here = os.path.dirname(os.path.abspath(__file__))
+    for _ in range(4):   # search up to 4 levels up
+        env_path = os.path.join(here, ".env")
+        if os.path.exists(env_path):
+            with open(env_path) as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith("API_FOOTBALL_KEY="):
+                        return line.split("=", 1)[1].strip()
+        here = os.path.dirname(here)
+    return os.environ.get("API_FOOTBALL_KEY", "")
+
+
+API_KEY = _get_api_key()
+
+
+def _fetch(endpoint: str, params: dict | None = None) -> dict:
+    """
+    GET request to API-Football v3.
+    Returns the parsed JSON or {} on any error.
+    """
     url = f"{BASE_URL}/{endpoint.lstrip('/')}"
-    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {API_KEY}", "Accept": "application/json"})
+    if params:
+        qs = "&".join(f"{k}={v}" for k, v in params.items())
+        url = f"{url}?{qs}"
+
+    req = urllib.request.Request(
+        url,
+        headers={
+            "x-apisports-key": API_KEY,
+            "Accept": "application/json",
+        },
+    )
     try:
-        with urllib.request.urlopen(req, timeout=5) as response:
-            return json.loads(response.read().decode())
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            return json.loads(resp.read().decode())
+    except urllib.error.HTTPError as e:
+        print(f"API-Football HTTP {e.code} on /{endpoint}: {e.reason}")
     except Exception as e:
-        print(f"Footballdata API Error fetching {endpoint}: {e}")
-        return {}
+        print(f"API-Football error on /{endpoint}: {e}")
+    return {}
 
-def get_last_completed_pl_match():
-    """
-    Fetches the most recently completed match in the Premier League (league_id = 15).
-    Useful for populating the Match Dashboard when no active ID is supplied.
-    """
-    res = fetch_api("leagues/15/matches")
-    if res and res.get("success"):
-        data = res.get("data", [])
-        if isinstance(data, list):
-            # Sort or filter for finished matches. Usually the array is chronological or reverse chronological.
-            finished = [m for m in data if m.get("status") in ["complete", "Finished", "FT"]]
-            if finished:
-                return finished[-1].get("match_id") # Assuming chronological, [-1] is the most recent.
-                
-    # Fallback to a hardcoded known match if API fails to retrieve the list
-    return 780100645
 
-def get_live_match_data(match_id):
-    """
-    Fetches base match info, stats, and events, then parses it into V4 model format.
-    """
-    match_data = fetch_api(f"matches/{match_id}")
-    stats_data = fetch_api(f"matches/{match_id}/stats")
-    events_data = fetch_api(f"matches/{match_id}/events")
-    
-    match_info = match_data.get("data", {}).get("match", {})
-    if not match_info:
-        match_info = stats_data.get("data", {}).get("match", {})
+# ── Public helpers ─────────────────────────────────────────────────────────────
 
-    home_team = match_info.get("home_team", {}).get("team_name", "Unknown Home")
-    away_team = match_info.get("away_team", {}).get("team_name", "Unknown Away")
-    
-    home_score = int(match_info.get("home_score", 0) or match_info.get("goals_home", 0) or 0)
-    away_score = int(match_info.get("away_score", 0) or match_info.get("goals_away", 0) or 0)
-    
-    red_cards = {"home": 0, "away": 0}
-    parsed_events = []
-    
-    events = events_data.get("data", {}).get("events", []) if events_data else []
-    for event in events:
-        side = event.get("team_side") 
-        etype = str(event.get("event_type", "")).lower()
-        minute = event.get("minute", "?")
-        detail = event.get("detail", etype.replace("_", " ").title())
-        player = event.get("player", {}).get("player_name", "Unknown")
-        team_name = home_team if side == "home" else away_team
-        
-        parsed_events.append({"time": f"{minute}'", "detail": f"{player} ({team_name}) - {detail}"})
-        
-        if etype == "red_card":
-            if side == "home": red_cards["home"] += 1
-            elif side == "away": red_cards["away"] += 1
+def get_last_completed_pl_match() -> int | None:
+    """
+    Returns the fixture ID of the most recently completed Premier League match.
+    Used as a fallback when no match_id is supplied to the /match route.
+    """
+    data = _fetch("fixtures", {"league": PL_LEAGUE, "season": PL_SEASON,
+                               "last": 1})
+    for fix in data.get("response", []):
+        return fix["fixture"]["id"]
+    return None
 
-    live_xg = {"home": 0.0, "away": 0.0}
-    stats_dict = stats_data.get("data", {}).get("stats", {})
-    
-    if isinstance(stats_dict, dict) and "xg" in stats_dict:
-        live_xg["home"] = float(stats_dict["xg"].get("home", 0.0))
-        live_xg["away"] = float(stats_dict["xg"].get("away", 0.0))
-        
-    status = match_info.get("status", "")
-    current_minute = 90 if status in ["complete", "Finished", "FT"] else match_info.get("minute", "Live")
-    if current_minute is None: current_minute = 0
-    
+
+def get_today_pl_fixtures() -> list[dict]:
+    """
+    Returns all Premier League fixtures scheduled for today (or live now).
+    Each dict has: fixture_id, home, away, status, minute, h_score, a_score.
+    """
+    data = _fetch("fixtures", {"league": PL_LEAGUE, "season": PL_SEASON,
+                               "live": "all"})
+    results = []
+    for fix in data.get("response", []):
+        results.append(_parse_fixture(fix))
+    return results
+
+
+def get_live_match_data(fixture_id: int | str) -> dict:
+    """
+    Full match detail for one fixture: teams, score, minute, events, xG.
+    Returns a dict with keys the rest of main.py expects.
+    """
+    data = _fetch("fixtures", {
+        "id": fixture_id,
+        "statistics": "true",
+    })
+
+    response = data.get("response", [])
+    if not response:
+        return _empty_match()
+
+    fix = response[0]
+    parsed = _parse_fixture(fix)
+
+    # Events (goals, cards, subs)
+    events_data = _fetch("fixtures/events", {"fixture": fixture_id})
+    parsed["events"] = _parse_events(events_data, parsed["home_team"],
+                                     parsed["away_team"])
+
+    # xG from statistics block (may not be present for all matches)
+    stats = fix.get("statistics", []) or []
+    parsed["live_xg"] = _parse_xg(stats)
+
+    return parsed
+
+
+# ── Internal parsers ───────────────────────────────────────────────────────────
+
+def _parse_fixture(fix: dict) -> dict:
+    fixture  = fix.get("fixture", {})
+    teams    = fix.get("teams", {})
+    goals    = fix.get("goals", {})
+    score    = fix.get("score", {})
+    status   = fixture.get("status", {})
+
+    home_name  = teams.get("home", {}).get("name", "Unknown Home")
+    away_name  = teams.get("away", {}).get("name", "Unknown Away")
+    h_score    = goals.get("home") or 0
+    a_score    = goals.get("away") or 0
+    status_str = status.get("long", "")
+    minute     = status.get("elapsed") or 0
+
+    # Normalise status to something the template can check
+    if status_str in ("Match Finished", "Full Time"):
+        status_str = "Finished"
+    elif status_str in ("Not Started", "Time to be Defined"):
+        status_str = "Not Started"
+
     return {
-        "home_team": home_team,
-        "away_team": away_team,
-        "home_score": home_score,
-        "away_score": away_score,
-        "current_minute": current_minute,
-        "red_cards": red_cards,
-        "live_xg": live_xg,
-        "events": parsed_events,
-        "status": status
+        "fixture_id"    : fixture.get("id"),
+        "home_team"     : home_name,
+        "away_team"     : away_name,
+        "h_score"       : int(h_score),
+        "a_score"       : int(a_score),
+        "home_score"    : int(h_score),   # alias for main.py compat
+        "away_score"    : int(a_score),   # alias for main.py compat
+        "status"        : status_str,
+        "current_minute": minute,
+        "minute"        : minute,
+        "live_xg"       : {"home": 0.0, "away": 0.0},
+        "events"        : [],
+        "red_cards"     : {"home": 0, "away": 0},
+    }
+
+
+def _parse_events(data: dict, home_name: str, away_name: str) -> list[dict]:
+    events = []
+    red_cards = {"home": 0, "away": 0}
+    for ev in data.get("response", []):
+        time    = ev.get("time", {}).get("elapsed", "?")
+        etype   = ev.get("type", "").lower()
+        detail  = ev.get("detail", etype.replace("_", " ").title())
+        player  = ev.get("player", {}).get("name", "Unknown")
+        team    = ev.get("team", {}).get("name", "")
+        side    = "home" if team == home_name else "away"
+
+        events.append({"time": f"{time}'", "detail": f"{player} ({team}) - {detail}"})
+        if etype == "card" and "red" in detail.lower():
+            red_cards[side] += 1
+
+    return events
+
+
+def _parse_xg(stats: list) -> dict:
+    xg = {"home": 0.0, "away": 0.0}
+    for team_stat in stats:
+        side = "home" if team_stat.get("team", {}).get("id") else "away"
+        for stat in team_stat.get("statistics", []):
+            if stat.get("type") == "expected_goals":
+                try:
+                    xg[side] = float(stat.get("value") or 0)
+                except (TypeError, ValueError):
+                    pass
+    return xg
+
+
+def _empty_match() -> dict:
+    return {
+        "fixture_id": None, "home_team": "Unknown Home",
+        "away_team": "Unknown Away", "h_score": 0, "a_score": 0,
+        "home_score": 0, "away_score": 0, "status": "",
+        "current_minute": 0, "minute": 0,
+        "live_xg": {"home": 0.0, "away": 0.0},
+        "events": [], "red_cards": {"home": 0, "away": 0},
     }
