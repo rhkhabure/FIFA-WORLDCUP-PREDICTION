@@ -3,7 +3,16 @@
 {% block content %}
 <div class="space-y-4 max-w-7xl mx-auto flex flex-col items-center justify-center h-[50vh]">
     <h1 class="text-2xl font-bold text-slate-300 font-mono tracking-widest">LEAGUE HUB</h1>
-    <p class="text-slate-500 font-mono">WIPED FOR RECONSTRUCTION</p>
-    <a href="/match?match_id=780100645" class="mt-4 px-4 py-2 border border-cyan-800 text-cyan-400 rounded hover:bg-cyan-950 transition">TEST MATCH DASHBOARD WIDGET 1</a>
+    <p class="text-slate-500 font-mono text-sm">Premier League · V4.2 Quant Terminal</p>
+
+    <a href="/match"
+       class="mt-4 px-6 py-3 border border-cyan-800 text-cyan-400 rounded
+              hover:bg-cyan-950 transition font-mono text-sm tracking-wider uppercase">
+        Latest Match &rarr;
+    </a>
+
+    <p class="text-slate-600 font-mono text-xs mt-2">
+        Redirects automatically to the most recently completed PL match
+    </p>
 </div>
 {% endblock %}
