@@ -2,109 +2,169 @@
 
 {% block content %}
 <div class="space-y-4 max-w-7xl mx-auto">
-    <!-- TOP HEADER -->
-    <div class="flex items-center text-slate-300 font-bold uppercase tracking-wider mb-2 text-sm">
-        <span class="mr-2 text-xl">⚽</span>
-        {% if featured.home_name and featured.away_name %}
-            {{ current_league }}: {{ featured.home_name|upper }} vs {{ featured.away_name|upper }}
-        {% else %}
-            QUANTITATIVE MATCH DASHBOARD
+
+    <!-- HEADER -->
+    <div class="flex items-center justify-between text-slate-300 font-bold uppercase tracking-wider mb-2 text-sm">
+        <div class="flex items-center gap-2">
+            <span class="text-xl">⚽</span>
+            {% if featured.home_name and featured.away_name %}
+                {{ current_league }}: {{ featured.home_name|upper }} vs {{ featured.away_name|upper }}
+            {% else %}
+                QUANTITATIVE MATCH DASHBOARD
+            {% endif %}
+        </div>
+        {% if featured.status %}
+            <span class="text-[10px] font-mono px-2 py-1 rounded border
+                {% if featured.status in ['complete','Finished','FT'] %}
+                    text-slate-400 border-slate-700 bg-slate-900/60
+                {% else %}
+                    text-emerald-400 border-emerald-800 bg-emerald-950/40
+                {% endif %}">
+                {{ featured.status|upper }}
+                {% if featured.minute and featured.status not in ['complete','Finished','FT','Not Started'] %}
+                    · {{ featured.minute }}'
+                {% endif %}
+            </span>
         {% endif %}
     </div>
 
-    <!-- TOP SECTION: 3 STAGES -->
-    <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl grid grid-cols-1 md:grid-cols-3 gap-6 relative">
-        
-        <!-- Stage 1: Prior (Static Base) -->
-        <div class="flex flex-col items-center">
-            <h3 class="text-sm font-bold text-slate-200">Prior (Static Base)</h3>
-            <span class="text-[10px] text-cyan-400/80 mb-2">Base Model (Dixon-Coles Prior)</span>
-            <div class="flex items-end justify-center h-20 w-full space-x-6">
+    <!-- SCORE ROW (only when match data is available) -->
+    {% if featured.home_name and featured.away_name %}
+    <div class="bg-[#0f172a] border border-slate-800 rounded-xl px-6 py-4 flex items-center justify-center gap-8">
+        <span class="text-lg font-bold text-slate-100 tracking-wide">{{ featured.home_name }}</span>
+        <div class="flex items-center gap-3 font-mono">
+            <span class="text-3xl font-black text-white">{{ featured.h_score }}</span>
+            <span class="text-slate-600 text-xl">–</span>
+            <span class="text-3xl font-black text-white">{{ featured.a_score }}</span>
+        </div>
+        <span class="text-lg font-bold text-slate-100 tracking-wide">{{ featured.away_name }}</span>
+    </div>
+    {% endif %}
+
+    <!-- TWO-PANEL ODDS SECTION -->
+    <!--
+        Panel 1 — Pre-game (Dixon-Coles bivariate Poisson)
+            Always shown. Gives the context for how the match looked
+            before a ball was kicked. Stays fixed throughout the match
+            as the reference point.
+
+        Panel 2 — Live (neural net, football_v4.pth)
+            Shows "Awaiting kickoff" before the match starts.
+            Once minute > 0 the neural net takes over, updating
+            as goals go in. Score + time features dominate here.
+    -->
+    <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-6 shadow-xl
+                grid grid-cols-1 md:grid-cols-2 gap-8 relative">
+
+        <!-- PANEL 1: Pre-game odds (Dixon-Coles) -->
+        <div class="flex flex-col items-center gap-3">
+            <div class="text-center">
+                <h3 class="text-sm font-bold text-slate-200 uppercase tracking-wide">Pre-Game</h3>
+                <span class="text-[10px] text-cyan-400/80 font-mono">Dixon-Coles · draw propensity 0.10</span>
+            </div>
+
+            <div class="flex items-end justify-center w-full gap-8" style="height: 96px;">
                 {% if prior %}
+                    <!-- Home -->
                     <div class="flex flex-col items-center justify-end h-full">
-                        <span class="text-xs text-teal-500 font-mono mb-1">{{ prior[0] }}%</span>
-                        <div class="w-10 bg-[#1f6b70] transition-all" style="height: {{ prior[0] }}%;"></div>
-                        <span class="text-[10px] text-slate-400 mt-1">Home</span>
+                        <span class="text-sm text-teal-400 font-mono font-bold mb-1">{{ prior[0] }}%</span>
+                        <div class="w-12 bg-teal-700 rounded-sm transition-all duration-500"
+                             style="height: {{ [prior[0], 4]|max }}%;"></div>
+                        <span class="text-[10px] text-slate-400 mt-2 uppercase tracking-wider">Home</span>
                     </div>
+                    <!-- Draw -->
                     <div class="flex flex-col items-center justify-end h-full">
-                        <span class="text-xs text-slate-400 font-mono mb-1">{{ prior[1] }}%</span>
-                        <div class="w-10 bg-[#475569] transition-all" style="height: {{ prior[1] }}%;"></div>
-                        <span class="text-[10px] text-slate-400 mt-1">Draw</span>
+                        <span class="text-sm text-slate-400 font-mono font-bold mb-1">{{ prior[1] }}%</span>
+                        <div class="w-12 bg-slate-600 rounded-sm transition-all duration-500"
+                             style="height: {{ [prior[1], 4]|max }}%;"></div>
+                        <span class="text-[10px] text-slate-400 mt-2 uppercase tracking-wider">Draw</span>
                     </div>
+                    <!-- Away -->
                     <div class="flex flex-col items-center justify-end h-full">
-                        <span class="text-xs text-[#a16207] font-mono mb-1">{{ prior[2] }}%</span>
-                        <div class="w-10 bg-[#854d0e] transition-all" style="height: {{ prior[2] }}%;"></div>
-                        <span class="text-[10px] text-slate-400 mt-1">Away</span>
+                        <span class="text-sm text-amber-500 font-mono font-bold mb-1">{{ prior[2] }}%</span>
+                        <div class="w-12 bg-amber-800 rounded-sm transition-all duration-500"
+                             style="height: {{ [prior[2], 4]|max }}%;"></div>
+                        <span class="text-[10px] text-slate-400 mt-2 uppercase tracking-wider">Away</span>
                     </div>
                 {% else %}
                     <div class="flex items-center justify-center h-full w-full">
-                        <span class="text-xs text-rose-500 font-mono uppercase tracking-widest bg-rose-950/40 border border-rose-900 px-3 py-1 rounded">NO PRIOR DATA</span>
+                        <span class="text-xs text-rose-400 font-mono uppercase tracking-widest
+                                     bg-rose-950/40 border border-rose-900 px-3 py-2 rounded">
+                            No prior data
+                        </span>
                     </div>
                 {% endif %}
             </div>
-            <div class="absolute top-1/2 left-[31%] text-slate-500 text-2xl -translate-y-1/2 opacity-70 hidden md:block">&rarr;</div>
         </div>
 
-        <!-- Stage 2: Likelihood (Lineup Adj.) -->
-        <div class="flex flex-col items-center relative">
-            <h3 class="text-sm font-bold text-slate-200">Likelihood (Lineup Adj.)</h3>
-            <div class="flex items-center text-[10px] mb-2">
-                <span class="text-cyan-400/80 mr-2">Post Lineup Release</span>
-            </div>
-            <div class="flex items-end justify-center h-20 w-full space-x-6">
-                {% if likelihood %}
-                    <!-- Likelihood implementation will go here once API supplies Lineup Data -->
-                {% else %}
-                    <div class="flex items-center justify-center h-full w-full">
-                        <span class="text-xs text-amber-500 font-mono uppercase tracking-widest bg-amber-950/40 border border-amber-900 px-3 py-1 rounded">NO LINEUP DATA - AWAITING XI</span>
-                    </div>
-                {% endif %}
-            </div>
-            <div class="absolute top-1/2 right-[-12%] text-slate-500 text-2xl -translate-y-1/2 opacity-70 hidden md:block">&rarr;</div>
+        <!-- Divider arrow (desktop only) -->
+        <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2
+                    text-slate-600 text-xl opacity-60 hidden md:block pointer-events-none">
+            &rarr;
         </div>
 
-        <!-- Stage 3: Posterior (In-Play Live) -->
-        <div class="flex flex-col items-center">
-            <h3 class="text-sm font-bold text-slate-200">Posterior (In-Play Live)</h3>
-            <div class="flex items-center text-[10px] mb-2 relative w-full justify-center">
-                {% if posterior and featured.status not in ["complete", "Finished", "FT"] %}
-                    <span class="text-amber-400 bg-slate-900 border border-slate-700 px-1.5 py-0.5 rounded mr-2 font-mono">{{ featured.minute }}'</span>
-                    <span class="text-cyan-400/80">Live xG Adjusted</span>
-                {% else %}
-                    <span class="text-cyan-400/80">Live Match Tracking</span>
-                {% endif %}
+        <!-- PANEL 2: Live odds (neural net) -->
+        <div class="flex flex-col items-center gap-3">
+            <div class="text-center">
+                <h3 class="text-sm font-bold text-slate-200 uppercase tracking-wide">Live</h3>
+                <span class="text-[10px] font-mono
+                    {% if posterior %}text-emerald-400/80{% else %}text-slate-500{% endif %}">
+                    {% if posterior %}
+                        Neural net · {{ featured.minute }}' in play
+                    {% elif featured.status == 'Not Started' %}
+                        Awaiting kickoff
+                    {% else %}
+                        Neural net · score + time features
+                    {% endif %}
+                </span>
             </div>
-            <div class="flex items-end justify-center h-20 w-full space-x-6 relative">
+
+            <div class="flex items-end justify-center w-full gap-8" style="height: 96px;">
                 {% if posterior %}
-                    <div class="flex flex-col items-center justify-end h-full z-10">
-                        <span class="text-xs text-teal-500 font-mono mb-1">{{ posterior[0] }}%</span>
-                        <div class="w-10 bg-[#1f6b70]/70 transition-all" style="height: {{ posterior[0] }}%;"></div>
-                        <span class="text-[10px] text-slate-400 mt-1">Home</span>
+                    <!-- Home -->
+                    <div class="flex flex-col items-center justify-end h-full">
+                        <span class="text-sm text-teal-400 font-mono font-bold mb-1">{{ posterior[0] }}%</span>
+                        <div class="w-12 bg-teal-600/80 rounded-sm transition-all duration-700"
+                             style="height: {{ [posterior[0], 4]|max }}%;"></div>
+                        <span class="text-[10px] text-slate-400 mt-2 uppercase tracking-wider">Home</span>
                     </div>
-                    <div class="flex flex-col items-center justify-end h-full z-10">
-                        <span class="text-xs text-slate-400 font-mono mb-1">{{ posterior[1] }}%</span>
-                        <div class="w-10 bg-[#475569]/70 transition-all" style="height: {{ posterior[1] }}%;"></div>
-                        <span class="text-[10px] text-slate-400 mt-1">Draw</span>
+                    <!-- Draw -->
+                    <div class="flex flex-col items-center justify-end h-full">
+                        <span class="text-sm text-slate-400 font-mono font-bold mb-1">{{ posterior[1] }}%</span>
+                        <div class="w-12 bg-slate-500/80 rounded-sm transition-all duration-700"
+                             style="height: {{ [posterior[1], 4]|max }}%;"></div>
+                        <span class="text-[10px] text-slate-400 mt-2 uppercase tracking-wider">Draw</span>
                     </div>
-                    <div class="flex flex-col items-center justify-end h-full z-10">
-                        <span class="text-xs text-[#a16207] font-mono mb-1">{{ posterior[2] }}%</span>
-                        <div class="w-10 bg-[#854d0e]/70 transition-all" style="height: {{ posterior[2] }}%;"></div>
-                        <span class="text-[10px] text-slate-400 mt-1">Away</span>
+                    <!-- Away -->
+                    <div class="flex flex-col items-center justify-end h-full">
+                        <span class="text-sm text-amber-500 font-mono font-bold mb-1">{{ posterior[2] }}%</span>
+                        <div class="w-12 bg-amber-700/80 rounded-sm transition-all duration-700"
+                             style="height: {{ [posterior[2], 4]|max }}%;"></div>
+                        <span class="text-[10px] text-slate-400 mt-2 uppercase tracking-wider">Away</span>
                     </div>
                 {% else %}
                     <div class="flex items-center justify-center h-full w-full">
-                        <span class="text-xs text-rose-500 font-mono uppercase tracking-widest bg-rose-950/40 border border-rose-900 px-3 py-1 rounded">NO LIVE API DATA</span>
+                        <span class="text-xs text-slate-500 font-mono uppercase tracking-widest
+                                     bg-slate-900/60 border border-slate-800 px-3 py-2 rounded">
+                            {% if featured.status == 'Not Started' %}
+                                Awaiting kickoff
+                            {% else %}
+                                No live data
+                            {% endif %}
+                        </span>
                     </div>
                 {% endif %}
             </div>
         </div>
     </div>
-    
-    <!-- WIP Placeholder for subsequent widgets (Matrix, Scatter, Pitch) to strictly avoid hardcoding placeholders right now -->
+
+    <!-- PITCH VISUALISATION (next design phase) -->
+    <!-- utils.py already has generate_pitch_svg_horizontal() ready.
+         Wire it in main.py once the 2-panel layout is confirmed. -->
+
 </div>
 
 <style>
-/* Reset base styles to dark elegant palette */
 body { background-color: #0b0f19 !important; }
 </style>
 {% endblock %}

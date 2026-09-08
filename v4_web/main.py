@@ -1,134 +1,272 @@
+"""
+main.py  —  V4.2 Quant Terminal
+=================================
+FastAPI app for the league football win-probability dashboard.
+
+Architecture (confirmed by Phase 3 validation):
+  PRE-GAME  ->  Dixon-Coles bivariate Poisson (v4_priors.json)
+                draw_propensity = 0.10
+  LIVE      ->  Neural net (football_v4.pth) once minute > 0
+                Score + time features dominate mid-match
+
+Run:  uvicorn main:app --reload --port 8001
+"""
+
 import json
+import pickle
+import sys
+import os
 import numpy as np
-from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
-from fastapi.responses import RedirectResponse
-import uvicorn
+import torch
+import torch.nn as nn
 from pathlib import Path
-import sys, os
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.templating import Jinja2Templates
+from scipy.stats import poisson
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from v4_backend.in_play_posterior import generate_live_in_play_odds
+import uvicorn
+
+ROOT = Path(__file__).resolve().parent
+sys.path.append(str(ROOT.parent))
+
 from footballdata import get_live_match_data, get_last_completed_pl_match
+from v4_backend.feature_builder import DCStrengthLookup   # noqa: E402
 
-app = FastAPI(title="V4 Quant Terminal")
-templates = Jinja2Templates(directory=Path(__file__).resolve().parent / "templates")
+# ── Constants ─────────────────────────────────────────────────────────────────
+DRAW_PROPENSITY = 0.10   # confirmed by elbow test on 2425 holdout
+LEAGUE_KEY      = "ENG-Premier League"   # expand as more leagues go live
 
+# ── Paths ─────────────────────────────────────────────────────────────────────
 def find_file(filename):
-    for p in Path(__file__).resolve().parent.parent.rglob(filename):
+    for p in ROOT.parent.rglob(filename):
         return p
     return None
 
 PRIORS_PATH = find_file("v4_priors.json")
+MODEL_PATH  = find_file("football_v4.pth")
+SCALER_PATH = find_file("scaler_v4.pkl")
+
+# ── Load DC priors ─────────────────────────────────────────────────────────────
 if PRIORS_PATH and PRIORS_PATH.exists():
-    with open(PRIORS_PATH, "r") as f:
+    with open(PRIORS_PATH) as f:
         priors_db = json.load(f)
+    dc_lookup = DCStrengthLookup(PRIORS_PATH)
 else:
     priors_db = {}
+    dc_lookup = None
+    print("WARNING: v4_priors.json not found -- pre-game odds will be unavailable.")
 
-from v4_backend.bivariate_poisson import generate_match_probabilities
+# ── Load neural net ────────────────────────────────────────────────────────────
+class FootballWinProbNet(nn.Module):
+    def __init__(self, n_features=11, n_classes=3, h1=40, h2=20, dropout=0.30):
+        super().__init__()
+        self.fc1  = nn.Linear(n_features, h1)
+        self.fc2  = nn.Linear(h1, h2)
+        self.head = nn.Linear(h2, n_classes)
+        self.drop = nn.Dropout(dropout)
+        self.act  = nn.ReLU()
 
+    def forward(self, x):
+        x = self.drop(self.act(self.fc1(x)))
+        x = self.drop(self.act(self.fc2(x)))
+        return self.head(x)
+
+
+nn_model, nn_scaler, nn_T = None, None, 1.0
+if MODEL_PATH and MODEL_PATH.exists() and SCALER_PATH and SCALER_PATH.exists():
+    ckpt = torch.load(MODEL_PATH, map_location="cpu", weights_only=False)
+    nn_model = FootballWinProbNet(**ckpt["arch"])
+    nn_model.load_state_dict(ckpt["model_state"])
+    nn_model.eval()
+    nn_T = ckpt.get("temperature", 1.0)
+    with open(SCALER_PATH, "rb") as f:
+        nn_scaler = pickle.load(f)
+    print(f"Loaded football_v4.pth  T={nn_T:.3f}")
+else:
+    print("WARNING: football_v4.pth or scaler not found -- live odds will be unavailable.")
+
+# ── FastAPI app ───────────────────────────────────────────────────────────────
+app = FastAPI(title="V4 Quant Terminal")
+templates = Jinja2Templates(
+    directory=ROOT / "templates"
+)
+
+
+# ── DC pre-game probability ───────────────────────────────────────────────────
+def dc_pregame(home_team: str, away_team: str, league: str) -> list | None:
+    """
+    Dixon-Coles bivariate Poisson with draw_propensity correction.
+    Returns [p_home%, p_draw%, p_away%] rounded to 1 dp, or None.
+    """
+    if not priors_db:
+        return None
+
+    league_data = priors_db.get(league)
+    if not league_data:
+        return None
+
+    teams = league_data["teams"]
+    meta  = league_data["meta"]
+
+    if home_team not in teams or away_team not in teams:
+        return None
+
+    h = teams[home_team]
+    a = teams[away_team]
+    gamma = meta.get("gamma_home_advantage", 1.25)
+    rho   = meta.get("rho_draw_correction",  0.0)
+
+    lam = np.clip(h["alpha"] * a["beta"] * gamma, 1e-5, 15.0)
+    mu  = np.clip(a["alpha"] * h["beta"],          1e-5, 15.0)
+
+    hp = poisson.pmf(np.arange(9), lam)
+    ap = poisson.pmf(np.arange(9), mu)
+    joint = np.outer(hp, ap)
+
+    joint[0, 0] *= max(1.0 - lam * mu * rho, 1e-5)
+    joint[1, 0] *= max(1.0 + mu * rho,       1e-5)
+    joint[0, 1] *= max(1.0 + lam * rho,      1e-5)
+    joint[1, 1] *= max(1.0 - rho,            1e-5)
+    joint /= joint.sum()
+
+    ph = float(np.tril(joint, -1).sum())
+    pd = float(np.trace(joint))
+    pa = float(np.triu(joint, +1).sum())
+
+    # Draw-propensity correction (dp=0.10, confirmed optimal by elbow test)
+    tr = DRAW_PROPENSITY / 2.0
+    ph2 = max(ph - tr, 0.0)
+    pa2 = max(pa - tr, 0.0)
+    pd2 = pd + DRAW_PROPENSITY
+    total = ph2 + pd2 + pa2
+
+    return [
+        round(ph2 / total * 100, 1),
+        round(pd2 / total * 100, 1),
+        round(pa2 / total * 100, 1),
+    ]
+
+
+# ── Neural net live probability ───────────────────────────────────────────────
+def nn_live(home_team: str, away_team: str, league: str,
+            minute: int, home_score: int, away_score: int) -> list | None:
+    """
+    Football_v4.pth inference for a live snapshot.
+    Returns [p_home%, p_draw%, p_away%] or None.
+
+    Lead-changes approximation: we don't have event-by-event data from
+    the API, so we use a simple heuristic consistent with training data
+    construction -- if both teams have scored, assume lead changed once.
+    """
+    if nn_model is None or nn_scaler is None or dc_lookup is None:
+        return None
+
+    goals_so_far = home_score + away_score
+    lead_changes = 1 if (home_score > 0 and away_score > 0) else 0
+
+    try:
+        feat = dc_lookup.build_feature_row(
+            home_team=home_team, away_team=away_team, league=league,
+            minute=minute, home_score=home_score, away_score=away_score,
+            lead_changes=lead_changes, goals_so_far=goals_so_far,
+            is_knockout=0, is_neutral_venue=0,
+        )
+    except Exception as e:
+        print(f"Feature build failed: {e}")
+        return None
+
+    X = nn_scaler.transform(np.array([feat], dtype="float32")).astype("float32")
+    with torch.no_grad():
+        logits = nn_model(torch.tensor(X)).numpy()[0]
+
+    # Temperature-scaled softmax
+    z = logits / nn_T
+    z -= z.max()
+    p = np.exp(z); p /= p.sum()
+    # p = [p_away, p_draw, p_home]  (class order from training: 0=away,1=draw,2=home)
+
+    return [
+        round(float(p[2]) * 100, 1),   # home
+        round(float(p[1]) * 100, 1),   # draw
+        round(float(p[0]) * 100, 1),   # away
+    ]
+
+
+# ── Routes ────────────────────────────────────────────────────────────────────
 @app.get("/", response_class=HTMLResponse)
 async def hub(request: Request):
-    return templates.TemplateResponse(request=request, name="index.html", context={"request": request})
+    return templates.TemplateResponse(
+        request=request, name="index.html", context={"request": request}
+    )
+
 
 @app.get("/match", response_class=HTMLResponse)
 async def match(request: Request):
     match_id = request.query_params.get("match_id")
-    
-    # SAFE FALLBACK: If no match_id is provided, automatically fetch the most recently completed PL match
+
+    # Auto-fetch the most recently completed PL match when no ID given
     if not match_id:
         match_id = get_last_completed_pl_match()
         if match_id:
-            # Redirect to explicitly show the fetched match ID in the URL
             return RedirectResponse(url=f"/match?match_id={match_id}")
 
-    # Base states
-    prior = None
-    likelihood = None
-    posterior = None
-    featured = {}
+    prior, posterior, featured = None, None, {}
 
-    home_name = None
-    away_name = None
-
-    # Fetch live match data
     if match_id:
         live_data = get_live_match_data(match_id)
-        if live_data and live_data.get("home_team") != "Unknown Home":
+        if live_data and live_data.get("home_team") not in (None, "Unknown Home"):
             home_name = live_data["home_team"]
             away_name = live_data["away_team"]
-            minute = live_data["current_minute"]
-            h_score = live_data["home_score"]
-            a_score = live_data["away_score"]
-            h_xg = live_data["live_xg"]["home"]
-            a_xg = live_data["live_xg"]["away"]
-            status = live_data["status"]
+            minute    = live_data["current_minute"]
+            h_score   = live_data["home_score"]
+            a_score   = live_data["away_score"]
+            status    = live_data["status"]
+
             featured = {
                 "home_name": home_name,
                 "away_name": away_name,
-                "minute": minute,
-                "status": status,
-                "h_score": h_score,
-                "a_score": a_score,
-                "h_xg": h_xg,
-                "a_xg": a_xg
+                "minute"   : minute,
+                "status"   : status,
+                "h_score"  : h_score,
+                "a_score"  : a_score,
+                "h_xg"     : live_data["live_xg"]["home"],
+                "a_xg"     : live_data["live_xg"]["away"],
             }
 
-    # If we successfully parsed a real match from the API, run the math engine
-    if home_name and away_name:
-        league_priors = priors_db.get("ENG-Premier League", {}).get("teams", {})
-        if not league_priors:
-            league_priors = priors_db.get("Premier League", {}).get("teams", {})
-            
-        if home_name in league_priors and away_name in league_priors:
-            h_alpha = league_priors[home_name].get('alpha', 1.0)
-            h_beta = league_priors[home_name].get('beta', 1.0)
-            a_alpha = league_priors[away_name].get('alpha', 1.0)
-            a_beta = league_priors[away_name].get('beta', 1.0)
+            # Panel 1 — DC pre-game (always computed when teams are known)
+            prior = dc_pregame(home_name, away_name, LEAGUE_KEY)
 
-            # Prior Calculation strictly from Model
-            probs, _, _ = generate_match_probabilities(h_alpha, a_beta, a_alpha, h_beta, gamma=1.0, rho=0.0)
-            prior = [round(probs["home_win"]*100, 1), round(probs["draw"]*100, 1), round(probs["away_win"]*100, 1)]
-            
-            # Likelihood (No lineup API yet -> None)
-            likelihood = None
-            
-            # Posterior Calculation strictly from Model
-            if featured.get("status") and featured.get("status") not in ["Not Started"]:
-                minute = featured["minute"]
-                if isinstance(minute, int): safe_min = minute
-                else:
-                    try: safe_min = int(str(minute).replace("'", ""))
-                    except: safe_min = 90
-                    
-                posterior_res = generate_live_in_play_odds(
-                    current_minute=safe_min,
-                    home_score=featured["h_score"],
-                    away_score=featured["a_score"],
-                    live_xg_h=featured["h_xg"],
-                    live_xg_a=featured["a_xg"],
-                    alpha_h_adj=h_alpha,
-                    beta_a_adj=a_beta,
-                    alpha_a_adj=a_alpha,
-                    beta_h_adj=h_beta,
-                    gamma=1.0, 
-                    rho=0.0
+            # Panel 2 — Neural net (only once the match has actually started)
+            safe_minute = 0
+            if isinstance(minute, int):
+                safe_minute = minute
+            else:
+                try:
+                    safe_minute = int(str(minute).replace("'", "").strip())
+                except (ValueError, TypeError):
+                    safe_minute = 0
+
+            match_started = (
+                status not in ("Not Started", "", None) and safe_minute > 0
+            )
+            if match_started:
+                posterior = nn_live(
+                    home_name, away_name, LEAGUE_KEY,
+                    safe_minute, h_score, a_score
                 )
-                
-                pos_probs = posterior_res["live_probabilities"]
-                posterior = [round(pos_probs["1"]*100, 1), round(pos_probs["X"]*100, 1), round(pos_probs["2"]*100, 1)]
 
     ctx = {
-        "request": request,
-        "current_league": "Premier League",
-        "featured": featured,
-        "prior": prior,
-        "likelihood": likelihood,
-        "posterior": posterior
+        "request"        : request,
+        "current_league" : "Premier League",
+        "featured"       : featured,
+        "prior"          : prior,
+        "posterior"      : posterior,
     }
-    return templates.TemplateResponse(request=request, name="match.html", context=ctx)
+    return templates.TemplateResponse(
+        request=request, name="match.html", context=ctx
+    )
+
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8001, reload=True)
