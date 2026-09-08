@@ -42,7 +42,7 @@ PRIORS_PATH = ROOT / "v4_priors.json"
 RESULTS_DIR = ROOT / "notebooks" / "results"
 RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
-HOLDOUT_SEASON = "2425"
+HOLDOUT_SEASON = "2526"
 
 # ── Imports from the project ──────────────────────────────────────────────────
 sys.path.insert(0, str(ROOT))

@@ -19,7 +19,7 @@ from scipy.optimize import minimize
 
 DB_PATH     = Path("v4_historical_data.sqlite")
 OUTPUT_PATH = Path("v4_backend/v4_priors.json")
-HOLDOUT_SEASON = "2425"   # Never touched during training
+HOLDOUT_SEASON = "2526"  # Never touched during training
 DECAY_RATE  = 0.0018      # e^(-xi * days_ago) -- same as before
 
 # ── Load training data ───────────────────────────────────────────────────────

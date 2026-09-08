@@ -42,3 +42,11 @@ but are NOT used going forward. The dashboard build starts from football_v2.pth.
 - Strength features: DCStrengthLookup (Dixon-Coles alpha/beta, global norm)
 - Fallback usage: 612 matches (11.3%)
 - Saved: data\processed\features_v4.parquet
+
+## V4.2 Phase 3 Step 1 — dataset built (2026-09-08 05:40 UTC)
+- Matches: 7,156  (seasons 2122-2324, holdout 2425 excluded)
+- Snapshots: 140,620
+- Outcome split: home 43.7% / draw 24.9% / away 31.4%
+- Strength features: DCStrengthLookup (Dixon-Coles alpha/beta, global norm)
+- Fallback usage: 0 matches (0.0%)
+- Saved: data\processed\features_v4.parquet

@@ -66,3 +66,22 @@
 - Log-loss: 1.0198
 - Draw recall: 0.473
 - Verdict: Draw recall improved but accuracy did not beat prior
+
+## V4.2 Phase 3 Step 2 — neural net trained (2026-09-08 05:42 UTC)
+- Architecture: 11→40→20→3  (1,363 params)
+- Strength features: Dixon-Coles alpha/beta (replaced FIFA rank)
+- Warm-started: True
+- Temperature T: 1.008
+- Test accuracy: 0.713  (baseline 0.436)
+- Test log-loss: 0.6002
+- Draw recall: 0.594  |  Draw precision: 0.575
+- Saved: v4_backend/models/football_v4.pth
+
+## V4.2 Phase 3 Step 3 � holdout validation (2026-09-08 05:43 UTC)
+- Model: football_v4.pth (Dixon-Coles strength features)
+- Holdout season: 2526 (1,752 matches)
+- Evaluation: pre-game only (minute=0, score 0-0)
+- Overall accuracy: 0.493  (baseline 0.440)
+- Log-loss: 1.0167
+- Draw recall: 0.070
+- Verdict: Neither metric improved -- investigate before proceeding
