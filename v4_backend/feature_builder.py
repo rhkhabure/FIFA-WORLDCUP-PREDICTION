@@ -55,6 +55,10 @@ TEAM_NAME_ALIASES = {
     "Man City"               : "Manchester City",
     "Man United"             : "Manchester United",
     "Man Utd"                : "Manchester United",
+    "West Ham United" : "West Ham",
+    "Leeds United"    : "Leeds",
+    "Newcastle United": "Newcastle United",  # already correct, documented
+    "Manchester United": "Manchester United",  # already correct, documented
 }
 
 
