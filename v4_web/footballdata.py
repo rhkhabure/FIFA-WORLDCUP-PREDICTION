@@ -66,13 +66,15 @@ def _fetch(endpoint: str, params: dict | None = None) -> dict:
 
 def get_last_completed_pl_match() -> int | None:
     """
-    Returns the match ID of the most recently completed Premier League match.
-    Used as a fallback when no match_id is supplied to the /match route.
+    Returns the match ID of the most recently completed Premier League
+    2025/26 match. Must pass season=2025 explicitly -- without it,
+    football-data.org returns FA Cup matches labelled as PL.
     """
     data = _fetch(f"competitions/{PL_CODE}/matches",
-                  {"status": "FINISHED", "limit": 3})
+                  {"status": "FINISHED", "season": 2025})
     matches = data.get("matches", [])
     if matches:
+        # Matches come back in chronological order -- last is most recent
         return matches[-1]["id"]
     return None
 
