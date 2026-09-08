@@ -27,7 +27,7 @@ from scipy.stats import poisson
 
 DB_PATH          = Path("v4_historical_data.sqlite")
 PRIORS_PATH      = Path("v4_backend/v4_priors.json")
-HOLDOUT          = "2425"
+HOLDOUT = "2526"
 DRAW_PROPENSITY  = 0.10  # tuned by grid search on training data
 MAX_GOALS        = 8
 
