@@ -31,14 +31,14 @@ def _get_api_key() -> str:
             with open(env_path) as f:
                 for line in f:
                     line = line.strip()
-                    if line.startswith("API_FOOTBALL_KEY="):
+                    if line.startswith("FOOTBALLDATA_ORG_KEY="):
                         return line.split("=", 1)[1].strip()
         here = os.path.dirname(here)
-    return os.environ.get("API_FOOTBALL_KEY", "")
-
+    return os.environ.get("FOOTBALLDATA_ORG_KEY", "")
 
 API_KEY = _get_api_key()
 
+print("DEBUG footballdata.py loaded, API_KEY:", API_KEY[:8] if API_KEY else "MISSING")
 
 def _fetch(endpoint: str, params: dict | None = None) -> dict:
     url = f"{BASE_URL}/{endpoint.lstrip('/')}"
@@ -65,16 +65,12 @@ def _fetch(endpoint: str, params: dict | None = None) -> dict:
 # ── Public helpers ─────────────────────────────────────────────────────────────
 
 def get_last_completed_pl_match() -> int | None:
-    """
-    Returns the match ID of the most recently completed Premier League
-    2025/26 match. Must pass season=2025 explicitly -- without it,
-    football-data.org returns FA Cup matches labelled as PL.
-    """
     data = _fetch(f"competitions/{PL_CODE}/matches",
-                  {"status": "FINISHED", "season": 2025})
+                  {"status": "FINISHED", "season": "2025"})
+    print("DEBUG last_match response keys:", list(data.keys()), 
+          "message:", data.get("message", "none"))
     matches = data.get("matches", [])
     if matches:
-        # Matches come back in chronological order -- last is most recent
         return matches[-1]["id"]
     return None
 
