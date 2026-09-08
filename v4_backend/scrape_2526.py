@@ -62,20 +62,30 @@ def main():
     print()
     conn.close()
 
-    # Scrape
+    # Scrape per-league so we can see which one hangs
     print(f"Downloading {NEW_SEASON} from Understat via soccerdata...")
-    try:
-        understat = sd.Understat(leagues=TARGET_LEAGUES, seasons=[SCRAPE_SEASON])
-        df_raw = understat.read_schedule()
-    except Exception as e:
-        raise RuntimeError(f"soccerdata failed: {e}") from e
+    all_dfs = []
+    for league in TARGET_LEAGUES:
+        print(f"  Scraping {league}...", flush=True)
+        try:
+            understat = sd.Understat(leagues=[league], seasons=[SCRAPE_SEASON], no_cache=True)
+            df_raw = understat.read_schedule()
+            df_raw = df_raw.reset_index()
+            if isinstance(df_raw.columns, pd.MultiIndex):
+                df_raw.columns = ["_".join(str(c) for c in col).strip() for col in df_raw.columns]
+        except Exception as e:
+            print(f"  {league}: FAILED - {e} -- skipping", flush=True)
+            continue
+        print(f"  {league}: {len(df_raw)} rows retrieved", flush=True)
+        all_dfs.append(df_raw)
 
-    df = df_raw.reset_index()
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = ["_".join(str(c) for c in col).strip() for col in df.columns]
+    if not all_dfs:
+        raise RuntimeError("No data retrieved for any league.")
 
-    print(f"Raw columns: {df.columns.tolist()}\n")
-
+    df = pd.concat(all_dfs, ignore_index=True)
+    print(f"\nRaw columns: {df.columns.tolist()}\n")
+    
+    
     # Resolve columns
     rename = {}
     missing = []
