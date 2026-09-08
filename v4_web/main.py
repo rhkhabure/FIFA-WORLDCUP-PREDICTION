@@ -205,11 +205,15 @@ async def hub(request: Request):
 async def match(request: Request):
     match_id = request.query_params.get("match_id")
 
-    # Auto-fetch the most recently completed PL match when no ID given
+    # Auto-fetch most recently completed PL match when no ID given
     if not match_id:
-        match_id = get_last_completed_pl_match()
-        if match_id:
-            return RedirectResponse(url=f"/match?match_id={match_id}")
+        found_id = get_last_completed_pl_match()
+        if found_id:
+            return RedirectResponse(url=f"/match?match_id={found_id}", status_code=302)
+        # No match found -- render empty state
+        ctx = {"request": request, "current_league": "Premier League",
+               "featured": {}, "prior": None, "posterior": None}
+        return templates.TemplateResponse(request=request, name="match.html", context=ctx)
 
     prior, posterior, featured = None, None, {}
 

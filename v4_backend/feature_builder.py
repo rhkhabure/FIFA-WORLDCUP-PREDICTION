@@ -48,6 +48,13 @@ TEAM_NAME_ALIASES = {
     "PSG"                : "Paris Saint Germain", # abbreviation
     "Tottenham Hotspur"  : "Tottenham",           # Sofascore vs Understat
     "Leicester City"     : "Leicester",           # Sofascore vs Understat
+    "Brighton & Hove Albion" : "Brighton",
+    "Bournemouth"            : "Bournemouth",   # documented -- already matches priors
+    "Wolves"                 : "Wolverhampton Wanderers",
+    "Spurs"                  : "Tottenham",
+    "Man City"               : "Manchester City",
+    "Man United"             : "Manchester United",
+    "Man Utd"                : "Manchester United",
 }
 
 
