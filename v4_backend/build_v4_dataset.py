@@ -36,7 +36,7 @@ RESULTS_DIR = Path("results")
 for d in (OUT_DIR, RESULTS_DIR):
     d.mkdir(parents=True, exist_ok=True)
 
-HOLDOUT_SEASON = "2425"   # never touched -- reserved for validation
+HOLDOUT_SEASON = "2526"   # never touched -- reserved for validation
 
 # ── Feature columns (must match neural net's FEATURE_COLS exactly) ────────────
 FEATURE_COLS = [
