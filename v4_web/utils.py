@@ -193,6 +193,12 @@ _CREST_IDS: dict[str, int] = {
     "Bayern Munich"           : 5,
     "Borussia Dortmund"       : 4,
     "Paris Saint Germain"     : 524,
+    # Add these inside _CREST_IDS dict:
+    "Spurs"          : 73,    # FPL shorthand for Tottenham
+    "Man Utd"        : 66,    # FPL shorthand for Manchester United
+    "Man City"       : 65,    # FPL shorthand for Manchester City
+    "Coventry"       : 1076,  # Championship side -- may 404, graceful no-op
+    "Coventry City"  : 1076,
 }
 _CREST_BASE = "https://crests.football-data.org"
 
