@@ -241,6 +241,7 @@ async def match(request: Request):
             away_color=away_colour,
             home_team=home_name,
             away_team=away_name,
+            home_crest_url="",   # FPL doesn't provide crest URLs
         )
 
     elif match_id:
@@ -263,6 +264,7 @@ async def match(request: Request):
                 "h_xg"      : live_data["live_xg"]["home"],
                 "a_xg"      : live_data["live_xg"]["away"],
                 "fixture_id": int(match_id),
+                "venue"     : live_data.get("venue", ""),
             }
 
             prior = dc_pregame(home_name, away_name, LEAGUE_KEY)
@@ -291,6 +293,7 @@ async def match(request: Request):
                 away_color=away_colour,
                 home_team=home_name,
                 away_team=away_name,
+                home_crest_url=live_data.get("home_crest", ""),
             )
 
     # Upcoming fixtures from FPL (no key, free, EAT times)

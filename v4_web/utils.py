@@ -367,45 +367,100 @@ def generate_pitch_svg_vertical(formation="4-3-3", team_color="#14b8a6",
 def generate_pitch_svg_horizontal(home_formation="4-3-3", away_formation="4-3-3",
                                   home_color="#14b8a6", away_color="#f43f5e",
                                   home_players=None, away_players=None,
-                                  home_team="Home", away_team="Away"):
-    """Full horizontal pitch for the Live Match page."""
+                                  home_team="Home", away_team="Away",
+                                  home_crest_url: str = ""):
+    """
+    Full horizontal pitch for the Live Match page.
+
+    Changes from original:
+    - Grass green pitch (#1a6b2e) instead of dark background
+    - White pitch markings instead of slate
+    - Translucent home-team crest watermarked at centre circle
+      (only when home_crest_url is supplied -- graceful no-op otherwise)
+    - Player dots now have a subtle drop-shadow glow
+    - Player name text is white-on-dark for legibility on green
+    """
     if home_players is None or len(home_players) == 0:
         home_players = get_squad_for_team(home_team)
     if away_players is None or len(away_players) == 0:
         away_players = get_squad_for_team(away_team)
 
-    W, H = 160, 100
+    W, H = 320, 200   # doubled from 160x100 for better player label legibility
 
-    svg = (f'<svg width="100%" style="max-width:100%;display:block;margin:0 auto;"'
-           f' viewBox="0 0 {W} {H}" xmlns="http://www.w3.org/2000/svg">'
-           '<defs>'
-           '<filter id="glow-h" x="-50%" y="-50%" width="200%" height="200%">'
-           '<feGaussianBlur stdDeviation="1.2" result="blur"/>'
-           '<feComposite in="SourceGraphic" in2="blur" operator="over"/>'
-           '</filter>'
-           '<filter id="glow-a" x="-50%" y="-50%" width="200%" height="200%">'
-           '<feGaussianBlur stdDeviation="1.2" result="blur"/>'
-           '<feComposite in="SourceGraphic" in2="blur" operator="over"/>'
-           '</filter>'
-           '</defs>'
-           f'<rect width="{W}" height="{H}" fill="#0b0f19" rx="6" ry="6"'
-           ' stroke="#1e293b" stroke-width="1.5"/>'
-           '<rect x="5" y="5" width="150" height="90" fill="none"'
-           ' stroke="#1e293b" stroke-width="0.75"/>'
-           '<line x1="80" y1="5" x2="80" y2="95" stroke="#1e293b" stroke-width="0.75"/>'
-           '<circle cx="80" cy="50" r="14" fill="none" stroke="#1e293b" stroke-width="0.75"/>'
-           '<circle cx="80" cy="50" r="1" fill="#334155"/>'
-           '<rect x="5" y="22" width="22" height="56" fill="none"'
-           ' stroke="#1e293b" stroke-width="0.75"/>'
-           '<rect x="5" y="36" width="8" height="28" fill="none"'
-           ' stroke="#1e293b" stroke-width="0.75"/>'
-           '<circle cx="16" cy="50" r="1" fill="#334155"/>'
-           '<rect x="133" y="22" width="22" height="56" fill="none"'
-           ' stroke="#1e293b" stroke-width="0.75"/>'
-           '<rect x="147" y="36" width="8" height="28" fill="none"'
-           ' stroke="#1e293b" stroke-width="0.75"/>'
-           '<circle cx="144" cy="50" r="1" fill="#334155"/>')
+    svg = (
+        f'<svg width="100%" style="max-width:100%;display:block;margin:0 auto;"'
+        f' viewBox="0 0 {W} {H}" xmlns="http://www.w3.org/2000/svg"'
+        f' xmlns:xlink="http://www.w3.org/1999/xlink">'
 
+        # ── Defs ──────────────────────────────────────────────────────────────
+        '<defs>'
+        # Subtle grass stripe pattern (alternating shades)
+        '<pattern id="grass" x="0" y="0" width="20" height="200"'
+        ' patternUnits="userSpaceOnUse">'
+        '<rect width="10" height="200" fill="#1a6b2e"/>'
+        '<rect x="10" width="10" height="200" fill="#1d7533"/>'
+        '</pattern>'
+        # Player glow filters
+        '<filter id="glow-h" x="-80%" y="-80%" width="260%" height="260%">'
+        '<feGaussianBlur stdDeviation="2" result="blur"/>'
+        '<feComposite in="SourceGraphic" in2="blur" operator="over"/>'
+        '</filter>'
+        '<filter id="glow-a" x="-80%" y="-80%" width="260%" height="260%">'
+        '<feGaussianBlur stdDeviation="2" result="blur"/>'
+        '<feComposite in="SourceGraphic" in2="blur" operator="over"/>'
+        '</filter>'
+        # Clip path for rounded pitch boundary
+        '<clipPath id="pitch-clip">'
+        '<rect x="8" y="8" width="304" height="184" rx="4"/>'
+        '</clipPath>'
+        '</defs>'
+
+        # ── Pitch surface ──────────────────────────────────────────────────────
+        '<rect width="320" height="200" fill="#1a6b2e" rx="6" ry="6"/>'
+        '<rect x="8" y="8" width="304" height="184" fill="url(#grass)" clip-path="url(#pitch-clip)"/>'
+
+        # ── Home crest watermark (translucent, centred on pitch) ────────────
+    )
+
+    if home_crest_url:
+        # Semi-transparent crest at the centre circle -- opacity 0.07 gives
+        # a barely-there watermark visible enough to read, not so loud it
+        # competes with the players
+        svg += (
+            f'<image href="{home_crest_url}" '
+            f'x="{W//2 - 24}" y="{H//2 - 24}" width="48" height="48" '
+            f'opacity="0.12" clip-path="url(#pitch-clip)"/>'
+        )
+
+    # ── Pitch markings (white) ────────────────────────────────────────────────
+    svg += (
+        # Outer boundary
+        '<rect x="8" y="8" width="304" height="184" fill="none"'
+        ' stroke="white" stroke-width="1.2" rx="4"/>'
+        # Halfway line
+        '<line x1="160" y1="8" x2="160" y2="192" stroke="white" stroke-width="1"/>'
+        # Centre circle
+        '<circle cx="160" cy="100" r="28" fill="none" stroke="white" stroke-width="1"/>'
+        '<circle cx="160" cy="100" r="2" fill="white"/>'
+        # Home penalty area (left)
+        '<rect x="8" y="44" width="44" height="112" fill="none" stroke="white" stroke-width="1"/>'
+        # Home goal area (left)
+        '<rect x="8" y="72" width="16" height="56" fill="none" stroke="white" stroke-width="1"/>'
+        # Home penalty spot
+        '<circle cx="36" cy="100" r="2" fill="white"/>'
+        # Home goal
+        '<rect x="2" y="82" width="6" height="36" fill="none" stroke="white" stroke-width="1"/>'
+        # Away penalty area (right)
+        '<rect x="268" y="44" width="44" height="112" fill="none" stroke="white" stroke-width="1"/>'
+        # Away goal area (right)
+        '<rect x="296" y="72" width="16" height="56" fill="none" stroke="white" stroke-width="1"/>'
+        # Away penalty spot
+        '<circle cx="284" cy="100" r="2" fill="white"/>'
+        # Away goal
+        '<rect x="312" y="82" width="6" height="36" fill="none" stroke="white" stroke-width="1"/>'
+    )
+
+    # ── Players ───────────────────────────────────────────────────────────────
     def parse_formation(fmt_str):
         if not fmt_str or fmt_str == "0-0": return [1, 4, 3, 3]
         return [1] + [int(x) for x in fmt_str.split("-")]
@@ -413,42 +468,48 @@ def generate_pitch_svg_horizontal(home_formation="4-3-3", away_formation="4-3-3"
     h_lines = parse_formation(home_formation)
     a_lines = parse_formation(away_formation)
 
+    # Home team (left → right), GK near left goal
     if h_lines and home_players:
         x_steps = len(h_lines)
         p_idx = 0
         for col_idx, num_players in enumerate(h_lines):
-            x = 12 + (58 / max(1, x_steps - 1)) * col_idx
+            x = 24 + (116 / max(1, x_steps - 1)) * col_idx
             for row_idx in range(num_players):
-                y = 8 + (84 / (num_players + 1)) * (row_idx + 1)
+                y = 14 + (172 / (num_players + 1)) * (row_idx + 1)
                 name = home_players[p_idx] if p_idx < len(home_players) else f"H{p_idx+1}"
                 glow = 'filter="url(#glow-h)"' if (p_idx % 3 == 0) else ""
-                svg += (f'<a href="/player?name={name}&team={home_team}"'
-                        f' style="cursor:pointer;">'
-                        f'<circle cx="{x:.1f}" cy="{y:.1f}" r="3.2"'
-                        f' fill="{home_color}" stroke="#0b0f19" stroke-width="0.8" {glow}/>'
-                        f'<text x="{x:.1f}" y="{y+6:.1f}" fill="#94a3b8"'
-                        f' font-family="\'JetBrains Mono\',monospace"'
-                        f' font-size="2.6px" text-anchor="middle">{name}</text>'
-                        f'</a>')
+                svg += (
+                    f'<a href="/player?name={name}&team={home_team}" style="cursor:pointer;">'
+                    f'<circle cx="{x:.1f}" cy="{y:.1f}" r="6"'
+                    f' fill="{home_color}" stroke="white" stroke-width="1.2" {glow}/>'
+                    f'<text x="{x:.1f}" y="{y+11:.1f}" fill="white"'
+                    f' font-family="\'JetBrains Mono\',monospace"'
+                    f' font-size="5px" text-anchor="middle"'
+                    f' style="text-shadow:0 0 3px rgba(0,0,0,0.8)">{name}</text>'
+                    f'</a>'
+                )
                 p_idx += 1
 
+    # Away team (right → left), GK near right goal
     if a_lines and away_players:
         x_steps = len(a_lines)
         p_idx = 0
         for col_idx, num_players in enumerate(a_lines):
-            x = 148 - (58 / max(1, x_steps - 1)) * col_idx
+            x = 296 - (116 / max(1, x_steps - 1)) * col_idx
             for row_idx in range(num_players):
-                y = 8 + (84 / (num_players + 1)) * (row_idx + 1)
+                y = 14 + (172 / (num_players + 1)) * (row_idx + 1)
                 name = away_players[p_idx] if p_idx < len(away_players) else f"A{p_idx+1}"
                 glow = 'filter="url(#glow-a)"' if (p_idx % 4 == 0) else ""
-                svg += (f'<a href="/player?name={name}&team={away_team}"'
-                        f' style="cursor:pointer;">'
-                        f'<circle cx="{x:.1f}" cy="{y:.1f}" r="3.2"'
-                        f' fill="{away_color}" stroke="#0b0f19" stroke-width="0.8" {glow}/>'
-                        f'<text x="{x:.1f}" y="{y+6:.1f}" fill="#94a3b8"'
-                        f' font-family="\'JetBrains Mono\',monospace"'
-                        f' font-size="2.6px" text-anchor="middle">{name}</text>'
-                        f'</a>')
+                svg += (
+                    f'<a href="/player?name={name}&team={away_team}" style="cursor:pointer;">'
+                    f'<circle cx="{x:.1f}" cy="{y:.1f}" r="6"'
+                    f' fill="{away_color}" stroke="white" stroke-width="1.2" {glow}/>'
+                    f'<text x="{x:.1f}" y="{y+11:.1f}" fill="white"'
+                    f' font-family="\'JetBrains Mono\',monospace"'
+                    f' font-size="5px" text-anchor="middle"'
+                    f' style="text-shadow:0 0 3px rgba(0,0,0,0.8)">{name}</text>'
+                    f'</a>'
+                )
                 p_idx += 1
 
     svg += "</svg>"
