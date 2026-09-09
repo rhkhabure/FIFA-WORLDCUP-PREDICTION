@@ -31,11 +31,10 @@ def _get_api_key() -> str:
             with open(env_path) as f:
                 for line in f:
                     line = line.strip()
-                    if line.startswith("API_FOOTBALL_KEY="):
+                    if line.startswith("FOOTBALLDATA_ORG_KEY="):
                         return line.split("=", 1)[1].strip()
         here = os.path.dirname(here)
-    return os.environ.get("API_FOOTBALL_KEY", "")
-
+    return os.environ.get("FOOTBALLDATA_ORG_KEY", "")
 
 API_KEY = _get_api_key()
 
