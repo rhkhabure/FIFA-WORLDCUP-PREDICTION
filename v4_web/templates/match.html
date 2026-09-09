@@ -223,6 +223,24 @@
         </div>
     </div>
 
+    <!-- WIN PROBABILITY TIMELINE -->
+    {% if timeline_svg %}
+    <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl">
+        <div class="flex items-center justify-between mb-2">
+            <span class="text-xs font-mono text-slate-400 uppercase tracking-widest">
+                Win Probability Timeline
+            </span>
+            <span class="text-[10px] font-mono text-slate-600">
+                Neural net · every 5 min + goal events
+            </span>
+        </div>
+        {{ timeline_svg | safe }}
+        <p class="text-[10px] text-slate-600 font-mono text-center mt-1">
+            Vertical lines mark goal events · dashed line = draw probability
+        </p>
+    </div>
+    {% endif %}
+
     <!-- PITCH -->
     {% if pitch_svg %}
     <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl">

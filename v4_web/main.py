@@ -38,6 +38,7 @@ from footballdata import get_live_match_data, get_last_completed_pl_match
 from utils import (generate_pitch_svg_horizontal, get_theme_for_team,
                    get_formation_for_team, get_squad_for_team,
                    get_crest_url)
+from timeline import build_match_timeline_svg
 from fpl import get_upcoming_fixtures
 from v4_backend.feature_builder import DCStrengthLookup, TEAM_NAME_ALIASES
 
@@ -196,9 +197,10 @@ async def match(request: Request):
         return templates.TemplateResponse(request=request, name="match.html", context=ctx)
 
     prior, posterior, featured = None, None, {}
-    pitch_svg = ""
-    home_colour = "#14b8a6"
-    away_colour = "#f43f5e"
+    pitch_svg    = ""
+    timeline_svg = ""
+    home_colour  = "#14b8a6"
+    away_colour  = "#f43f5e"
     home_formation = "4-3-3"
     away_formation = "4-3-3"
 
@@ -280,8 +282,21 @@ async def match(request: Request):
                 posterior = nn_live(home_name, away_name, LEAGUE_KEY,
                                     safe_minute, h_score, a_score)
 
-            # Pitch -- use real kit colours and typical formation
-            home_theme     = get_theme_for_team(home_name)
+            # Win probability timeline (finished matches with goal data only)
+            timeline_svg = ""
+            if status in ("Finished", "FT") and live_data.get("events"):
+                timeline_svg = build_match_timeline_svg(
+                    home_name=home_name,
+                    away_name=away_name,
+                    league=LEAGUE_KEY,
+                    raw_goals=live_data["events"],
+                    home_colour=home_colour,
+                    away_colour=away_colour,
+                    dc_lookup=dc_lookup,
+                    nn_model=nn_model,
+                    nn_scaler=nn_scaler,
+                    nn_T=nn_T,
+                )
             away_theme     = get_theme_for_team(away_name)
             home_colour    = home_theme["primary"]
             away_colour    = away_theme["primary"]
@@ -309,6 +324,7 @@ async def match(request: Request):
         "prior"          : prior,
         "posterior"      : posterior,
         "pitch_svg"      : pitch_svg,
+        "timeline_svg"   : timeline_svg,
         "fixtures"       : fixtures,
         "home_colour"    : home_colour,
         "away_colour"    : away_colour,
