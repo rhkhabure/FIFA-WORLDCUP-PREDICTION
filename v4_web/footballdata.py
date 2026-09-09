@@ -38,7 +38,7 @@ def _get_api_key() -> str:
 
 API_KEY = _get_api_key()
 
-print("DEBUG footballdata.py loaded, API_KEY:", API_KEY[:8] if API_KEY else "MISSING")
+
 
 def _fetch(endpoint: str, params: dict | None = None) -> dict:
     url = f"{BASE_URL}/{endpoint.lstrip('/')}"

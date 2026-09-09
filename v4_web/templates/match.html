@@ -158,9 +158,30 @@
         </div>
     </div>
 
-    <!-- PITCH VISUALISATION (next design phase) -->
-    <!-- utils.py already has generate_pitch_svg_horizontal() ready.
-         Wire it in main.py once the 2-panel layout is confirmed. -->
+    <!-- PITCH -->
+    {% if pitch_svg %}
+    <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl">
+        <div class="flex items-center justify-between mb-3">
+            <span class="text-xs font-mono text-slate-400 uppercase tracking-widest">
+                Starting Lineups
+            </span>
+            <div class="flex items-center gap-4 text-xs font-mono">
+                <span class="flex items-center gap-1.5">
+                    <span class="inline-block w-2.5 h-2.5 rounded-full bg-teal-500"></span>
+                    {{ featured.home_name }}
+                </span>
+                <span class="flex items-center gap-1.5">
+                    <span class="inline-block w-2.5 h-2.5 rounded-full bg-rose-500"></span>
+                    {{ featured.away_name }}
+                </span>
+            </div>
+        </div>
+        {{ pitch_svg | safe }}
+        <p class="text-[10px] text-slate-600 font-mono text-center mt-2">
+            Default lineups shown · Live lineup sync coming soon
+        </p>
+    </div>
+    {% endif %}
 
 </div>
 

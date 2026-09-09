@@ -30,6 +30,7 @@ import uvicorn
 ROOT = Path(__file__).resolve().parent
 sys.path.append(str(ROOT.parent))
 
+from utils import generate_pitch_svg_horizontal, get_theme_for_team
 from footballdata import get_live_match_data, get_last_completed_pl_match
 from v4_backend.feature_builder import DCStrengthLookup   # noqa: E402
 
@@ -265,12 +266,23 @@ async def match(request: Request):
                     safe_minute, h_score, a_score
                 )
 
+            # Pitch SVG -- use team theme colours, fall back to defaults
+            home_theme = get_theme_for_team(home_name)
+            away_theme = get_theme_for_team(away_name)
+            pitch_svg  = generate_pitch_svg_horizontal(
+                home_color=home_theme["primary"],
+                away_color=away_theme["primary"],
+                home_team=home_name,
+                away_team=away_name,
+            )
+
     ctx = {
         "request"        : request,
         "current_league" : "Premier League",
         "featured"       : featured,
         "prior"          : prior,
         "posterior"      : posterior,
+        "pitch_svg"      : pitch_svg if featured else "",
     }
     return templates.TemplateResponse(
         request=request, name="match.html", context=ctx
