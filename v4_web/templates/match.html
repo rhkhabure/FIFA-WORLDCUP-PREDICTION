@@ -35,7 +35,7 @@
         <div class="text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-2">
             Upcoming · Premier League · All times EAT (UTC+3)
         </div>
-        <div class="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+        <div class="fixtures-strip flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
             {% for f in fixtures %}
             <a href="/match?match_id={{ f.match_id }}"
                class="flex-none border rounded-lg px-3 py-2 text-center min-w-[130px]
@@ -243,8 +243,28 @@
 
 <style>
 body { background-color: #0b0f19 !important; }
-/* Hide scrollbar on fixtures strip while keeping scroll */
 .scrollbar-hide::-webkit-scrollbar { display: none; }
 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 </style>
+<script>
+// Persist the fixtures strip scroll position across page navigations.
+// On load: restore the saved position.
+// On fixture click: save the current position before navigating.
+(function () {
+    const KEY = "fixtures-scroll";
+    const strip = document.querySelector(".fixtures-strip");
+    if (!strip) return;
+
+    // Restore saved scroll position immediately (before paint)
+    const saved = sessionStorage.getItem(KEY);
+    if (saved !== null) strip.scrollLeft = parseInt(saved, 10);
+
+    // Save position when any fixture link is clicked
+    strip.querySelectorAll("a").forEach(function (link) {
+        link.addEventListener("click", function () {
+            sessionStorage.setItem(KEY, strip.scrollLeft);
+        });
+    });
+})();
+</script>
 {% endblock %}

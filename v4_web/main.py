@@ -99,6 +99,11 @@ templates = Jinja2Templates(directory=ROOT / "templates")
 
 # ── DC pre-game ───────────────────────────────────────────────────────────────
 def dc_pregame(home_team: str, away_team: str, league: str) -> list | None:
+    """
+    Dixon-Coles bivariate Poisson with draw_propensity correction.
+    Returns [p_home%, p_draw%, p_away%] rounded to 1 dp, or None.
+    Uses bottom-quartile fallback for teams not in priors (promoted clubs etc.)
+    """
     if not priors_db:
         return None
     league_data = priors_db.get(league)
@@ -106,12 +111,19 @@ def dc_pregame(home_team: str, away_team: str, league: str) -> list | None:
         return None
     teams  = league_data["teams"]
     meta   = league_data["meta"]
+
+    # Apply alias table -- FPL uses different names than Understat
     home_key = TEAM_NAME_ALIASES.get(home_team, home_team)
     away_key = TEAM_NAME_ALIASES.get(away_team, away_team)
-    if home_key not in teams or away_key not in teams:
-        return None
-    h     = teams[home_key]
-    a     = teams[away_key]
+
+    # Bottom-quartile fallback for teams not in priors (promoted/cup sides)
+    all_alpha = [v["alpha"] for v in teams.values()]
+    all_beta  = [v["beta"]  for v in teams.values()]
+    q25_alpha = float(np.percentile(all_alpha, 25))
+    q75_beta  = float(np.percentile(all_beta,  75))
+
+    h = teams.get(home_key, {"alpha": q25_alpha, "beta": q75_beta})
+    a = teams.get(away_key, {"alpha": q25_alpha, "beta": q75_beta})
     gamma = meta.get("gamma_home_advantage", 1.25)
     rho   = meta.get("rho_draw_correction",  0.0)
     lam   = np.clip(h["alpha"] * a["beta"] * gamma, 1e-5, 15.0)
