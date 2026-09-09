@@ -116,14 +116,15 @@ def get_upcoming_fixtures(max_fixtures: int = 10) -> list[dict]:
             ko_display = "TBC"
 
         result.append({
-            "fixture_id"  : f.get("id"),
-            "home"        : home_name,
-            "away"        : away_name,
-            "kickoff_utc" : ko_raw or "",
-            "kickoff_eat" : ko_display,
-            "gameweek"    : f.get("event"),
-            "started"     : f.get("started", False),
-            "finished"    : f.get("finished", False),
+            "fixture_id"   : f.get("id"),          # FPL internal ID (for highlighting)
+            "match_id"     : f.get("code"),          # football-data.org match code
+            "home"         : home_name,
+            "away"         : away_name,
+            "kickoff_utc"  : ko_raw or "",
+            "kickoff_eat"  : ko_display,
+            "gameweek"     : f.get("event"),
+            "started"      : f.get("started", False),
+            "finished"     : f.get("finished", False),
         })
 
     return result

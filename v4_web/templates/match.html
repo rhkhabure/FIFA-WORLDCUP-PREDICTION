@@ -37,10 +37,10 @@
         </div>
         <div class="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
             {% for f in fixtures %}
-            <a href="/match?match_id={{ f.fixture_id }}"
+            <a href="/match?match_id={{ f.match_id }}"
                class="flex-none border rounded-lg px-3 py-2 text-center min-w-[130px]
                       transition cursor-pointer
-                      {% if f.fixture_id == featured.fixture_id %}
+                      {% if f.match_id|string == featured.fixture_id|string %}
                           border-cyan-700 bg-cyan-950/40 text-cyan-300
                       {% else %}
                           border-slate-700 bg-slate-900/40 text-slate-300
