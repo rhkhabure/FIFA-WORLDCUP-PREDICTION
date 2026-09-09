@@ -36,7 +36,8 @@ sys.path.append(str(ROOT.parent))
 
 from footballdata import get_live_match_data, get_last_completed_pl_match
 from utils import (generate_pitch_svg_horizontal, get_theme_for_team,
-                   get_formation_for_team, get_squad_for_team)
+                   get_formation_for_team, get_squad_for_team,
+                   get_crest_url)
 from fpl import get_upcoming_fixtures
 from v4_backend.feature_builder import DCStrengthLookup, TEAM_NAME_ALIASES
 
@@ -241,7 +242,7 @@ async def match(request: Request):
             away_color=away_colour,
             home_team=home_name,
             away_team=away_name,
-            home_crest_url="",   # FPL doesn't provide crest URLs
+            home_crest_url=get_crest_url(home_name),
         )
 
     elif match_id:
@@ -293,7 +294,9 @@ async def match(request: Request):
                 away_color=away_colour,
                 home_team=home_name,
                 away_team=away_name,
-                home_crest_url=live_data.get("home_crest", ""),
+                home_crest_url=get_crest_url(
+                    home_name, live_data.get("home_crest", "")
+                ),
             )
 
     # Upcoming fixtures from FPL (no key, free, EAT times)
