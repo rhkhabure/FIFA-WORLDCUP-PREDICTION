@@ -109,11 +109,16 @@ def dc_pregame(home_team: str, away_team: str, league: str) -> list | None:
     teams = league_data["teams"]
     meta  = league_data["meta"]
 
-    if home_team not in teams or away_team not in teams:
+    # Apply alias table -- same lookup the DCStrengthLookup class uses
+    from v4_backend.feature_builder import TEAM_NAME_ALIASES
+    home_key = TEAM_NAME_ALIASES.get(home_team, home_team)
+    away_key = TEAM_NAME_ALIASES.get(away_team, away_team)
+
+    if home_key not in teams or away_key not in teams:
         return None
 
-    h = teams[home_team]
-    a = teams[away_team]
+    h = teams[home_key]
+    a = teams[away_key]
     gamma = meta.get("gamma_home_advantage", 1.25)
     rho   = meta.get("rho_draw_correction",  0.0)
 
