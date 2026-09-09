@@ -31,13 +31,13 @@ def _get_api_key() -> str:
             with open(env_path) as f:
                 for line in f:
                     line = line.strip()
-                    if line.startswith("FOOTBALLDATA_ORG_KEY="):
+                    if line.startswith("API_FOOTBALL_KEY="):
                         return line.split("=", 1)[1].strip()
         here = os.path.dirname(here)
-    return os.environ.get("FOOTBALLDATA_ORG_KEY", "")
+    return os.environ.get("API_FOOTBALL_KEY", "")
+
 
 API_KEY = _get_api_key()
-
 
 
 def _fetch(endpoint: str, params: dict | None = None) -> dict:
@@ -65,12 +65,16 @@ def _fetch(endpoint: str, params: dict | None = None) -> dict:
 # ── Public helpers ─────────────────────────────────────────────────────────────
 
 def get_last_completed_pl_match() -> int | None:
+    """
+    Returns the match ID of the most recently completed Premier League
+    2025/26 match. Must pass season=2025 explicitly -- without it,
+    football-data.org returns FA Cup matches labelled as PL.
+    """
     data = _fetch(f"competitions/{PL_CODE}/matches",
-                  {"status": "FINISHED", "season": "2025"})
-    print("DEBUG last_match response keys:", list(data.keys()), 
-          "message:", data.get("message", "none"))
+                  {"status": "FINISHED", "season": 2025})
     matches = data.get("matches", [])
     if matches:
+        # Matches come back in chronological order -- last is most recent
         return matches[-1]["id"]
     return None
 
@@ -150,6 +154,11 @@ def _parse_match(m: dict) -> dict:
     status_raw = m.get("status", "")
     minute     = _derive_minute(status_raw)
 
+    # Venue and crest -- available on free tier in individual match responses
+    venue      = m.get("venue", "") or ""
+    home_crest = m.get("homeTeam", {}).get("crest", "") or ""
+    away_crest = m.get("awayTeam", {}).get("crest", "") or ""
+
     return {
         "fixture_id"    : m.get("id"),
         "home_team"     : home_name,
@@ -164,6 +173,9 @@ def _parse_match(m: dict) -> dict:
         "live_xg"       : {"home": 0.0, "away": 0.0},
         "events"        : [],
         "red_cards"     : {"home": 0, "away": 0},
+        "venue"         : venue,
+        "home_crest"    : home_crest,
+        "away_crest"    : away_crest,
     }
 
 

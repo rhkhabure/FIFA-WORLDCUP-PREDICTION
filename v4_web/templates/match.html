@@ -61,18 +61,25 @@
     <!-- SCORE ROW -->
     {% if featured.home_name and featured.away_name %}
     <div class="bg-[#0f172a] border border-slate-800 rounded-xl px-6 py-4
-                flex items-center justify-center gap-8">
-        <span class="text-lg font-bold text-slate-100 tracking-wide">
-            {{ featured.home_name }}
-        </span>
-        <div class="flex items-center gap-3 font-mono">
-            <span class="text-3xl font-black text-white">{{ featured.h_score }}</span>
-            <span class="text-slate-600 text-xl">–</span>
-            <span class="text-3xl font-black text-white">{{ featured.a_score }}</span>
+                flex flex-col items-center gap-1">
+        <div class="flex items-center gap-8">
+            <span class="text-lg font-bold text-slate-100 tracking-wide">
+                {{ featured.home_name }}
+            </span>
+            <div class="flex items-center gap-3 font-mono">
+                <span class="text-3xl font-black text-white">{{ featured.h_score }}</span>
+                <span class="text-slate-600 text-xl">–</span>
+                <span class="text-3xl font-black text-white">{{ featured.a_score }}</span>
+            </div>
+            <span class="text-lg font-bold text-slate-100 tracking-wide">
+                {{ featured.away_name }}
+            </span>
         </div>
-        <span class="text-lg font-bold text-slate-100 tracking-wide">
-            {{ featured.away_name }}
-        </span>
+        {% if featured.venue %}
+        <div class="text-[10px] font-mono text-slate-500 uppercase tracking-widest">
+            📍 {{ featured.venue }}
+        </div>
+        {% endif %}
     </div>
     {% endif %}
 
@@ -97,11 +104,13 @@
             <div class="flex items-end justify-center w-full gap-8" style="height:96px">
                 {% if prior %}
                     <div class="flex flex-col items-center justify-end h-full">
-                        <span class="text-sm text-teal-400 font-mono font-bold mb-1">
+                        <span class="text-sm font-mono font-bold mb-1"
+                              style="color:{{ home_colour }}">
                             {{ prior[0] }}%
                         </span>
-                        <div class="w-12 bg-teal-700 rounded-sm transition-all duration-500"
-                             style="height:{{ [prior[0],4]|max }}%"></div>
+                        <div class="w-12 rounded-sm transition-all duration-500"
+                             style="height:{{ [prior[0],4]|max }}%;
+                                    background:{{ home_colour }};opacity:0.85"></div>
                         <span class="text-[10px] text-slate-400 mt-2 uppercase tracking-wider">
                             Home
                         </span>
@@ -117,11 +126,13 @@
                         </span>
                     </div>
                     <div class="flex flex-col items-center justify-end h-full">
-                        <span class="text-sm text-amber-500 font-mono font-bold mb-1">
+                        <span class="text-sm font-mono font-bold mb-1"
+                              style="color:{{ away_colour }}">
                             {{ prior[2] }}%
                         </span>
-                        <div class="w-12 bg-amber-800 rounded-sm transition-all duration-500"
-                             style="height:{{ [prior[2],4]|max }}%"></div>
+                        <div class="w-12 rounded-sm transition-all duration-500"
+                             style="height:{{ [prior[2],4]|max }}%;
+                                    background:{{ away_colour }};opacity:0.85"></div>
                         <span class="text-[10px] text-slate-400 mt-2 uppercase tracking-wider">
                             Away
                         </span>
@@ -163,11 +174,13 @@
             <div class="flex items-end justify-center w-full gap-8" style="height:96px">
                 {% if posterior %}
                     <div class="flex flex-col items-center justify-end h-full">
-                        <span class="text-sm text-teal-400 font-mono font-bold mb-1">
+                        <span class="text-sm font-mono font-bold mb-1"
+                              style="color:{{ home_colour }}">
                             {{ posterior[0] }}%
                         </span>
-                        <div class="w-12 bg-teal-600/80 rounded-sm transition-all duration-700"
-                             style="height:{{ [posterior[0],4]|max }}%"></div>
+                        <div class="w-12 rounded-sm transition-all duration-700"
+                             style="height:{{ [posterior[0],4]|max }}%;
+                                    background:{{ home_colour }};opacity:0.75"></div>
                         <span class="text-[10px] text-slate-400 mt-2 uppercase tracking-wider">
                             Home
                         </span>
@@ -183,11 +196,13 @@
                         </span>
                     </div>
                     <div class="flex flex-col items-center justify-end h-full">
-                        <span class="text-sm text-amber-500 font-mono font-bold mb-1">
+                        <span class="text-sm font-mono font-bold mb-1"
+                              style="color:{{ away_colour }}">
                             {{ posterior[2] }}%
                         </span>
-                        <div class="w-12 bg-amber-700/80 rounded-sm transition-all duration-700"
-                             style="height:{{ [posterior[2],4]|max }}%"></div>
+                        <div class="w-12 rounded-sm transition-all duration-700"
+                             style="height:{{ [posterior[2],4]|max }}%;
+                                    background:{{ away_colour }};opacity:0.75"></div>
                         <span class="text-[10px] text-slate-400 mt-2 uppercase tracking-wider">
                             Away
                         </span>
