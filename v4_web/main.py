@@ -197,10 +197,12 @@ async def match(request: Request):
         return templates.TemplateResponse(request=request, name="match.html", context=ctx)
 
     prior, posterior, featured = None, None, {}
-    pitch_svg    = ""
-    timeline_svg = ""
-    home_colour  = "#14b8a6"
-    away_colour  = "#f43f5e"
+    pitch_svg      = ""
+    timeline_svg   = ""
+    home_colour    = "#14b8a6"
+    away_colour    = "#f43f5e"
+    home_theme     = get_theme_for_team("Default")
+    away_theme     = get_theme_for_team("Default")
     home_formation = "4-3-3"
     away_formation = "4-3-3"
 
