@@ -162,7 +162,51 @@ def get_theme_for_team(team_name: str) -> dict:
     }
 
 
-# ── Default formations ────────────────────────────────────────────────────────
+# ── Team crest URLs (football-data.org static CDN, no auth needed) ────────────
+_CREST_IDS: dict[str, int] = {
+    "Arsenal"                 : 57,
+    "Aston Villa"             : 58,
+    "Bournemouth"             : 1044,
+    "Brentford"               : 402,
+    "Brighton"                : 397,
+    "Burnley"                 : 328,
+    "Chelsea"                 : 61,
+    "Crystal Palace"          : 354,
+    "Everton"                 : 62,
+    "Fulham"                  : 63,
+    "Ipswich"                 : 610,
+    "Leeds"                   : 341,
+    "Leicester"               : 338,
+    "Liverpool"               : 64,
+    "Manchester City"         : 65,
+    "Manchester United"       : 66,
+    "Newcastle United"        : 67,
+    "Nottingham Forest"       : 351,
+    "Southampton"             : 340,
+    "Sunderland"              : 394,
+    "Tottenham"               : 73,
+    "West Ham"                : 563,
+    "Wolverhampton Wanderers" : 76,
+    "Real Madrid"             : 86,
+    "Barcelona"               : 81,
+    "Atletico Madrid"         : 78,
+    "Bayern Munich"           : 5,
+    "Borussia Dortmund"       : 4,
+    "Paris Saint Germain"     : 524,
+}
+_CREST_BASE = "https://crests.football-data.org"
+
+
+def get_crest_url(team_name: str, fallback_url: str = "") -> str:
+    """
+    Returns the football-data.org CDN crest URL for a team.
+    Falls back to fallback_url (e.g. the URL from the match API)
+    if the team isn't in the static lookup.
+    """
+    tid = _CREST_IDS.get(team_name)
+    if tid:
+        return f"{_CREST_BASE}/{tid}.png"
+    return fallback_url
 # Each team's most commonly used shape this season.
 # Format: "DEF-MID-FWD" (GK always assumed as +1).
 DEFAULT_FORMATIONS = {
@@ -429,7 +473,7 @@ def generate_pitch_svg_horizontal(home_formation="4-3-3", away_formation="4-3-3"
         svg += (
             f'<image href="{home_crest_url}" '
             f'x="{W//2 - 24}" y="{H//2 - 24}" width="48" height="48" '
-            f'opacity="0.12" clip-path="url(#pitch-clip)"/>'
+            f'opacity="0.22" clip-path="url(#pitch-clip)"/>'
         )
 
     # ── Pitch markings (white) ────────────────────────────────────────────────
