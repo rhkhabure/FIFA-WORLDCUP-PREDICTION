@@ -4,7 +4,8 @@
 <div class="space-y-4 max-w-7xl mx-auto">
 
     <!-- HEADER -->
-    <div class="flex items-center justify-between text-slate-300 font-bold uppercase tracking-wider mb-2 text-sm">
+    <div class="flex items-center justify-between text-slate-300 font-bold uppercase
+                tracking-wider text-sm">
         <div class="flex items-center gap-2">
             <span class="text-xl">⚽</span>
             {% if featured.home_name and featured.away_name %}
@@ -15,76 +16,115 @@
         </div>
         {% if featured.status %}
             <span class="text-[10px] font-mono px-2 py-1 rounded border
-                {% if featured.status in ['complete','Finished','FT'] %}
+                {% if featured.status in ['Finished','FT'] %}
                     text-slate-400 border-slate-700 bg-slate-900/60
                 {% else %}
                     text-emerald-400 border-emerald-800 bg-emerald-950/40
                 {% endif %}">
                 {{ featured.status|upper }}
-                {% if featured.minute and featured.status not in ['complete','Finished','FT','Not Started'] %}
+                {% if featured.minute and featured.status == 'In Play' %}
                     · {{ featured.minute }}'
                 {% endif %}
             </span>
         {% endif %}
     </div>
 
-    <!-- SCORE ROW (only when match data is available) -->
+    <!-- UPCOMING FIXTURES WIDGET -->
+    {% if fixtures %}
+    <div class="bg-[#0f172a] border border-slate-800 rounded-xl px-4 py-3 shadow-xl">
+        <div class="text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-2">
+            Upcoming · Premier League · All times EAT (UTC+3)
+        </div>
+        <div class="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+            {% for f in fixtures %}
+            <a href="/match?match_id={{ f.fixture_id }}"
+               class="flex-none border rounded-lg px-3 py-2 text-center min-w-[130px]
+                      transition cursor-pointer
+                      {% if f.fixture_id == featured.fixture_id %}
+                          border-cyan-700 bg-cyan-950/40 text-cyan-300
+                      {% else %}
+                          border-slate-700 bg-slate-900/40 text-slate-300
+                          hover:border-slate-500 hover:bg-slate-800/40
+                      {% endif %}">
+                <div class="text-[10px] font-mono text-slate-500 mb-1">
+                    {{ f.kickoff_eat }}
+                </div>
+                <div class="text-xs font-bold truncate">{{ f.home }}</div>
+                <div class="text-[10px] text-slate-500 my-0.5">vs</div>
+                <div class="text-xs font-bold truncate">{{ f.away }}</div>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- SCORE ROW -->
     {% if featured.home_name and featured.away_name %}
-    <div class="bg-[#0f172a] border border-slate-800 rounded-xl px-6 py-4 flex items-center justify-center gap-8">
-        <span class="text-lg font-bold text-slate-100 tracking-wide">{{ featured.home_name }}</span>
+    <div class="bg-[#0f172a] border border-slate-800 rounded-xl px-6 py-4
+                flex items-center justify-center gap-8">
+        <span class="text-lg font-bold text-slate-100 tracking-wide">
+            {{ featured.home_name }}
+        </span>
         <div class="flex items-center gap-3 font-mono">
             <span class="text-3xl font-black text-white">{{ featured.h_score }}</span>
             <span class="text-slate-600 text-xl">–</span>
             <span class="text-3xl font-black text-white">{{ featured.a_score }}</span>
         </div>
-        <span class="text-lg font-bold text-slate-100 tracking-wide">{{ featured.away_name }}</span>
+        <span class="text-lg font-bold text-slate-100 tracking-wide">
+            {{ featured.away_name }}
+        </span>
     </div>
     {% endif %}
 
-    <!-- TWO-PANEL ODDS SECTION -->
+    <!-- TWO-PANEL ODDS -->
     <!--
-        Panel 1 — Pre-game (Dixon-Coles bivariate Poisson)
-            Always shown. Gives the context for how the match looked
-            before a ball was kicked. Stays fixed throughout the match
-            as the reference point.
-
-        Panel 2 — Live (neural net, football_v4.pth)
-            Shows "Awaiting kickoff" before the match starts.
-            Once minute > 0 the neural net takes over, updating
-            as goals go in. Score + time features dominate here.
+        Panel 1 — Pre-game  : Dixon-Coles bivariate Poisson, dp=0.10
+        Panel 2 — Live      : Neural net (football_v4.pth) from kickoff onward
     -->
     <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-6 shadow-xl
                 grid grid-cols-1 md:grid-cols-2 gap-8 relative">
 
-        <!-- PANEL 1: Pre-game odds (Dixon-Coles) -->
+        <!-- Panel 1: Pre-game -->
         <div class="flex flex-col items-center gap-3">
             <div class="text-center">
-                <h3 class="text-sm font-bold text-slate-200 uppercase tracking-wide">Pre-Game</h3>
-                <span class="text-[10px] text-cyan-400/80 font-mono">Dixon-Coles · draw propensity 0.10</span>
+                <h3 class="text-sm font-bold text-slate-200 uppercase tracking-wide">
+                    Pre-Game
+                </h3>
+                <span class="text-[10px] text-cyan-400/80 font-mono">
+                    Dixon-Coles · draw propensity 0.10
+                </span>
             </div>
-
-            <div class="flex items-end justify-center w-full gap-8" style="height: 96px;">
+            <div class="flex items-end justify-center w-full gap-8" style="height:96px">
                 {% if prior %}
-                    <!-- Home -->
                     <div class="flex flex-col items-center justify-end h-full">
-                        <span class="text-sm text-teal-400 font-mono font-bold mb-1">{{ prior[0] }}%</span>
+                        <span class="text-sm text-teal-400 font-mono font-bold mb-1">
+                            {{ prior[0] }}%
+                        </span>
                         <div class="w-12 bg-teal-700 rounded-sm transition-all duration-500"
-                             style="height: {{ [prior[0], 4]|max }}%;"></div>
-                        <span class="text-[10px] text-slate-400 mt-2 uppercase tracking-wider">Home</span>
+                             style="height:{{ [prior[0],4]|max }}%"></div>
+                        <span class="text-[10px] text-slate-400 mt-2 uppercase tracking-wider">
+                            Home
+                        </span>
                     </div>
-                    <!-- Draw -->
                     <div class="flex flex-col items-center justify-end h-full">
-                        <span class="text-sm text-slate-400 font-mono font-bold mb-1">{{ prior[1] }}%</span>
+                        <span class="text-sm text-slate-400 font-mono font-bold mb-1">
+                            {{ prior[1] }}%
+                        </span>
                         <div class="w-12 bg-slate-600 rounded-sm transition-all duration-500"
-                             style="height: {{ [prior[1], 4]|max }}%;"></div>
-                        <span class="text-[10px] text-slate-400 mt-2 uppercase tracking-wider">Draw</span>
+                             style="height:{{ [prior[1],4]|max }}%"></div>
+                        <span class="text-[10px] text-slate-400 mt-2 uppercase tracking-wider">
+                            Draw
+                        </span>
                     </div>
-                    <!-- Away -->
                     <div class="flex flex-col items-center justify-end h-full">
-                        <span class="text-sm text-amber-500 font-mono font-bold mb-1">{{ prior[2] }}%</span>
+                        <span class="text-sm text-amber-500 font-mono font-bold mb-1">
+                            {{ prior[2] }}%
+                        </span>
                         <div class="w-12 bg-amber-800 rounded-sm transition-all duration-500"
-                             style="height: {{ [prior[2], 4]|max }}%;"></div>
-                        <span class="text-[10px] text-slate-400 mt-2 uppercase tracking-wider">Away</span>
+                             style="height:{{ [prior[2],4]|max }}%"></div>
+                        <span class="text-[10px] text-slate-400 mt-2 uppercase tracking-wider">
+                            Away
+                        </span>
                     </div>
                 {% else %}
                     <div class="flex items-center justify-center h-full w-full">
@@ -97,16 +137,18 @@
             </div>
         </div>
 
-        <!-- Divider arrow (desktop only) -->
+        <!-- Divider arrow -->
         <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2
                     text-slate-600 text-xl opacity-60 hidden md:block pointer-events-none">
             &rarr;
         </div>
 
-        <!-- PANEL 2: Live odds (neural net) -->
+        <!-- Panel 2: Live -->
         <div class="flex flex-col items-center gap-3">
             <div class="text-center">
-                <h3 class="text-sm font-bold text-slate-200 uppercase tracking-wide">Live</h3>
+                <h3 class="text-sm font-bold text-slate-200 uppercase tracking-wide">
+                    Live
+                </h3>
                 <span class="text-[10px] font-mono
                     {% if posterior %}text-emerald-400/80{% else %}text-slate-500{% endif %}">
                     {% if posterior %}
@@ -118,29 +160,37 @@
                     {% endif %}
                 </span>
             </div>
-
-            <div class="flex items-end justify-center w-full gap-8" style="height: 96px;">
+            <div class="flex items-end justify-center w-full gap-8" style="height:96px">
                 {% if posterior %}
-                    <!-- Home -->
                     <div class="flex flex-col items-center justify-end h-full">
-                        <span class="text-sm text-teal-400 font-mono font-bold mb-1">{{ posterior[0] }}%</span>
+                        <span class="text-sm text-teal-400 font-mono font-bold mb-1">
+                            {{ posterior[0] }}%
+                        </span>
                         <div class="w-12 bg-teal-600/80 rounded-sm transition-all duration-700"
-                             style="height: {{ [posterior[0], 4]|max }}%;"></div>
-                        <span class="text-[10px] text-slate-400 mt-2 uppercase tracking-wider">Home</span>
+                             style="height:{{ [posterior[0],4]|max }}%"></div>
+                        <span class="text-[10px] text-slate-400 mt-2 uppercase tracking-wider">
+                            Home
+                        </span>
                     </div>
-                    <!-- Draw -->
                     <div class="flex flex-col items-center justify-end h-full">
-                        <span class="text-sm text-slate-400 font-mono font-bold mb-1">{{ posterior[1] }}%</span>
+                        <span class="text-sm text-slate-400 font-mono font-bold mb-1">
+                            {{ posterior[1] }}%
+                        </span>
                         <div class="w-12 bg-slate-500/80 rounded-sm transition-all duration-700"
-                             style="height: {{ [posterior[1], 4]|max }}%;"></div>
-                        <span class="text-[10px] text-slate-400 mt-2 uppercase tracking-wider">Draw</span>
+                             style="height:{{ [posterior[1],4]|max }}%"></div>
+                        <span class="text-[10px] text-slate-400 mt-2 uppercase tracking-wider">
+                            Draw
+                        </span>
                     </div>
-                    <!-- Away -->
                     <div class="flex flex-col items-center justify-end h-full">
-                        <span class="text-sm text-amber-500 font-mono font-bold mb-1">{{ posterior[2] }}%</span>
+                        <span class="text-sm text-amber-500 font-mono font-bold mb-1">
+                            {{ posterior[2] }}%
+                        </span>
                         <div class="w-12 bg-amber-700/80 rounded-sm transition-all duration-700"
-                             style="height: {{ [posterior[2], 4]|max }}%;"></div>
-                        <span class="text-[10px] text-slate-400 mt-2 uppercase tracking-wider">Away</span>
+                             style="height:{{ [posterior[2],4]|max }}%"></div>
+                        <span class="text-[10px] text-slate-400 mt-2 uppercase tracking-wider">
+                            Away
+                        </span>
                     </div>
                 {% else %}
                     <div class="flex items-center justify-center h-full w-full">
@@ -166,19 +216,25 @@
                 Starting Lineups
             </span>
             <div class="flex items-center gap-4 text-xs font-mono">
+                {% if featured.home_name %}
                 <span class="flex items-center gap-1.5">
-                    <span class="inline-block w-2.5 h-2.5 rounded-full bg-teal-500"></span>
+                    <span class="inline-block w-2.5 h-2.5 rounded-full"
+                          style="background:{{ home_colour }}"></span>
                     {{ featured.home_name }}
+                    <span class="text-slate-600">{{ home_formation }}</span>
                 </span>
                 <span class="flex items-center gap-1.5">
-                    <span class="inline-block w-2.5 h-2.5 rounded-full bg-rose-500"></span>
+                    <span class="inline-block w-2.5 h-2.5 rounded-full"
+                          style="background:{{ away_colour }}"></span>
                     {{ featured.away_name }}
+                    <span class="text-slate-600">{{ away_formation }}</span>
                 </span>
+                {% endif %}
             </div>
         </div>
         {{ pitch_svg | safe }}
         <p class="text-[10px] text-slate-600 font-mono text-center mt-2">
-            Default lineups shown · Live lineup sync coming soon
+            Typical XI shown · Live lineup sync requires paid API plan
         </p>
     </div>
     {% endif %}
@@ -187,5 +243,8 @@
 
 <style>
 body { background-color: #0b0f19 !important; }
+/* Hide scrollbar on fixtures strip while keeping scroll */
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 </style>
 {% endblock %}
