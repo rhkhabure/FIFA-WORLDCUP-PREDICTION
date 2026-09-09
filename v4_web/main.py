@@ -189,7 +189,49 @@ async def match(request: Request):
     home_formation = "4-3-3"
     away_formation = "4-3-3"
 
-    if match_id:
+    # Check if this match_id is in the FPL upcoming fixtures first.
+    # football-data.org free tier returns 400 for upcoming matches --
+    # it only serves individual match detail for finished games.
+    # For upcoming matches, we use FPL team names directly.
+    all_upcoming = get_upcoming_fixtures(max_fixtures=50)
+    fpl_match = next(
+        (f for f in all_upcoming if str(f.get("match_id")) == str(match_id)),
+        None
+    )
+
+    if fpl_match:
+        # Upcoming match -- FPL has team names, no score data yet
+        home_name = fpl_match["home"]
+        away_name = fpl_match["away"]
+        featured = {
+            "home_name" : home_name,
+            "away_name" : away_name,
+            "minute"    : 0,
+            "status"    : "Not Started",
+            "h_score"   : 0,
+            "a_score"   : 0,
+            "h_xg"      : 0.0,
+            "a_xg"      : 0.0,
+            "fixture_id": fpl_match.get("match_id"),
+        }
+        prior = dc_pregame(home_name, away_name, LEAGUE_KEY)
+        # No posterior -- match hasn't started
+        home_theme     = get_theme_for_team(home_name)
+        away_theme     = get_theme_for_team(away_name)
+        home_colour    = home_theme["primary"]
+        away_colour    = away_theme["primary"]
+        home_formation = get_formation_for_team(home_name)
+        away_formation = get_formation_for_team(away_name)
+        pitch_svg = generate_pitch_svg_horizontal(
+            home_formation=home_formation,
+            away_formation=away_formation,
+            home_color=home_colour,
+            away_color=away_colour,
+            home_team=home_name,
+            away_team=away_name,
+        )
+
+    elif match_id:
         live_data = get_live_match_data(match_id)
         if live_data and live_data.get("home_team") not in (None, "Unknown Home"):
             home_name = live_data["home_team"]
