@@ -252,6 +252,7 @@ async def match(request: Request):
     elif match_id:
         live_data = get_live_match_data(match_id)
         if live_data and live_data.get("home_team") not in (None, "Unknown Home"):
+            print(f"DEBUG events count: {len(live_data.get('events', []))}, goals: {live_data.get('events', [])[:2]}")
             home_name = live_data["home_team"]
             away_name = live_data["away_team"]
             minute    = live_data["current_minute"]
