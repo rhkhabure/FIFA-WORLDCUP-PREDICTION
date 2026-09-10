@@ -282,9 +282,15 @@ async def match(request: Request):
                 posterior = nn_live(home_name, away_name, LEAGUE_KEY,
                                     safe_minute, h_score, a_score)
 
-            # Win probability timeline -- works for any finished match with goals.
-            # Goal minutes are approximated (44' first half, 75' second half)
-            # since the free API tier doesn't return individual goal timings.
+            # Colours and formation -- must come BEFORE timeline and pitch
+            home_theme     = get_theme_for_team(home_name)
+            away_theme     = get_theme_for_team(away_name)
+            home_colour    = home_theme["primary"]
+            away_colour    = away_theme["primary"]
+            home_formation = get_formation_for_team(home_name)
+            away_formation = get_formation_for_team(away_name)
+
+            # Win probability timeline
             timeline_svg = ""
             if status in ("Finished", "FT") and (h_score + a_score) > 0:
                 timeline_svg = build_match_timeline_svg(
@@ -300,11 +306,8 @@ async def match(request: Request):
                     nn_scaler=nn_scaler,
                     nn_T=nn_T,
                 )
-            away_theme     = get_theme_for_team(away_name)
-            home_colour    = home_theme["primary"]
-            away_colour    = away_theme["primary"]
-            home_formation = get_formation_for_team(home_name)
-            away_formation = get_formation_for_team(away_name)
+
+            # Pitch
             pitch_svg = generate_pitch_svg_horizontal(
                 home_formation=home_formation,
                 away_formation=away_formation,
