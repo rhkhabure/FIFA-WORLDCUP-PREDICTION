@@ -7,7 +7,7 @@ Free tier: 10 req/min, covers Premier League (PL) current season,
            live scores, match events, team names.
 Auth header: X-Auth-Token
 
-Environment variable: API_FOOTBALL_KEY in project root .env
+Environment variable: FOOTBALLDATA_ORG_KEY in project root .env
 (despite the name, this is a football-data.org key -- format: 32-char hex)
 
 Base URL: https://api.football-data.org/v4
@@ -31,10 +31,10 @@ def _get_api_key() -> str:
             with open(env_path) as f:
                 for line in f:
                     line = line.strip()
-                    if line.startswith("API_FOOTBALL_KEY="):
+                    if line.startswith("FOOTBALLDATA_ORG_KEY="):
                         return line.split("=", 1)[1].strip()
         here = os.path.dirname(here)
-    return os.environ.get("API_FOOTBALL_KEY", "")
+    return os.environ.get("FOOTBALLDATA_ORG_KEY", "")
 
 
 API_KEY = _get_api_key()
