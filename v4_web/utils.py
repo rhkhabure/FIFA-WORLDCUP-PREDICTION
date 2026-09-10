@@ -193,14 +193,6 @@ _CREST_IDS: dict[str, int] = {
     "Bayern Munich"           : 5,
     "Borussia Dortmund"       : 4,
     "Paris Saint Germain"     : 524,
-    # Add these inside _CREST_IDS dict:
-    "Spurs"          : 73,    # FPL shorthand for Tottenham
-    "Man Utd"        : 66,    # FPL shorthand for Manchester United
-    "Man City"       : 65,    # FPL shorthand for Manchester City
-    "Coventry"       : 1076,  # Championship side -- may 404, graceful no-op
-    "Coventry City"  : 1076,
-    
-    
 }
 _CREST_BASE = "https://crests.football-data.org"
 
@@ -349,13 +341,40 @@ DEFAULT_SQUADS = {
 
 
 def get_squad_for_team(team_name: str) -> list[str]:
+    # Try direct match first, then common aliases
     if team_name in DEFAULT_SQUADS:
         return DEFAULT_SQUADS[team_name]
-    return [f"P{i+1}" for i in range(11)]
+    # Common API name -> short name mappings
+    _SQUAD_ALIASES = {
+        "West Ham United"        : "West Ham",
+        "Leeds United"           : "Leeds",
+        "Newcastle United"       : "Newcastle United",
+        "Nottingham Forest"      : "Nottingham Forest",
+        "Wolverhampton Wanderers": "Wolverhampton Wanderers",
+        "Tottenham Hotspur"      : "Tottenham",
+        "Leicester City"         : "Leicester",
+        "Manchester United"      : "Manchester United",
+        "Manchester City"        : "Manchester City",
+        "Nott'm Forest"          : "Nottingham Forest",
+        "Ipswich Town"           : "Ipswich",
+    }
+    canonical = _SQUAD_ALIASES.get(team_name, team_name)
+    return DEFAULT_SQUADS.get(canonical, [f"P{i+1}" for i in range(11)])
 
 
 def get_formation_for_team(team_name: str) -> str:
-    return DEFAULT_FORMATIONS.get(team_name, "4-3-3")
+    if team_name in DEFAULT_FORMATIONS:
+        return DEFAULT_FORMATIONS[team_name]
+    _FORMATION_ALIASES = {
+        "West Ham United"        : "West Ham",
+        "Leeds United"           : "Leeds",
+        "Tottenham Hotspur"      : "Tottenham",
+        "Leicester City"         : "Leicester",
+        "Nott'm Forest"          : "Nottingham Forest",
+        "Ipswich Town"           : "Ipswich",
+    }
+    canonical = _FORMATION_ALIASES.get(team_name, team_name)
+    return DEFAULT_FORMATIONS.get(canonical, "4-3-3")
 
 
 # ── SVG pitch generators ──────────────────────────────────────────────────────
@@ -420,7 +439,11 @@ def generate_pitch_svg_horizontal(home_formation="4-3-3", away_formation="4-3-3"
                                   home_color="#14b8a6", away_color="#f43f5e",
                                   home_players=None, away_players=None,
                                   home_team="Home", away_team="Away",
-                                  home_crest_url: str = ""):
+                                  home_crest_url: str = "",
+                                  away_crest_url: str = "",
+                                  h_score: int | None = None,
+                                  a_score: int | None = None,
+                                  status: str = ""):
     """
     Full horizontal pitch for the Live Match page.
 
@@ -563,6 +586,37 @@ def generate_pitch_svg_horizontal(home_formation="4-3-3", away_formation="4-3-3"
                     f'</a>'
                 )
                 p_idx += 1
+
+    # ── Score overlay (pill at top centre, inside pitch boundary) ─────────────
+    if h_score is not None and a_score is not None:
+        svg += (
+            '<rect x="118" y="8" width="84" height="22"'
+            ' fill="rgba(0,0,0,0.60)" rx="11"/>'
+        )
+        if home_crest_url:
+            svg += (
+                f'<image href="{home_crest_url}"'
+                f' x="121" y="10" width="14" height="14" opacity="0.95"/>'
+            )
+        if away_crest_url:
+            svg += (
+                f'<image href="{away_crest_url}"'
+                f' x="185" y="10" width="14" height="14" opacity="0.95"/>'
+            )
+        svg += (
+            f'<text x="160" y="23" fill="white"'
+            f' font-family="\'JetBrains Mono\',monospace"'
+            f' font-size="11" font-weight="bold" text-anchor="middle"'
+            f' style="text-shadow:0 1px 4px rgba(0,0,0,0.9)">'
+            f'{h_score}  –  {a_score}</text>'
+        )
+        if status:
+            badge = {"Finished": "FT", "Half Time": "HT"}.get(status, status)
+            svg += (
+                f'<text x="160" y="31" fill="#94a3b8"'
+                f' font-family="\'JetBrains Mono\',monospace"'
+                f' font-size="4.5" text-anchor="middle">{badge}</text>'
+            )
 
     svg += "</svg>"
     return svg

@@ -58,55 +58,26 @@
     </div>
     {% endif %}
 
-    <!-- SCORE ROW -->
-    {% if featured.home_name and featured.away_name %}
-    <div class="bg-[#0f172a] border border-slate-800 rounded-xl px-6 py-4
-                flex flex-col items-center gap-1">
-        <div class="flex items-center gap-8">
-            <span class="text-lg font-bold text-slate-100 tracking-wide">
-                {{ featured.home_name }}
-            </span>
-            <div class="flex items-center gap-3 font-mono">
-                <span class="text-3xl font-black text-white">{{ featured.h_score }}</span>
-                <span class="text-slate-600 text-xl">–</span>
-                <span class="text-3xl font-black text-white">{{ featured.a_score }}</span>
-            </div>
-            <span class="text-lg font-bold text-slate-100 tracking-wide">
-                {{ featured.away_name }}
-            </span>
-        </div>
-        {% if featured.venue %}
-        <div class="text-[10px] font-mono text-slate-500 uppercase tracking-widest">
-            📍 {{ featured.venue }}
-        </div>
-        {% endif %}
-    </div>
-    {% endif %}
-
     <!-- MATCH STATS BAR -->
     {% if featured.home_name and featured.away_name %}
     <div class="bg-[#0f172a] border border-slate-800 rounded-xl px-6 py-3 shadow-xl">
-        <div class="grid grid-cols-3 gap-4 text-center text-xs font-mono">
+        <div class="flex items-center justify-around text-center text-xs font-mono gap-4 flex-wrap">
 
             {% if featured.h_ht is not none and featured.a_ht is not none %}
-            <!-- Half-time score -->
-            <div class="flex flex-col items-center gap-1">
+            <div class="flex flex-col items-center gap-0.5">
                 <span class="text-[10px] text-slate-500 uppercase tracking-widest">Half Time</span>
-                <span class="text-slate-200 font-bold">
-                    {{ featured.h_ht }} – {{ featured.a_ht }}
-                </span>
+                <span class="text-slate-200 font-bold">{{ featured.h_ht }} – {{ featured.a_ht }}</span>
             </div>
             {% endif %}
 
-            <!-- Model odds vs bookmaker odds comparison -->
             {% if featured.odds_home %}
-            <div class="flex flex-col items-center gap-1 col-span-{% if featured.h_ht is not none %}1{% else %}3{% endif %}">
+            <div class="flex flex-col items-center gap-0.5">
                 <span class="text-[10px] text-slate-500 uppercase tracking-widest">Bookmaker Odds</span>
-                <div class="flex items-center gap-3">
+                <div class="flex items-center gap-2">
                     <span style="color:{{ home_colour }}" class="font-bold">
                         {{ featured.home_name.split()[0] }} {{ featured.odds_home }}
                     </span>
-                    <span class="text-slate-500">Draw {{ featured.odds_draw }}</span>
+                    <span class="text-slate-500">D {{ featured.odds_draw }}</span>
                     <span style="color:{{ away_colour }}" class="font-bold">
                         {{ featured.away_name.split()[0] }} {{ featured.odds_away }}
                     </span>
@@ -114,9 +85,15 @@
             </div>
             {% endif %}
 
+            {% if featured.venue %}
+            <div class="flex flex-col items-center gap-0.5">
+                <span class="text-[10px] text-slate-500 uppercase tracking-widest">Venue</span>
+                <span class="text-slate-300">📍 {{ featured.venue }}</span>
+            </div>
+            {% endif %}
+
             {% if featured.referee %}
-            <!-- Referee -->
-            <div class="flex flex-col items-center gap-1">
+            <div class="flex flex-col items-center gap-0.5">
                 <span class="text-[10px] text-slate-500 uppercase tracking-widest">Referee</span>
                 <span class="text-slate-300">{{ featured.referee }}</span>
             </div>
@@ -125,8 +102,6 @@
         </div>
     </div>
     {% endif %}
-
-    <!-- TWO-PANEL ODDS -->
     <!--
         Panel 1 — Pre-game  : Dixon-Coles bivariate Poisson, dp=0.10
         Panel 2 — Live      : Neural net (football_v4.pth) from kickoff onward
@@ -302,23 +277,21 @@
     <!-- PITCH -->
     {% if pitch_svg %}
     <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl">
-        <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center justify-between mb-2">
             <span class="text-xs font-mono text-slate-400 uppercase tracking-widest">
                 Starting Lineups
             </span>
-            <div class="flex items-center gap-4 text-xs font-mono">
+            <div class="flex items-center gap-4 text-[10px] font-mono">
                 {% if featured.home_name %}
                 <span class="flex items-center gap-1.5">
-                    <span class="inline-block w-2.5 h-2.5 rounded-full"
+                    <span class="inline-block w-2 h-2 rounded-full"
                           style="background:{{ home_colour }}"></span>
-                    {{ featured.home_name }}
-                    <span class="text-slate-600">{{ home_formation }}</span>
+                    {{ featured.home_name }} · {{ home_formation }}
                 </span>
                 <span class="flex items-center gap-1.5">
-                    <span class="inline-block w-2.5 h-2.5 rounded-full"
+                    <span class="inline-block w-2 h-2 rounded-full"
                           style="background:{{ away_colour }}"></span>
-                    {{ featured.away_name }}
-                    <span class="text-slate-600">{{ away_formation }}</span>
+                    {{ featured.away_name }} · {{ away_formation }}
                 </span>
                 {% endif %}
             </div>
