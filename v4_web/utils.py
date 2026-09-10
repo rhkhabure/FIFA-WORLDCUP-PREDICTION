@@ -164,29 +164,35 @@ def get_theme_for_team(team_name: str) -> dict:
 
 # ── Team crest URLs (football-data.org static CDN, no auth needed) ────────────
 _CREST_IDS: dict[str, int] = {
+    # Verified from football-data.org /competitions/PL/teams?season=2025
     "Arsenal"                 : 57,
     "Aston Villa"             : 58,
-    "Bournemouth"             : 1044,
-    "Brentford"               : 402,
-    "Brighton"                : 397,
-    "Burnley"                 : 328,
     "Chelsea"                 : 61,
-    "Crystal Palace"          : 354,
     "Everton"                 : 62,
     "Fulham"                  : 63,
-    "Ipswich"                 : 610,
-    "Leeds"                   : 341,
-    "Leicester"               : 338,
     "Liverpool"               : 64,
     "Manchester City"         : 65,
     "Manchester United"       : 66,
     "Newcastle United"        : 67,
-    "Nottingham Forest"       : 351,
-    "Southampton"             : 340,
-    "Sunderland"              : 394,
+    "Sunderland"              : 71,
     "Tottenham"               : 73,
-    "West Ham"                : 563,
     "Wolverhampton Wanderers" : 76,
+    "Burnley"                 : 328,
+    "Leeds"                   : 341,
+    "Nottingham Forest"       : 351,
+    "Crystal Palace"          : 354,
+    "Brighton"                : 397,
+    "Brentford"               : 402,
+    "West Ham"                : 563,
+    # Bournemouth uses a name slug not an ID on the CDN
+    # handled separately in get_crest_url below
+    "Bournemouth"             : 1044,
+    # Teams missing from 2025/26 API list -- use best known IDs
+    "Ipswich"                 : 610,
+    "Leicester"               : 338,
+    "Southampton"             : 340,
+    # Hull City and Coventry are Championship sides, no PL crest
+    # Big 5 extras
     "Real Madrid"             : 86,
     "Barcelona"               : 81,
     "Atletico Madrid"         : 78,
@@ -196,13 +202,19 @@ _CREST_IDS: dict[str, int] = {
 }
 _CREST_BASE = "https://crests.football-data.org"
 
+# Special cases where the CDN uses a name slug instead of numeric ID
+_CREST_SLUGS: dict[str, str] = {
+    "Bournemouth": "bournemouth",
+}
+
 
 def get_crest_url(team_name: str, fallback_url: str = "") -> str:
     """
     Returns the football-data.org CDN crest URL for a team.
-    Falls back to fallback_url (e.g. the URL from the match API)
-    if the team isn't in the static lookup.
+    Checks slug overrides first, then numeric IDs, then fallback_url.
     """
+    if team_name in _CREST_SLUGS:
+        return f"{_CREST_BASE}/{_CREST_SLUGS[team_name]}.png"
     tid = _CREST_IDS.get(team_name)
     if tid:
         return f"{_CREST_BASE}/{tid}.png"
