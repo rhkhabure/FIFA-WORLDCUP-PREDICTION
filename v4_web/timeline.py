@@ -45,17 +45,17 @@ def _approximate_goals(h_score: int, a_score: int,
     h_first  = math.ceil(h_score / 2)
     h_second = h_score - h_first
     for _ in range(h_first):
-        goals.append({"minute": 44, "is_home": True,  "scorer": home_name.split()[0]})
+        goals.append({"minute": 44, "is_home": True,  "scorer": home_name})
     for _ in range(h_second):
-        goals.append({"minute": 75, "is_home": True,  "scorer": home_name.split()[0]})
+        goals.append({"minute": 75, "is_home": True,  "scorer": home_name})
 
     # Away goals
     a_first  = math.ceil(a_score / 2)
     a_second = a_score - a_first
     for _ in range(a_first):
-        goals.append({"minute": 44, "is_home": False, "scorer": "Away"})
+        goals.append({"minute": 44, "is_home": False, "scorer": away_name})
     for _ in range(a_second):
-        goals.append({"minute": 75, "is_home": False, "scorer": "Away"})
+        goals.append({"minute": 75, "is_home": False, "scorer": away_name})
 
     return sorted(goals, key=lambda g: g["minute"])
 
