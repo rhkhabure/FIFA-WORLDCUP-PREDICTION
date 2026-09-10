@@ -268,6 +268,12 @@ async def match(request: Request):
                 "a_xg"      : live_data["live_xg"]["away"],
                 "fixture_id": int(match_id),
                 "venue"     : live_data.get("venue", ""),
+                "h_ht"      : live_data.get("h_ht"),
+                "a_ht"      : live_data.get("a_ht"),
+                "odds_home" : live_data.get("odds_home"),
+                "odds_draw" : live_data.get("odds_draw"),
+                "odds_away" : live_data.get("odds_away"),
+                "referee"   : live_data.get("referee", ""),
             }
 
             prior = dc_pregame(home_name, away_name, LEAGUE_KEY)

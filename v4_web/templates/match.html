@@ -83,6 +83,49 @@
     </div>
     {% endif %}
 
+    <!-- MATCH STATS BAR -->
+    {% if featured.home_name and featured.away_name %}
+    <div class="bg-[#0f172a] border border-slate-800 rounded-xl px-6 py-3 shadow-xl">
+        <div class="grid grid-cols-3 gap-4 text-center text-xs font-mono">
+
+            {% if featured.h_ht is not none and featured.a_ht is not none %}
+            <!-- Half-time score -->
+            <div class="flex flex-col items-center gap-1">
+                <span class="text-[10px] text-slate-500 uppercase tracking-widest">Half Time</span>
+                <span class="text-slate-200 font-bold">
+                    {{ featured.h_ht }} – {{ featured.a_ht }}
+                </span>
+            </div>
+            {% endif %}
+
+            <!-- Model odds vs bookmaker odds comparison -->
+            {% if featured.odds_home %}
+            <div class="flex flex-col items-center gap-1 col-span-{% if featured.h_ht is not none %}1{% else %}3{% endif %}">
+                <span class="text-[10px] text-slate-500 uppercase tracking-widest">Bookmaker Odds</span>
+                <div class="flex items-center gap-3">
+                    <span style="color:{{ home_colour }}" class="font-bold">
+                        {{ featured.home_name.split()[0] }} {{ featured.odds_home }}
+                    </span>
+                    <span class="text-slate-500">Draw {{ featured.odds_draw }}</span>
+                    <span style="color:{{ away_colour }}" class="font-bold">
+                        {{ featured.away_name.split()[0] }} {{ featured.odds_away }}
+                    </span>
+                </div>
+            </div>
+            {% endif %}
+
+            {% if featured.referee %}
+            <!-- Referee -->
+            <div class="flex flex-col items-center gap-1">
+                <span class="text-[10px] text-slate-500 uppercase tracking-widest">Referee</span>
+                <span class="text-slate-300">{{ featured.referee }}</span>
+            </div>
+            {% endif %}
+
+        </div>
+    </div>
+    {% endif %}
+
     <!-- TWO-PANEL ODDS -->
     <!--
         Panel 1 — Pre-game  : Dixon-Coles bivariate Poisson, dp=0.10

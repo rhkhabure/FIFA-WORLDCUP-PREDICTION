@@ -31,10 +31,11 @@ def _get_api_key() -> str:
             with open(env_path) as f:
                 for line in f:
                     line = line.strip()
-                    if line.startswith("FOOTBALLDATA_ORG_KEY="):
+                    if line.startswith("API_FOOTBALL_KEY="):
                         return line.split("=", 1)[1].strip()
         here = os.path.dirname(here)
-    return os.environ.get("FOOTBALLDATA_ORG_KEY", "")
+    return os.environ.get("API_FOOTBALL_KEY", "")
+
 
 API_KEY = _get_api_key()
 
@@ -148,15 +149,28 @@ def _parse_match(m: dict) -> dict:
     away_name = _clean_name(m.get("awayTeam", {}).get("name", "Unknown Away"))
     score     = m.get("score", {})
     ft        = score.get("fullTime", {})
+    ht        = score.get("halfTime", {})
     h_score   = ft.get("home") or 0
     a_score   = ft.get("away") or 0
+    h_ht      = ht.get("home")
+    a_ht      = ht.get("away")
     status_raw = m.get("status", "")
     minute     = _derive_minute(status_raw)
 
-    # Venue and crest -- available on free tier in individual match responses
+    # Odds (bookmaker market prices -- interesting context for the model)
+    odds      = m.get("odds", {}) or {}
+    odds_home = odds.get("homeWin")
+    odds_draw = odds.get("draw")
+    odds_away = odds.get("awayWin")
+
+    # Venue and crests
     venue      = m.get("venue", "") or ""
     home_crest = m.get("homeTeam", {}).get("crest", "") or ""
     away_crest = m.get("awayTeam", {}).get("crest", "") or ""
+
+    # Referee
+    referees   = m.get("referees", []) or []
+    referee    = referees[0].get("name", "") if referees else ""
 
     return {
         "fixture_id"    : m.get("id"),
@@ -166,6 +180,8 @@ def _parse_match(m: dict) -> dict:
         "a_score"       : int(a_score),
         "home_score"    : int(h_score),
         "away_score"    : int(a_score),
+        "h_ht"          : int(h_ht) if h_ht is not None else None,
+        "a_ht"          : int(a_ht) if a_ht is not None else None,
         "status"        : _normalise_status(status_raw),
         "current_minute": minute,
         "minute"        : minute,
@@ -175,6 +191,10 @@ def _parse_match(m: dict) -> dict:
         "venue"         : venue,
         "home_crest"    : home_crest,
         "away_crest"    : away_crest,
+        "odds_home"     : float(odds_home) if odds_home else None,
+        "odds_draw"     : float(odds_draw) if odds_draw else None,
+        "odds_away"     : float(odds_away) if odds_away else None,
+        "referee"       : referee,
     }
 
 
