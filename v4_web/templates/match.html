@@ -284,6 +284,21 @@
     </div>
     {% endif %}
 
+    <!-- SCORELINE PROBABILITY MATRIX -->
+    {% if matrix_svg %}
+    <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl">
+        <div class="flex items-center justify-between mb-3">
+            <span class="text-xs font-mono text-slate-400 uppercase tracking-widest">
+                Scoreline Probabilities
+            </span>
+            <span class="text-[10px] font-mono text-slate-600">
+                Dixon-Coles bivariate Poisson · pre-game
+            </span>
+        </div>
+        {{ matrix_svg | safe }}
+    </div>
+    {% endif %}
+
     <!-- PITCH -->
     {% if pitch_svg %}
     <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl">
