@@ -88,13 +88,13 @@ def build_scoreline_svg(
     # ── Layout constants ──────────────────────────────────────────────────────
     PAD_L   = 28   # left padding for home-goals axis labels
     PAD_T   = 28   # top padding for away-goals axis labels
-    SIDE_W  = 140  # sidebar width for top scorelines
-    GAP     = 16   # gap between grid and sidebar
 
     grid_w  = N * cell_size
     grid_h  = N * cell_size
-    total_w = PAD_L + grid_w + GAP + SIDE_W + 8
-    total_h = PAD_T + grid_h + 24   # extra for axis label at bottom
+    # Top scorelines stacked below the grid (no sidebar)
+    LIST_H  = top_n * 18 + 36   # height for scoreline list below grid
+    total_w = PAD_L + grid_w + 8
+    total_h = PAD_T + grid_h + 20 + LIST_H
 
     svg = (
         f'<svg width="100%" viewBox="0 0 {total_w} {total_h}"'
@@ -189,85 +189,59 @@ def build_scoreline_svg(
                 f' opacity="0.85">{pct_str}</text>'
             )
 
-    # ── Sidebar: top N scorelines ─────────────────────────────────────────────
-    sx = PAD_L + grid_w + GAP
-
-    svg += (
-        f'<text x="{sx}" y="{PAD_T + 4}"'
-        f' fill="#64748b" font-size="8" font-weight="bold"'
-        f' font-family="JetBrains Mono,monospace"'
-        f' text-anchor="start">TOP SCORELINES</text>'
-    )
-
-    # Gather and sort all cells
+    # ── Top scorelines below grid ─────────────────────────────────────────────
     all_scores = sorted(
         [(float(joint[i,j]), i, j) for i in range(N) for j in range(N)],
         reverse=True
     )
 
-    row_h = (grid_h - 16) / top_n
-    for rank, (prob, i, j) in enumerate(all_scores[:top_n]):
-        ry = PAD_T + 16 + rank * row_h
-        outcome = "H" if i > j else ("A" if j > i else "D")
-        colour  = (home_colour if outcome == "H"
-                   else away_colour if outcome == "A"
-                   else "#64748b")
-
-        # Rank number
-        svg += (
-            f'<text x="{sx + 6}" y="{ry + 14}"'
-            f' fill="#334155" font-size="9" text-anchor="middle"'
-            f' font-family="JetBrains Mono,monospace">#{rank+1}</text>'
-        )
-        # Scoreline
-        svg += (
-            f'<text x="{sx + 26}" y="{ry + 14}"'
-            f' fill="{colour}" font-size="11" font-weight="bold"'
-            f' font-family="JetBrains Mono,monospace"'
-            f' text-anchor="middle">{i}-{j}</text>'
-        )
-        # Probability bar
-        bar_w = int((SIDE_W - 50) * prob / all_scores[0][0])
-        svg += (
-            f'<rect x="{sx + 40}" y="{ry + 4}"'
-            f' width="{bar_w}" height="10"'
-            f' fill="{colour}" opacity="0.6" rx="2"/>'
-            f'<text x="{sx + 44 + bar_w}" y="{ry + 13}"'
-            f' fill="{colour}" font-size="8"'
-            f' font-family="JetBrains Mono,monospace"'
-            f' opacity="0.9">{prob:.1%}</text>'
-        )
-
-    # ── Outcome probability totals (below sidebar) ───────────────────────────
     p_home = float(np.tril(joint, -1).sum())
     p_draw = float(np.trace(joint))
     p_away = float(np.triu(joint, +1).sum())
 
-    oy = PAD_T + grid_h - 36
+    list_y = PAD_T + grid_h + 28   # start below the axis label
+
+    # Outcome totals header
     svg += (
-        f'<line x1="{sx}" y1="{oy - 4}" x2="{sx + SIDE_W - 8}" y2="{oy - 4}"'
+        f'<line x1="{PAD_L}" y1="{list_y - 8}" x2="{total_w - 4}" y2="{list_y - 8}"'
         f' stroke="#1e293b" stroke-width="0.8"/>'
-        f'<text x="{sx}" y="{oy + 8}"'
-        f' fill="{home_colour}" font-size="8"'
-        f' font-family="JetBrains Mono,monospace">'
-        f'H {p_home:.0%}</text>'
-        f'<text x="{sx + 44}" y="{oy + 8}"'
+        f'<text x="{PAD_L}" y="{list_y + 2}"'
+        f' fill="{home_colour}" font-size="8" font-weight="bold"'
+        f' font-family="JetBrains Mono,monospace">H {p_home:.0%}</text>'
+        f'<text x="{PAD_L + 52}" y="{list_y + 2}"'
         f' fill="#64748b" font-size="8"'
-        f' font-family="JetBrains Mono,monospace">'
-        f'D {p_draw:.0%}</text>'
-        f'<text x="{sx + 84}" y="{oy + 8}"'
-        f' fill="{away_colour}" font-size="8"'
-        f' font-family="JetBrains Mono,monospace">'
-        f'A {p_away:.0%}</text>'
+        f' font-family="JetBrains Mono,monospace">D {p_draw:.0%}</text>'
+        f'<text x="{PAD_L + 104}" y="{list_y + 2}"'
+        f' fill="{away_colour}" font-size="8" font-weight="bold"'
+        f' font-family="JetBrains Mono,monospace">A {p_away:.0%}</text>'
+        f'<text x="{total_w - 8}" y="{list_y + 2}"'
+        f' fill="#475569" font-size="7.5" text-anchor="end"'
+        f' font-family="JetBrains Mono,monospace">xG {lam:.2f}–{mu:.2f}</text>'
     )
 
-    # Expected goals
-    svg += (
-        f'<text x="{sx}" y="{oy + 22}"'
-        f' fill="#475569" font-size="7.5"'
-        f' font-family="JetBrains Mono,monospace">'
-        f'xG {lam:.2f} – {mu:.2f}</text>'
-    )
+    # Top scorelines in a horizontal row
+    bar_total_w = total_w - PAD_L - 8
+    for rank, (prob, i, j) in enumerate(all_scores[:top_n]):
+        ry = list_y + 14 + rank * 18
+        outcome = "H" if i > j else ("A" if j > i else "D")
+        colour  = (home_colour if outcome == "H"
+                   else away_colour if outcome == "A"
+                   else "#64748b")
+        bar_w = int((bar_total_w - 60) * prob / all_scores[0][0])
+        svg += (
+            f'<text x="{PAD_L}" y="{ry}"'
+            f' fill="#334155" font-size="8"'
+            f' font-family="JetBrains Mono,monospace">#{rank+1}</text>'
+            f'<text x="{PAD_L + 18}" y="{ry}"'
+            f' fill="{colour}" font-size="9" font-weight="bold"'
+            f' font-family="JetBrains Mono,monospace">{i}-{j}</text>'
+            f'<rect x="{PAD_L + 38}" y="{ry - 9}"'
+            f' width="{bar_w}" height="9"'
+            f' fill="{colour}" opacity="0.5" rx="2"/>'
+            f'<text x="{PAD_L + 42 + bar_w}" y="{ry}"'
+            f' fill="{colour}" font-size="7.5"'
+            f' font-family="JetBrains Mono,monospace">{prob:.1%}</text>'
+        )
 
     svg += "</svg>"
     return svg

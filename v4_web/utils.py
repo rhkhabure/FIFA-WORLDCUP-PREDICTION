@@ -219,6 +219,19 @@ def get_crest_url(team_name: str, fallback_url: str = "") -> str:
     if tid:
         return f"{_CREST_BASE}/{tid}.png"
     return fallback_url
+
+
+def get_crest_proxy_url(team_name: str) -> str:
+    """
+    Returns the local proxy URL for a team crest.
+    Use this in SVG <image> tags to avoid CORS issues.
+    Returns "" if the team has no known crest.
+    """
+    if team_name in _CREST_SLUGS or team_name in _CREST_IDS:
+        # URL-encode spaces
+        safe_name = team_name.replace(" ", "%20")
+        return f"/crest/{safe_name}"
+    return ""
 # Each team's most commonly used shape this season.
 # Format: "DEF-MID-FWD" (GK always assumed as +1).
 DEFAULT_FORMATIONS = {
