@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="space-y-4 max-w-7xl mx-auto">
+<div class="space-y-3 max-w-screen-2xl mx-auto">
 
     <!-- HEADER -->
     <div class="flex items-center justify-between text-slate-300 font-bold uppercase
@@ -22,23 +22,21 @@
                     text-emerald-400 border-emerald-800 bg-emerald-950/40
                 {% endif %}">
                 {{ featured.status|upper }}
-                {% if featured.minute and featured.status == 'In Play' %}
-                    · {{ featured.minute }}'
-                {% endif %}
+                {% if featured.minute and featured.status == 'In Play' %}· {{ featured.minute }}'{% endif %}
             </span>
         {% endif %}
     </div>
 
-    <!-- UPCOMING FIXTURES WIDGET -->
+    <!-- FIXTURES STRIP -->
     {% if fixtures %}
-    <div class="bg-[#0f172a] border border-slate-800 rounded-xl px-4 py-3 shadow-xl">
-        <div class="text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-2">
+    <div class="bg-[#0f172a] border border-slate-800 rounded-xl px-4 py-2.5 shadow-xl">
+        <div class="text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-1.5">
             Upcoming · Premier League · All times EAT (UTC+3)
         </div>
         <div class="fixtures-strip flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
             {% for f in fixtures %}
             <a href="/match?match_id={{ f.match_id }}"
-               class="flex-none border rounded-lg px-3 py-2 text-center min-w-[130px]
+               class="flex-none border rounded-lg px-3 py-1.5 text-center min-w-[110px]
                       transition cursor-pointer
                       {% if f.match_id|string == featured.fixture_id|string %}
                           border-cyan-700 bg-cyan-950/40 text-cyan-300
@@ -46,118 +44,60 @@
                           border-slate-700 bg-slate-900/40 text-slate-300
                           hover:border-slate-500 hover:bg-slate-800/40
                       {% endif %}">
-                <div class="text-[10px] font-mono text-slate-500 mb-1">
-                    {{ f.kickoff_eat }}
-                </div>
-                <div class="text-xs font-bold truncate">{{ f.home }}</div>
-                <div class="text-[10px] text-slate-500 my-0.5">vs</div>
-                <div class="text-xs font-bold truncate">{{ f.away }}</div>
+                <div class="text-[9px] font-mono text-slate-500 mb-0.5">{{ f.kickoff_eat }}</div>
+                <div class="text-[11px] font-bold truncate">{{ f.home }}</div>
+                <div class="text-[9px] text-slate-500">vs</div>
+                <div class="text-[11px] font-bold truncate">{{ f.away }}</div>
             </a>
             {% endfor %}
         </div>
     </div>
     {% endif %}
 
-    <!-- MATCH STATS BAR -->
-    {% if featured.home_name and featured.away_name %}
-    <div class="bg-[#0f172a] border border-slate-800 rounded-xl px-6 py-3 shadow-xl">
-        <div class="flex items-center justify-around text-center text-xs font-mono gap-4 flex-wrap">
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!-- TOP ROW: THREE ODDS PANELS (Pre-game → [spacer] → Live)           -->
+    <!-- Matches the screenshot's Prior | Likelihood | Posterior layout     -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <div class="grid grid-cols-3 gap-3">
 
-            {% if featured.h_ht is not none and featured.a_ht is not none %}
-            <div class="flex flex-col items-center gap-0.5">
-                <span class="text-[10px] text-slate-500 uppercase tracking-widest">Half Time</span>
-                <span class="text-slate-200 font-bold">{{ featured.h_ht }} – {{ featured.a_ht }}</span>
-            </div>
-            {% endif %}
-
-            {% if featured.odds_home %}
-            <div class="flex flex-col items-center gap-0.5">
-                <span class="text-[10px] text-slate-500 uppercase tracking-widest">Bookmaker Odds</span>
-                <div class="flex items-center gap-2">
-                    <span style="color:{{ home_colour }}" class="font-bold">
-                        {{ featured.home_name.split()[0] }} {{ featured.odds_home }}
-                    </span>
-                    <span class="text-slate-500">D {{ featured.odds_draw }}</span>
-                    <span style="color:{{ away_colour }}" class="font-bold">
-                        {{ featured.away_name.split()[0] }} {{ featured.odds_away }}
-                    </span>
-                </div>
-            </div>
-            {% endif %}
-
-            {% if featured.venue %}
-            <div class="flex flex-col items-center gap-0.5">
-                <span class="text-[10px] text-slate-500 uppercase tracking-widest">Venue</span>
-                <span class="text-slate-300">📍 {{ featured.venue }}</span>
-            </div>
-            {% endif %}
-
-            {% if featured.referee %}
-            <div class="flex flex-col items-center gap-0.5">
-                <span class="text-[10px] text-slate-500 uppercase tracking-widest">Referee</span>
-                <span class="text-slate-300">{{ featured.referee }}</span>
-            </div>
-            {% endif %}
-
-        </div>
-    </div>
-    {% endif %}
-    <!--
-        Panel 1 — Pre-game  : Dixon-Coles bivariate Poisson, dp=0.10
-        Panel 2 — Live      : Neural net (football_v4.pth) from kickoff onward
-    -->
-    <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-6 shadow-xl
-                grid grid-cols-1 md:grid-cols-2 gap-8 relative">
-
-        <!-- Panel 1: Pre-game -->
-        <div class="flex flex-col items-center gap-3">
+        <!-- Pre-game (DC) -->
+        <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl
+                    flex flex-col items-center gap-2">
             <div class="text-center">
-                <h3 class="text-sm font-bold text-slate-200 uppercase tracking-wide">
-                    Pre-Game
+                <h3 class="text-xs font-bold text-slate-200 uppercase tracking-widest">
+                    Prior (Static Base)
                 </h3>
-                <span class="text-[10px] text-cyan-400/80 font-mono">
-                    Dixon-Coles · draw propensity 0.10
+                <span class="text-[10px] text-cyan-400/70 font-mono">
+                    Dixon-Coles · dp 0.10
                 </span>
             </div>
-            <div class="flex items-end justify-center w-full gap-8" style="height:96px">
+            <div class="flex items-end justify-center w-full gap-6" style="height:80px">
                 {% if prior %}
                     <div class="flex flex-col items-center justify-end h-full">
                         <span class="text-sm font-mono font-bold mb-1"
-                              style="color:{{ home_colour }}">
-                            {{ prior[0] }}%
-                        </span>
-                        <div class="w-12 rounded-sm transition-all duration-500"
+                              style="color:{{ home_colour }}">{{ prior[0] }}%</span>
+                        <div class="w-14 rounded-sm transition-all duration-500"
                              style="height:{{ [prior[0],4]|max }}%;
                                     background:{{ home_colour }};opacity:0.85"></div>
-                        <span class="text-[10px] text-slate-400 mt-2 uppercase tracking-wider">
-                            Home
-                        </span>
+                        <span class="text-[10px] text-slate-400 mt-2 uppercase tracking-widest">Home</span>
                     </div>
                     <div class="flex flex-col items-center justify-end h-full">
-                        <span class="text-sm text-slate-400 font-mono font-bold mb-1">
-                            {{ prior[1] }}%
-                        </span>
-                        <div class="w-12 bg-slate-600 rounded-sm transition-all duration-500"
+                        <span class="text-sm text-slate-400 font-mono font-bold mb-1">{{ prior[1] }}%</span>
+                        <div class="w-14 bg-slate-600 rounded-sm transition-all duration-500"
                              style="height:{{ [prior[1],4]|max }}%"></div>
-                        <span class="text-[10px] text-slate-400 mt-2 uppercase tracking-wider">
-                            Draw
-                        </span>
+                        <span class="text-[10px] text-slate-400 mt-2 uppercase tracking-widest">Draw</span>
                     </div>
                     <div class="flex flex-col items-center justify-end h-full">
                         <span class="text-sm font-mono font-bold mb-1"
-                              style="color:{{ away_colour }}">
-                            {{ prior[2] }}%
-                        </span>
-                        <div class="w-12 rounded-sm transition-all duration-500"
+                              style="color:{{ away_colour }}">{{ prior[2] }}%</span>
+                        <div class="w-14 rounded-sm transition-all duration-500"
                              style="height:{{ [prior[2],4]|max }}%;
                                     background:{{ away_colour }};opacity:0.85"></div>
-                        <span class="text-[10px] text-slate-400 mt-2 uppercase tracking-wider">
-                            Away
-                        </span>
+                        <span class="text-[10px] text-slate-400 mt-2 uppercase tracking-widest">Away</span>
                     </div>
                 {% else %}
                     <div class="flex items-center justify-center h-full w-full">
-                        <span class="text-xs text-rose-400 font-mono uppercase tracking-widest
+                        <span class="text-[10px] text-rose-400 font-mono uppercase
                                      bg-rose-950/40 border border-rose-900 px-3 py-2 rounded">
                             No prior data
                         </span>
@@ -166,74 +106,106 @@
             </div>
         </div>
 
-        <!-- Divider arrow -->
-        <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2
-                    text-slate-600 text-xl opacity-60 hidden md:block pointer-events-none">
-            &rarr;
+        <!-- Centre panel: Bookmaker odds or match context -->
+        <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl
+                    flex flex-col items-center justify-center gap-3">
+            {% if featured.odds_home %}
+            <div class="text-center">
+                <h3 class="text-xs font-bold text-slate-200 uppercase tracking-widest mb-1">
+                    Bookmaker Odds
+                </h3>
+                <div class="flex items-center gap-4 font-mono">
+                    <div class="text-center">
+                        <div class="text-lg font-bold" style="color:{{ home_colour }}">
+                            {{ featured.odds_home }}
+                        </div>
+                        <div class="text-[10px] text-slate-500 uppercase">Home</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-lg font-bold text-slate-400">{{ featured.odds_draw }}</div>
+                        <div class="text-[10px] text-slate-500 uppercase">Draw</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-lg font-bold" style="color:{{ away_colour }}">
+                            {{ featured.odds_away }}
+                        </div>
+                        <div class="text-[10px] text-slate-500 uppercase">Away</div>
+                    </div>
+                </div>
+            </div>
+            {% if featured.referee %}
+            <div class="text-center border-t border-slate-800 pt-2 w-full">
+                <span class="text-[10px] text-slate-500 font-mono uppercase">Referee · </span>
+                <span class="text-[10px] text-slate-300 font-mono">{{ featured.referee }}</span>
+            </div>
+            {% endif %}
+            {% else %}
+            <div class="text-center space-y-2">
+                {% if featured.referee %}
+                <div>
+                    <span class="text-[10px] text-slate-500 font-mono uppercase tracking-widest">Referee</span>
+                    <div class="text-sm text-slate-300 font-mono mt-0.5">{{ featured.referee }}</div>
+                </div>
+                {% endif %}
+                {% if featured.venue %}
+                <div>
+                    <span class="text-[10px] text-slate-500 font-mono uppercase tracking-widest">Venue</span>
+                    <div class="text-sm text-slate-300 font-mono mt-0.5">{{ featured.venue }}</div>
+                </div>
+                {% endif %}
+                {% if not featured.referee and not featured.venue %}
+                <span class="text-[10px] text-slate-600 font-mono uppercase tracking-widest">
+                    Pre-game analysis
+                </span>
+                {% endif %}
+            </div>
+            {% endif %}
         </div>
 
-        <!-- Panel 2: Live -->
-        <div class="flex flex-col items-center gap-3">
+        <!-- Live (Neural net) -->
+        <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl
+                    flex flex-col items-center gap-2">
             <div class="text-center">
-                <h3 class="text-sm font-bold text-slate-200 uppercase tracking-wide">
-                    Live
+                <h3 class="text-xs font-bold text-slate-200 uppercase tracking-widest">
+                    Posterior (In-Play Live)
                 </h3>
                 <span class="text-[10px] font-mono
-                    {% if posterior %}text-emerald-400/80{% else %}text-slate-500{% endif %}">
-                    {% if posterior %}
-                        Neural net · {{ featured.minute }}' in play
-                    {% elif featured.status == 'Not Started' %}
-                        Awaiting kickoff
-                    {% else %}
-                        Neural net · score + time features
-                    {% endif %}
+                    {% if posterior %}text-emerald-400/70{% else %}text-slate-500{% endif %}">
+                    {% if posterior %}Neural net · {{ featured.minute }}' in play
+                    {% elif featured.status == 'Not Started' %}Awaiting kickoff
+                    {% else %}Neural net · score + time{% endif %}
                 </span>
             </div>
-            <div class="flex items-end justify-center w-full gap-8" style="height:96px">
+            <div class="flex items-end justify-center w-full gap-6" style="height:80px">
                 {% if posterior %}
                     <div class="flex flex-col items-center justify-end h-full">
                         <span class="text-sm font-mono font-bold mb-1"
-                              style="color:{{ home_colour }}">
-                            {{ posterior[0] }}%
-                        </span>
-                        <div class="w-12 rounded-sm transition-all duration-700"
+                              style="color:{{ home_colour }}">{{ posterior[0] }}%</span>
+                        <div class="w-14 rounded-sm transition-all duration-700"
                              style="height:{{ [posterior[0],4]|max }}%;
                                     background:{{ home_colour }};opacity:0.75"></div>
-                        <span class="text-[10px] text-slate-400 mt-2 uppercase tracking-wider">
-                            Home
-                        </span>
+                        <span class="text-[10px] text-slate-400 mt-2 uppercase tracking-widest">Home</span>
                     </div>
                     <div class="flex flex-col items-center justify-end h-full">
-                        <span class="text-sm text-slate-400 font-mono font-bold mb-1">
-                            {{ posterior[1] }}%
-                        </span>
-                        <div class="w-12 bg-slate-500/80 rounded-sm transition-all duration-700"
+                        <span class="text-sm text-slate-400 font-mono font-bold mb-1">{{ posterior[1] }}%</span>
+                        <div class="w-14 bg-slate-500/80 rounded-sm transition-all duration-700"
                              style="height:{{ [posterior[1],4]|max }}%"></div>
-                        <span class="text-[10px] text-slate-400 mt-2 uppercase tracking-wider">
-                            Draw
-                        </span>
+                        <span class="text-[10px] text-slate-400 mt-2 uppercase tracking-widest">Draw</span>
                     </div>
                     <div class="flex flex-col items-center justify-end h-full">
                         <span class="text-sm font-mono font-bold mb-1"
-                              style="color:{{ away_colour }}">
-                            {{ posterior[2] }}%
-                        </span>
-                        <div class="w-12 rounded-sm transition-all duration-700"
+                              style="color:{{ away_colour }}">{{ posterior[2] }}%</span>
+                        <div class="w-14 rounded-sm transition-all duration-700"
                              style="height:{{ [posterior[2],4]|max }}%;
                                     background:{{ away_colour }};opacity:0.75"></div>
-                        <span class="text-[10px] text-slate-400 mt-2 uppercase tracking-wider">
-                            Away
-                        </span>
+                        <span class="text-[10px] text-slate-400 mt-2 uppercase tracking-widest">Away</span>
                     </div>
                 {% else %}
                     <div class="flex items-center justify-center h-full w-full">
-                        <span class="text-xs text-slate-500 font-mono uppercase tracking-widest
+                        <span class="text-[10px] text-slate-500 font-mono uppercase
                                      bg-slate-900/60 border border-slate-800 px-3 py-2 rounded">
-                            {% if featured.status == 'Not Started' %}
-                                Awaiting kickoff
-                            {% else %}
-                                No live data
-                            {% endif %}
+                            {% if featured.status == 'Not Started' %}Awaiting kickoff
+                            {% else %}No live data{% endif %}
                         </span>
                     </div>
                 {% endif %}
@@ -241,65 +213,157 @@
         </div>
     </div>
 
-    <!-- WIN PROBABILITY TIMELINE -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!-- MAIN BODY: Matrix left | Pitch centre | Team ratings right        -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <div class="grid gap-3 items-stretch" style="grid-template-columns: 1fr 2fr 1fr;">
+
+        <!-- LEFT: Scoreline matrix -->
+        <div class="flex flex-col">
+            {% if matrix_svg %}
+            <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-3 shadow-xl flex-1">
+                <div class="text-[10px] font-mono text-slate-400 uppercase tracking-widest mb-1">
+                    Scoreline Probabilities
+                </div>
+                {{ matrix_svg | safe }}
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- CENTRE: Pitch (main focus) -->
+        <div>
+            {% if pitch_svg %}
+            <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-3 shadow-xl h-full">
+                <div class="flex items-center justify-between mb-1">
+                    <span class="text-[10px] font-mono text-slate-400 uppercase tracking-widest">
+                        Starting Lineups
+                    </span>
+                    <div class="flex items-center gap-3 text-[9px] font-mono">
+                        {% if featured.home_name %}
+                        <span class="flex items-center gap-1">
+                            <span class="w-1.5 h-1.5 rounded-full inline-block"
+                                  style="background:{{ home_colour }}"></span>
+                            {{ featured.home_name }} · {{ home_formation }}
+                        </span>
+                        <span class="flex items-center gap-1">
+                            <span class="w-1.5 h-1.5 rounded-full inline-block"
+                                  style="background:{{ away_colour }}"></span>
+                            {{ featured.away_name }} · {{ away_formation }}
+                        </span>
+                        {% endif %}
+                    </div>
+                </div>
+                {{ pitch_svg | safe }}
+                <p class="text-[9px] text-slate-600 font-mono text-center mt-1">
+                    Typical XI · Live lineups require paid API
+                </p>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- RIGHT: Team ratings & DC parameters -->
+        <div class="flex flex-col">
+            {% if featured.home_name and featured.away_name %}
+            <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl flex-1">
+                <div class="text-[10px] font-mono text-slate-400 uppercase tracking-widest mb-3">
+                    Team Ratings & Parameters
+                </div>
+
+                <!-- Home team -->
+                <div class="mb-4">
+                    <div class="text-xs font-bold uppercase tracking-widest mb-2"
+                         style="color:{{ home_colour }}">
+                        {{ featured.home_name }}
+                    </div>
+                    {% if home_alpha %}
+                    <div class="space-y-1.5 font-mono text-xs">
+                        <div class="flex justify-between">
+                            <span class="text-slate-500">α Attack</span>
+                            <span style="color:{{ home_colour }}" class="font-bold">
+                                {{ "%.3f"|format(home_alpha) }}
+                            </span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-slate-500">β Defence</span>
+                            <span style="color:{{ home_colour }}" class="font-bold">
+                                {{ "%.3f"|format(home_beta) }}
+                            </span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-slate-500">xG proj.</span>
+                            <span class="text-slate-300 font-bold">{{ "%.2f"|format(home_xg_proj) }}</span>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <div class="border-t border-slate-800 my-2"></div>
+
+                <!-- Away team -->
+                <div class="mb-4">
+                    <div class="text-xs font-bold uppercase tracking-widest mb-2"
+                         style="color:{{ away_colour }}">
+                        {{ featured.away_name }}
+                    </div>
+                    {% if away_alpha %}
+                    <div class="space-y-1.5 font-mono text-xs">
+                        <div class="flex justify-between">
+                            <span class="text-slate-500">α Attack</span>
+                            <span style="color:{{ away_colour }}" class="font-bold">
+                                {{ "%.3f"|format(away_alpha) }}
+                            </span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-slate-500">β Defence</span>
+                            <span style="color:{{ away_colour }}" class="font-bold">
+                                {{ "%.3f"|format(away_beta) }}
+                            </span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-slate-500">xG proj.</span>
+                            <span class="text-slate-300 font-bold">{{ "%.2f"|format(away_xg_proj) }}</span>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <div class="border-t border-slate-800 my-2"></div>
+
+                <!-- League parameters -->
+                {% if league_gamma %}
+                <div class="space-y-1.5 font-mono text-xs">
+                    <div class="text-[10px] text-slate-500 uppercase tracking-widest mb-1">
+                        League Parameters
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-500">γ Home adv.</span>
+                        <span class="text-slate-300">{{ "%.3f"|format(league_gamma) }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-500">ρ Draw corr.</span>
+                        <span class="text-slate-300">{{ "%.4f"|format(league_rho) }}</span>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!-- BOTTOM: Win probability timeline (full width)                     -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
     {% if timeline_svg %}
-    <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl">
-        <div class="flex items-center justify-between mb-2">
-            <span class="text-xs font-mono text-slate-400 uppercase tracking-widest">
+    <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-3 shadow-xl">
+        <div class="flex items-center justify-between mb-1">
+            <span class="text-[10px] font-mono text-slate-400 uppercase tracking-widest">
                 Win Probability Timeline
             </span>
-            <span class="text-[10px] font-mono text-slate-600">
-                Neural net · every 5 min + goal events
+            <span class="text-[9px] font-mono text-slate-600">
+                Neural net · 5 min intervals · goal minutes approximated
             </span>
         </div>
         {{ timeline_svg | safe }}
-        <p class="text-[10px] text-slate-600 font-mono text-center mt-1">
-            Goal minutes approximated (44' / 75') · exact timings require paid API tier
-        </p>
-    </div>
-    {% endif %}
-
-    <!-- SCORELINE PROBABILITY MATRIX -->
-    {% if matrix_svg %}
-    <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl">
-        <div class="flex items-center justify-between mb-3">
-            <span class="text-xs font-mono text-slate-400 uppercase tracking-widest">
-                Scoreline Probabilities
-            </span>
-            <span class="text-[10px] font-mono text-slate-600">
-                Dixon-Coles bivariate Poisson · pre-game
-            </span>
-        </div>
-        {{ matrix_svg | safe }}
-    </div>
-    {% endif %}
-
-    <!-- PITCH -->
-    {% if pitch_svg %}
-    <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl">
-        <div class="flex items-center justify-between mb-2">
-            <span class="text-xs font-mono text-slate-400 uppercase tracking-widest">
-                Starting Lineups
-            </span>
-            <div class="flex items-center gap-4 text-[10px] font-mono">
-                {% if featured.home_name %}
-                <span class="flex items-center gap-1.5">
-                    <span class="inline-block w-2 h-2 rounded-full"
-                          style="background:{{ home_colour }}"></span>
-                    {{ featured.home_name }} · {{ home_formation }}
-                </span>
-                <span class="flex items-center gap-1.5">
-                    <span class="inline-block w-2 h-2 rounded-full"
-                          style="background:{{ away_colour }}"></span>
-                    {{ featured.away_name }} · {{ away_formation }}
-                </span>
-                {% endif %}
-            </div>
-        </div>
-        {{ pitch_svg | safe }}
-        <p class="text-[10px] text-slate-600 font-mono text-center mt-2">
-            Typical XI shown · Live lineup sync requires paid API plan
-        </p>
     </div>
     {% endif %}
 
@@ -311,19 +375,12 @@ body { background-color: #0b0f19 !important; }
 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 </style>
 <script>
-// Persist the fixtures strip scroll position across page navigations.
-// On load: restore the saved position.
-// On fixture click: save the current position before navigating.
 (function () {
     const KEY = "fixtures-scroll";
     const strip = document.querySelector(".fixtures-strip");
     if (!strip) return;
-
-    // Restore saved scroll position immediately (before paint)
     const saved = sessionStorage.getItem(KEY);
     if (saved !== null) strip.scrollLeft = parseInt(saved, 10);
-
-    // Save position when any fixture link is clicked
     strip.querySelectorAll("a").forEach(function (link) {
         link.addEventListener("click", function () {
             sessionStorage.setItem(KEY, strip.scrollLeft);

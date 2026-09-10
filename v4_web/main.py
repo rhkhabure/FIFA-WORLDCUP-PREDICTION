@@ -37,7 +37,7 @@ sys.path.append(str(ROOT.parent))
 from footballdata import get_live_match_data, get_last_completed_pl_match
 from utils import (generate_pitch_svg_horizontal, get_theme_for_team,
                    get_formation_for_team, get_squad_for_team,
-                   get_crest_url)
+                   get_crest_url, get_crest_proxy_url)
 from timeline import build_match_timeline_svg
 from scoreline_matrix import build_scoreline_svg
 from fpl import get_upcoming_fixtures
@@ -175,6 +175,29 @@ def nn_live(home_team, away_team, league, minute, home_score, away_score):
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
+import urllib.request as _urllib_req
+from fastapi.responses import Response as _Response
+
+@app.get("/crest/{team_name}")
+async def crest_proxy(team_name: str):
+    """
+    Proxy crest images through our server to avoid CORS issues
+    when SVG <image> tags try to load from crests.football-data.org.
+    Usage in SVG: href="/crest/Arsenal" instead of the full CDN URL.
+    """
+    url = get_crest_url(team_name)
+    if not url:
+        return _Response(status_code=404)
+    try:
+        req = _urllib_req.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with _urllib_req.urlopen(req, timeout=5) as resp:
+            data = resp.read()
+        return _Response(content=data, media_type="image/png",
+                        headers={"Cache-Control": "public, max-age=86400"})
+    except Exception:
+        return _Response(status_code=404)
+
+
 @app.get("/", response_class=HTMLResponse)
 async def hub(request: Request):
     return templates.TemplateResponse(
@@ -252,8 +275,8 @@ async def match(request: Request):
             away_color=away_colour,
             home_team=home_name,
             away_team=away_name,
-            home_crest_url=get_crest_url(home_name),
-            away_crest_url=get_crest_url(away_name),
+            home_crest_url=get_crest_proxy_url(home_name),
+            away_crest_url=get_crest_proxy_url(away_name),
             h_score=0, a_score=0,
             status="Not Started",
         )
@@ -340,16 +363,45 @@ async def match(request: Request):
                 away_color=away_colour,
                 home_team=home_name,
                 away_team=away_name,
-                home_crest_url=get_crest_url(
+                home_crest_url=get_crest_proxy_url(home_name) or get_crest_url(
                     home_name, live_data.get("home_crest", "")
                 ),
-                away_crest_url=get_crest_url(
+                away_crest_url=get_crest_proxy_url(away_name) or get_crest_url(
                     away_name, live_data.get("away_crest", "")
                 ),
                 h_score=h_score,
                 a_score=a_score,
                 status=status,
             )
+
+    # Team ratings for the right panel
+    home_alpha = home_beta = away_alpha = away_beta = None
+    home_xg_proj = away_xg_proj = 0.0
+    league_gamma = league_rho = None
+
+    if featured and priors_db:
+        league_data = priors_db.get(LEAGUE_KEY, {})
+        teams = league_data.get("teams", {})
+        meta  = league_data.get("meta", {})
+        hk = TEAM_NAME_ALIASES.get(home_name if featured else "", "")
+        ak = TEAM_NAME_ALIASES.get(away_name if featured else "", "")
+        if not hk: hk = home_name if featured else ""
+        if not ak: ak = away_name if featured else ""
+        h_params = teams.get(hk, {})
+        a_params = teams.get(ak, {})
+        if h_params:
+            home_alpha   = h_params.get("alpha")
+            home_beta    = h_params.get("beta")
+        if a_params:
+            away_alpha   = a_params.get("alpha")
+            away_beta    = a_params.get("beta")
+        if home_alpha and away_beta:
+            gamma = meta.get("gamma_home_advantage", 1.25)
+            home_xg_proj = round(home_alpha * away_beta * gamma, 2)
+        if away_alpha and home_beta:
+            away_xg_proj = round(away_alpha * home_beta, 2)
+        league_gamma = meta.get("gamma_home_advantage")
+        league_rho   = meta.get("rho_draw_correction")
 
     # Upcoming fixtures from FPL (no key, free, EAT times)
     fixtures = get_upcoming_fixtures(max_fixtures=10)
@@ -368,6 +420,15 @@ async def match(request: Request):
         "away_colour"    : away_colour,
         "home_formation" : home_formation,
         "away_formation" : away_formation,
+        # Team ratings panel
+        "home_alpha"     : home_alpha,
+        "home_beta"      : home_beta,
+        "away_alpha"     : away_alpha,
+        "away_beta"      : away_beta,
+        "home_xg_proj"   : home_xg_proj,
+        "away_xg_proj"   : away_xg_proj,
+        "league_gamma"   : league_gamma,
+        "league_rho"     : league_rho,
     }
     return templates.TemplateResponse(request=request, name="match.html", context=ctx)
 
