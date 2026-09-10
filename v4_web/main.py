@@ -39,6 +39,7 @@ from utils import (generate_pitch_svg_horizontal, get_theme_for_team,
                    get_formation_for_team, get_squad_for_team,
                    get_crest_url)
 from timeline import build_match_timeline_svg
+from scoreline_matrix import build_scoreline_svg
 from fpl import get_upcoming_fixtures
 from v4_backend.feature_builder import DCStrengthLookup, TEAM_NAME_ALIASES
 
@@ -199,6 +200,7 @@ async def match(request: Request):
     prior, posterior, featured = None, None, {}
     pitch_svg    = ""
     timeline_svg = ""
+    matrix_svg   = ""
     home_colour  = "#14b8a6"
     away_colour  = "#f43f5e"
     home_formation = "4-3-3"
@@ -237,6 +239,11 @@ async def match(request: Request):
         away_colour    = away_theme["primary"]
         home_formation = get_formation_for_team(home_name)
         away_formation = get_formation_for_team(away_name)
+        matrix_svg = build_scoreline_svg(
+            home_name=home_name, away_name=away_name,
+            league=LEAGUE_KEY, priors_db=priors_db,
+            home_colour=home_colour, away_colour=away_colour,
+        )
         pitch_svg = generate_pitch_svg_horizontal(
             home_formation=home_formation,
             away_formation=away_formation,
@@ -296,6 +303,13 @@ async def match(request: Request):
             home_formation = get_formation_for_team(home_name)
             away_formation = get_formation_for_team(away_name)
 
+            # Scoreline probability matrix (always shown -- pre-game prediction)
+            matrix_svg = build_scoreline_svg(
+                home_name=home_name, away_name=away_name,
+                league=LEAGUE_KEY, priors_db=priors_db,
+                home_colour=home_colour, away_colour=away_colour,
+            )
+
             # Win probability timeline
             timeline_svg = ""
             if status in ("Finished", "FT") and (h_score + a_score) > 0:
@@ -337,6 +351,7 @@ async def match(request: Request):
         "posterior"      : posterior,
         "pitch_svg"      : pitch_svg,
         "timeline_svg"   : timeline_svg,
+        "matrix_svg"     : matrix_svg,
         "fixtures"       : fixtures,
         "home_colour"    : home_colour,
         "away_colour"    : away_colour,
