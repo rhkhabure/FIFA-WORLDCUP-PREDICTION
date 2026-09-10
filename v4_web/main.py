@@ -197,12 +197,10 @@ async def match(request: Request):
         return templates.TemplateResponse(request=request, name="match.html", context=ctx)
 
     prior, posterior, featured = None, None, {}
-    pitch_svg      = ""
-    timeline_svg   = ""
-    home_colour    = "#14b8a6"
-    away_colour    = "#f43f5e"
-    home_theme     = get_theme_for_team("Default")
-    away_theme     = get_theme_for_team("Default")
+    pitch_svg    = ""
+    timeline_svg = ""
+    home_colour  = "#14b8a6"
+    away_colour  = "#f43f5e"
     home_formation = "4-3-3"
     away_formation = "4-3-3"
 
@@ -252,7 +250,6 @@ async def match(request: Request):
     elif match_id:
         live_data = get_live_match_data(match_id)
         if live_data and live_data.get("home_team") not in (None, "Unknown Home"):
-            print(f"DEBUG events count: {len(live_data.get('events', []))}, goals: {live_data.get('events', [])[:2]}")
             home_name = live_data["home_team"]
             away_name = live_data["away_team"]
             minute    = live_data["current_minute"]
@@ -285,14 +282,17 @@ async def match(request: Request):
                 posterior = nn_live(home_name, away_name, LEAGUE_KEY,
                                     safe_minute, h_score, a_score)
 
-            # Win probability timeline (finished matches with goal data only)
+            # Win probability timeline -- works for any finished match with goals.
+            # Goal minutes are approximated (44' first half, 75' second half)
+            # since the free API tier doesn't return individual goal timings.
             timeline_svg = ""
-            if status in ("Finished", "FT") and live_data.get("events"):
+            if status in ("Finished", "FT") and (h_score + a_score) > 0:
                 timeline_svg = build_match_timeline_svg(
                     home_name=home_name,
                     away_name=away_name,
                     league=LEAGUE_KEY,
-                    raw_goals=live_data["events"],
+                    h_score=h_score,
+                    a_score=a_score,
                     home_colour=home_colour,
                     away_colour=away_colour,
                     dc_lookup=dc_lookup,
