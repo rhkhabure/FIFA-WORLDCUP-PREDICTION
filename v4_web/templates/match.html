@@ -345,6 +345,42 @@
                     </div>
                 </div>
                 {% endif %}
+
+                <!-- Live xG (populated by JS polling when FotMob key present) -->
+                {% if fotmob_available %}
+                <div class="border-t border-slate-800 mt-3 pt-3">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-[10px] text-slate-500 uppercase tracking-widest">
+                            Live xG
+                        </span>
+                        <select id="poll-interval"
+                                class="bg-slate-900 border border-slate-700 text-slate-400
+                                       text-[9px] font-mono rounded px-1 py-0.5 cursor-pointer">
+                            <option value="60">1 min</option>
+                            <option value="300" selected>5 min</option>
+                            <option value="600">10 min</option>
+                            <option value="0">Paused</option>
+                        </select>
+                    </div>
+                    <div id="xg-display" class="space-y-2 font-mono text-xs">
+                        <div class="flex justify-between items-center">
+                            <span style="color:{{ home_colour }}" class="font-bold truncate">
+                                {{ featured.home_name if featured.home_name else "Home" }}
+                            </span>
+                            <span id="home-xg" class="text-slate-400">—</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span style="color:{{ away_colour }}" class="font-bold truncate">
+                                {{ featured.away_name if featured.away_name else "Away" }}
+                            </span>
+                            <span id="away-xg" class="text-slate-400">—</span>
+                        </div>
+                        <div id="xg-status" class="text-[9px] text-slate-600 text-right">
+                            Awaiting poll
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
             </div>
             {% endif %}
         </div>
@@ -375,6 +411,7 @@ body { background-color: #0b0f19 !important; }
 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 </style>
 <script>
+// ── Fixtures strip scroll persistence ─────────────────────────────────────────
 (function () {
     const KEY = "fixtures-scroll";
     const strip = document.querySelector(".fixtures-strip");
@@ -386,6 +423,69 @@ body { background-color: #0b0f19 !important; }
             sessionStorage.setItem(KEY, strip.scrollLeft);
         });
     });
+})();
+
+// ── Live xG polling (FotMob via /live/{match_id}) ─────────────────────────────
+(function () {
+    const matchId   = "{{ featured.fixture_id if featured.fixture_id else '' }}";
+    const status    = "{{ featured.status if featured.status else '' }}";
+    const homeXgEl  = document.getElementById("home-xg");
+    const awayXgEl  = document.getElementById("away-xg");
+    const statusEl  = document.getElementById("xg-status");
+    const intervalSel = document.getElementById("poll-interval");
+
+    // Only poll for live or finished matches with a valid match ID
+    if (!matchId || !homeXgEl || !intervalSel) return;
+    if (status === "Not Started") {
+        if (statusEl) statusEl.textContent = "Match not started";
+        return;
+    }
+
+    let pollTimer = null;
+
+    function fmt(v) {
+        return (typeof v === "number") ? v.toFixed(2) : "—";
+    }
+
+    async function poll() {
+        try {
+            const resp = await fetch(`/live/${matchId}`);
+            if (resp.status === 204) {
+                if (statusEl) statusEl.textContent = "FotMob key not configured";
+                return;
+            }
+            const data = await resp.json();
+            if (data.status === "ok") {
+                homeXgEl.textContent = fmt(data.home_xg);
+                awayXgEl.textContent = fmt(data.away_xg);
+                if (statusEl) {
+                    const now = new Date().toLocaleTimeString("en-GB", {hour: "2-digit", minute: "2-digit"});
+                    statusEl.textContent = `Updated ${now}`;
+                }
+            } else {
+                if (statusEl) statusEl.textContent = "No xG data yet";
+            }
+        } catch (e) {
+            if (statusEl) statusEl.textContent = "Poll error";
+        }
+    }
+
+    function startPolling(intervalSeconds) {
+        if (pollTimer) clearInterval(pollTimer);
+        if (intervalSeconds === 0) {
+            if (statusEl) statusEl.textContent = "Paused";
+            return;
+        }
+        poll();  // immediate first poll
+        pollTimer = setInterval(poll, intervalSeconds * 1000);
+    }
+
+    intervalSel.addEventListener("change", function () {
+        startPolling(parseInt(this.value, 10));
+    });
+
+    // Start with the default selected value (5 min)
+    startPolling(parseInt(intervalSel.value, 10));
 })();
 </script>
 {% endblock %}

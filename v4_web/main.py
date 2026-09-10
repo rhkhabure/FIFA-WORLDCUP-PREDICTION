@@ -41,6 +41,7 @@ from utils import (generate_pitch_svg_horizontal, get_theme_for_team,
 from timeline import build_match_timeline_svg
 from scoreline_matrix import build_scoreline_svg
 from fpl import get_upcoming_fixtures
+from fotmob import get_lineup, get_live_xg, fotmob_to_fpl_team_name, has_key as fotmob_available
 from v4_backend.feature_builder import DCStrengthLookup, TEAM_NAME_ALIASES
 
 # ── Constants ─────────────────────────────────────────────────────────────────
@@ -176,15 +177,11 @@ def nn_live(home_team, away_team, league, minute, home_score, away_score):
 
 # ── Routes ────────────────────────────────────────────────────────────────────
 import urllib.request as _urllib_req
-from fastapi.responses import Response as _Response
+from fastapi.responses import Response as _Response, JSONResponse
 
 @app.get("/crest/{team_name}")
 async def crest_proxy(team_name: str):
-    """
-    Proxy crest images through our server to avoid CORS issues
-    when SVG <image> tags try to load from crests.football-data.org.
-    Usage in SVG: href="/crest/Arsenal" instead of the full CDN URL.
-    """
+    """Proxy crest images to avoid CORS issues in SVG <image> tags."""
     url = get_crest_url(team_name)
     if not url:
         return _Response(status_code=404)
@@ -196,6 +193,35 @@ async def crest_proxy(team_name: str):
                         headers={"Cache-Control": "public, max-age=86400"})
     except Exception:
         return _Response(status_code=404)
+
+
+@app.get("/live/{match_id}")
+async def live_poll(match_id: str):
+    """
+    Live polling endpoint called by the frontend every N minutes.
+    Returns: live xG, score, minute from FotMob (1 credit per call).
+    The frontend decides the interval via the dropdown.
+
+    Only makes the FotMob API call if PARSE_BOT_KEY is configured.
+    Returns 204 No Content when FotMob is unavailable so the JS
+    can handle it gracefully without showing an error.
+    """
+    if not fotmob_available():
+        return _Response(status_code=204)
+
+    xg = get_live_xg(match_id, max_age_seconds=60)
+    if not xg:
+        return JSONResponse({"status": "no_data"})
+
+    return JSONResponse({
+        "status"     : "ok",
+        "home_xg"    : xg["home_xg"],
+        "away_xg"    : xg["away_xg"],
+        "home_xg_h1" : xg["home_xg_h1"],
+        "away_xg_h1" : xg["away_xg_h1"],
+        "home_xg_h2" : xg["home_xg_h2"],
+        "away_xg_h2" : xg["away_xg_h2"],
+    })
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -260,8 +286,19 @@ async def match(request: Request):
         away_theme     = get_theme_for_team(away_name)
         home_colour    = home_theme["primary"]
         away_colour    = away_theme["primary"]
-        home_formation = get_formation_for_team(home_name)
-        away_formation = get_formation_for_team(away_name)
+
+        # Try FotMob for confirmed lineup (uses match_id = FPL code)
+        fotmob_lineup  = get_lineup(fpl_match.get("match_id")) if fotmob_available() else None
+        if fotmob_lineup and fotmob_lineup.get("home_players"):
+            home_formation = fotmob_lineup["home_formation"]
+            away_formation = fotmob_lineup["away_formation"]
+            home_players   = fotmob_lineup["home_players"]
+            away_players   = fotmob_lineup["away_players"]
+        else:
+            home_formation = get_formation_for_team(home_name)
+            away_formation = get_formation_for_team(away_name)
+            home_players   = None   # pitch generator uses DEFAULT_SQUADS
+            away_players   = None
         matrix_svg = build_scoreline_svg(
             home_name=home_name, away_name=away_name,
             league=LEAGUE_KEY, priors_db=priors_db,
@@ -275,6 +312,8 @@ async def match(request: Request):
             away_color=away_colour,
             home_team=home_name,
             away_team=away_name,
+            home_players=home_players,
+            away_players=away_players,
             home_crest_url=get_crest_proxy_url(home_name),
             away_crest_url=get_crest_proxy_url(away_name),
             h_score=0, a_score=0,
@@ -407,28 +446,28 @@ async def match(request: Request):
     fixtures = get_upcoming_fixtures(max_fixtures=10)
 
     ctx = {
-        "request"        : request,
-        "current_league" : "Premier League",
-        "featured"       : featured,
-        "prior"          : prior,
-        "posterior"      : posterior,
-        "pitch_svg"      : pitch_svg,
-        "timeline_svg"   : timeline_svg,
-        "matrix_svg"     : matrix_svg,
-        "fixtures"       : fixtures,
-        "home_colour"    : home_colour,
-        "away_colour"    : away_colour,
-        "home_formation" : home_formation,
-        "away_formation" : away_formation,
-        # Team ratings panel
-        "home_alpha"     : home_alpha,
-        "home_beta"      : home_beta,
-        "away_alpha"     : away_alpha,
-        "away_beta"      : away_beta,
-        "home_xg_proj"   : home_xg_proj,
-        "away_xg_proj"   : away_xg_proj,
-        "league_gamma"   : league_gamma,
-        "league_rho"     : league_rho,
+        "request"          : request,
+        "current_league"   : "Premier League",
+        "featured"         : featured,
+        "prior"            : prior,
+        "posterior"        : posterior,
+        "pitch_svg"        : pitch_svg,
+        "timeline_svg"     : timeline_svg,
+        "matrix_svg"       : matrix_svg,
+        "fixtures"         : fixtures,
+        "home_colour"      : home_colour,
+        "away_colour"      : away_colour,
+        "home_formation"   : home_formation,
+        "away_formation"   : away_formation,
+        "home_alpha"       : home_alpha,
+        "home_beta"        : home_beta,
+        "away_alpha"       : away_alpha,
+        "away_beta"        : away_beta,
+        "home_xg_proj"     : home_xg_proj,
+        "away_xg_proj"     : away_xg_proj,
+        "league_gamma"     : league_gamma,
+        "league_rho"       : league_rho,
+        "fotmob_available" : fotmob_available(),
     }
     return templates.TemplateResponse(request=request, name="match.html", context=ctx)
 
