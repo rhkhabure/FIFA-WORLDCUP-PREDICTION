@@ -243,6 +243,7 @@ async def match(request: Request):
             home_name=home_name, away_name=away_name,
             league=LEAGUE_KEY, priors_db=priors_db,
             home_colour=home_colour, away_colour=away_colour,
+            max_goals=4, cell_size=38,
         )
         pitch_svg = generate_pitch_svg_horizontal(
             home_formation=home_formation,
@@ -252,6 +253,9 @@ async def match(request: Request):
             home_team=home_name,
             away_team=away_name,
             home_crest_url=get_crest_url(home_name),
+            away_crest_url=get_crest_url(away_name),
+            h_score=0, a_score=0,
+            status="Not Started",
         )
 
     elif match_id:
@@ -308,6 +312,7 @@ async def match(request: Request):
                 home_name=home_name, away_name=away_name,
                 league=LEAGUE_KEY, priors_db=priors_db,
                 home_colour=home_colour, away_colour=away_colour,
+                max_goals=4, cell_size=38,
             )
 
             # Win probability timeline
@@ -338,6 +343,12 @@ async def match(request: Request):
                 home_crest_url=get_crest_url(
                     home_name, live_data.get("home_crest", "")
                 ),
+                away_crest_url=get_crest_url(
+                    away_name, live_data.get("away_crest", "")
+                ),
+                h_score=h_score,
+                a_score=a_score,
+                status=status,
             )
 
     # Upcoming fixtures from FPL (no key, free, EAT times)
