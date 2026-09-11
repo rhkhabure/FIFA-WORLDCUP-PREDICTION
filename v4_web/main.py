@@ -45,6 +45,7 @@ from fotmob import (get_lineup, get_live_xg, get_fotmob_match_id,
                     has_key as fotmob_available)
 from lineup_adjustment import compute_lineup_adjusted_odds, get_absent_key_players
 from teamdata import get_team_profile, get_team_season_results, get_next_fixture, get_last_n_results, get_standings
+from football_co_uk import get_team_results_historical, get_pl_standings_historical
 from v4_backend.feature_builder import DCStrengthLookup, TEAM_NAME_ALIASES
 
 # ── Constants ─────────────────────────────────────────────────────────────────
@@ -298,10 +299,24 @@ async def team_profile(request: Request, team_id: int, season: int = 2025):
             dc_estimated = True
 
     # Season results
-    all_results  = get_team_season_results(team_id, season=season)
+    # Season data — use fdco CSVs for historical, football-data.org for recent
+    # football-data.org free tier: current + ~2 recent seasons
+    # fdco: free CSVs back to 1888, we offer 2014-present
+    USE_FDCO = season < 2023
+
+    if USE_FDCO:
+        all_results = get_team_results_historical(team_name, season)
+        standings   = get_pl_standings_historical(season)
+        # Map fdco standings team_id using our _CREST_IDS
+        from utils import _CREST_IDS as _CID
+        for row in standings:
+            row["team_id"] = _CID.get(row["team_name"])
+    else:
+        all_results = get_team_season_results(team_id, season=season)
+        standings   = get_standings(season=season)
+
     last_5       = get_last_n_results(all_results, n=5)
     next_fixture = get_next_fixture(all_results)
-    standings    = get_standings(season=season)
 
     ctx = {
         "request"        : request,
