@@ -419,7 +419,7 @@ def generate_pitch_svg_vertical(formation="4-3-3", team_color="#14b8a6",
         return [1] + [int(x) for x in fmt_str.split("-")]
 
     lines = parse_formation(formation)
-    W, H = 200, 160   # half height — top half of pitch only
+    W, H = 200, 220   # half-pitch: tall enough to see all rows clearly
 
     crest_url = get_crest_proxy_url(team_name)
 
