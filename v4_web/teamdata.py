@@ -13,12 +13,17 @@ All functions return plain dicts ready for Jinja2 templates.
 
 import json
 import os
+import time
 import urllib.request
 import urllib.error
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 EAT = timezone(timedelta(hours=3))
+
+# Simple in-memory cache to avoid rate limit (free tier: 10 req/min)
+_cache: dict = {}
+_CACHE_TTL = 300  # 5 minutes
 
 
 def _get_api_key() -> str:
@@ -44,12 +49,19 @@ def _fetch(endpoint: str, params: dict | None = None) -> dict:
     if params:
         qs = "&".join(f"{k}={v}" for k, v in params.items())
         url = f"{url}?{qs}"
+    # Cache check
+    if url in _cache:
+        data, ts = _cache[url]
+        if time.time() - ts < _CACHE_TTL:
+            return data
     req = urllib.request.Request(
         url, headers={"X-Auth-Token": API_KEY}
     )
     try:
         with urllib.request.urlopen(req, timeout=8) as resp:
-            return json.loads(resp.read().decode())
+            data = json.loads(resp.read().decode())
+        _cache[url] = (data, time.time())
+        return data
     except urllib.error.HTTPError as e:
         print(f"teamdata HTTP {e.code} on {endpoint}: {e.reason}")
     except Exception as e:
