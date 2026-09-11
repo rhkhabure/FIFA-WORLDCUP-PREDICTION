@@ -42,7 +42,7 @@ from timeline import build_match_timeline_svg
 from scoreline_matrix import build_scoreline_svg
 from fpl import get_upcoming_fixtures
 from fotmob import (get_lineup, get_live_xg, get_fotmob_match_id,
-                    fotmob_to_fpl_team_name, has_key as fotmob_available)
+                    has_key as fotmob_available)
 from lineup_adjustment import compute_lineup_adjusted_odds, get_absent_key_players
 from v4_backend.feature_builder import DCStrengthLookup, TEAM_NAME_ALIASES
 
@@ -453,6 +453,7 @@ async def match(request: Request):
     home_alpha = home_beta = away_alpha = away_beta = None
     home_xg_proj = away_xg_proj = 0.0
     league_gamma = league_rho = None
+    home_alpha_estimated = away_alpha_estimated = False
 
     if featured and priors_db:
         league_data = priors_db.get(LEAGUE_KEY, {})
@@ -462,14 +463,32 @@ async def match(request: Request):
         ak = TEAM_NAME_ALIASES.get(away_name if featured else "", "")
         if not hk: hk = home_name if featured else ""
         if not ak: ak = away_name if featured else ""
-        h_params = teams.get(hk, {})
-        a_params = teams.get(ak, {})
+
+        # Bottom-quartile fallback for promoted/cup sides not in priors
+        all_alpha = [v["alpha"] for v in teams.values()]
+        all_beta  = [v["beta"]  for v in teams.values()]
+        q25_alpha = float(np.percentile(all_alpha, 25))
+        q75_beta  = float(np.percentile(all_beta,  75))
+
+        h_params = teams.get(hk)
+        a_params = teams.get(ak)
+
         if h_params:
-            home_alpha   = h_params.get("alpha")
-            home_beta    = h_params.get("beta")
+            home_alpha = h_params.get("alpha")
+            home_beta  = h_params.get("beta")
+        else:
+            home_alpha = q25_alpha
+            home_beta  = q75_beta
+            home_alpha_estimated = True
+
         if a_params:
-            away_alpha   = a_params.get("alpha")
-            away_beta    = a_params.get("beta")
+            away_alpha = a_params.get("alpha")
+            away_beta  = a_params.get("beta")
+        else:
+            away_alpha = q25_alpha
+            away_beta  = q75_beta
+            away_alpha_estimated = True
+
         if home_alpha and away_beta:
             gamma = meta.get("gamma_home_advantage", 1.25)
             home_xg_proj = round(home_alpha * away_beta * gamma, 2)
@@ -495,14 +514,16 @@ async def match(request: Request):
         "away_colour"      : away_colour,
         "home_formation"   : home_formation,
         "away_formation"   : away_formation,
-        "home_alpha"       : home_alpha,
-        "home_beta"        : home_beta,
-        "away_alpha"       : away_alpha,
-        "away_beta"        : away_beta,
-        "home_xg_proj"     : home_xg_proj,
-        "away_xg_proj"     : away_xg_proj,
-        "league_gamma"     : league_gamma,
-        "league_rho"       : league_rho,
+        "home_alpha"              : home_alpha,
+        "home_beta"               : home_beta,
+        "away_alpha"              : away_alpha,
+        "away_beta"               : away_beta,
+        "home_xg_proj"            : home_xg_proj,
+        "away_xg_proj"            : away_xg_proj,
+        "league_gamma"            : league_gamma,
+        "league_rho"              : league_rho,
+        "home_alpha_estimated"    : home_alpha_estimated,
+        "away_alpha_estimated"    : away_alpha_estimated,
         "fotmob_available" : fotmob_available(),
         "lineup_prior"     : lineup_prior,
         "adj_lam"          : adj_lam,
