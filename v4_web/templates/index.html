@@ -1,18 +1,47 @@
 {% extends "base.html" %}
-
 {% block content %}
-<div class="space-y-4 max-w-7xl mx-auto flex flex-col items-center justify-center h-[50vh]">
-    <h1 class="text-2xl font-bold text-slate-300 font-mono tracking-widest">LEAGUE HUB</h1>
-    <p class="text-slate-500 font-mono text-sm">Premier League · V4.2 Quant Terminal</p>
+<div class="max-w-screen-2xl mx-auto space-y-6">
 
-    <a href="/match"
-       class="mt-4 px-6 py-3 border border-cyan-800 text-cyan-400 rounded
-              hover:bg-cyan-950 transition font-mono text-sm tracking-wider uppercase">
-        Latest Match &rarr;
-    </a>
+    <div class="flex items-center gap-3">
+        <span class="text-2xl">⚽</span>
+        <div>
+            <h1 class="text-xl font-bold text-white tracking-wide">V4.2 Quant Terminal</h1>
+            <p class="text-[10px] font-mono text-slate-500 uppercase tracking-widest">
+                Premier League · Dixon-Coles + Neural Net
+            </p>
+        </div>
+    </div>
 
-    <p class="text-slate-600 font-mono text-xs mt-2">
-        Redirects automatically to the most recently completed PL match
-    </p>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+        <!-- Match dashboard -->
+        <a href="/match" class="block bg-[#0f172a] border border-slate-800 hover:border-slate-600
+                                rounded-xl p-6 shadow-xl transition group">
+            <div class="text-2xl mb-2">📊</div>
+            <h2 class="text-base font-bold text-white mb-1">Live Match Dashboard</h2>
+            <p class="text-[11px] font-mono text-slate-500">
+                Pre-game DC priors · Lineup adjustment · Neural net live odds ·
+                Win probability timeline · Scoreline matrix
+            </p>
+            <div class="text-[10px] font-mono text-cyan-500 mt-3 group-hover:text-cyan-300 transition">
+                Open dashboard →
+            </div>
+        </a>
+
+        <!-- Teams hub -->
+        <a href="/teams" class="block bg-[#0f172a] border border-slate-800 hover:border-slate-600
+                                rounded-xl p-6 shadow-xl transition group">
+            <div class="text-2xl mb-2">🏟️</div>
+            <h2 class="text-base font-bold text-white mb-1">Team Profiles</h2>
+            <p class="text-[11px] font-mono text-slate-500">
+                Squad · Formation · DC ratings · Season results · Next fixture
+            </p>
+            <div class="text-[10px] font-mono text-cyan-500 mt-3 group-hover:text-cyan-300 transition">
+                Browse teams →
+            </div>
+        </a>
+
+    </div>
+
 </div>
 {% endblock %}
