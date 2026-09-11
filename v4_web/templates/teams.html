@@ -116,6 +116,20 @@ const SHORT = {
 };
 CLUBS.forEach(c => c.short = SHORT[c.name] || c.name.split(" ")[0]);
 
+// London cluster jitter offsets (pixels at base zoom)
+// Applied at low zoom to separate overlapping dots; fades out as zoom increases
+const JITTER = {
+    "Arsenal"        : [  0.0, -18],
+    "Tottenham"      : [ 14.0, -28],
+    "West Ham"       : [ 28.0,   0],
+    "Crystal Palace" : [  8.0,  28],
+    "Chelsea"        : [-14.0,  20],
+    "Fulham"         : [-28.0,   6],
+    "Brentford"      : [-22.0, -11],
+};
+// How much jitter to apply: 1.0 at zoom=1, 0 at zoom>=JITTER_FADE_ZOOM
+const JITTER_FADE_ZOOM = 3.5;
+
 // ── Projection ────────────────────────────────────────────────────────────────
 const LAT_MIN=49.9,LAT_MAX=55.9,LON_MIN=-5.7,LON_MAX=1.8;
 function merc(lat){const r=lat*Math.PI/180;return Math.log(Math.tan(Math.PI/4+r/2));}
@@ -129,6 +143,8 @@ const OUTLINE_COORDS=[
     [-0.90,54.70],[-0.80,54.30],[-0.20,53.60],[ 0.10,53.50],[ 0.20,53.00],
     [ 0.30,52.60],[ 1.20,52.60],[ 1.60,52.30],[ 1.80,51.80],[ 1.50,51.40],
     [ 1.20,51.20],[ 0.80,51.10],[ 0.50,51.00],[ 0.20,51.00],
+    [ 0.30,50.90],[ 0.50,50.80],[ 0.40,50.70],[ 0.20,50.70],
+    [ 0.10,50.80],[-0.10,50.80],[-0.20,50.80],[-0.40,50.80],
     [ 0.10,51.30],[ 0.00,51.50],[-0.10,51.40],[-0.50,51.20],[-0.80,51.00],
     [-1.00,50.80],[-1.20,50.70],[-1.50,50.60],[-2.00,50.60],[-2.50,50.50],
     [-3.00,50.20],[-3.50,50.20],[-4.00,50.30],[-4.50,50.20],[-5.00,50.10],
@@ -251,7 +267,7 @@ function draw() {
                 }
                 const img=crestImgs[best.name];
                 if(img){
-                    ctx.globalAlpha=0.12;
+                    ctx.globalAlpha=0.99;
                     ctx.drawImage(img,px-20,py-20,40,40);
                 }
             }
@@ -271,43 +287,56 @@ function draw() {
     ctx.stroke();
 
     // Club markers
+    // Jitter factor: 1.0 at zoom=1, fades to 0 at JITTER_FADE_ZOOM
+    const jitterFactor = Math.max(0, 1 - (zoom - 1) / (JITTER_FADE_ZOOM - 1));
+
     CLUBS.forEach(club => {
         const {px,py,colour,name,short,id}=club;
+
+        // Apply jitter offset (screen-space, not world-space)
+        const [jx,jy] = JITTER[name] || [0,0];
+        // Jitter is in base-canvas pixels; we need to offset in world space
+        // because we're drawing inside a scaled ctx
+        const wpx = px + jx * jitterFactor / zoom;
+        const wpy = py + jy * jitterFactor / zoom;
+
         const dotR = Math.max(10, 14/zoom);
         const crestS = dotR*1.6;
 
         // Glow
-        const g=ctx.createRadialGradient(px,py,dotR,px,py,dotR*2.5);
+        const g=ctx.createRadialGradient(wpx,wpy,dotR,wpx,wpy,dotR*2.5);
         g.addColorStop(0,colour+"70");g.addColorStop(1,colour+"00");
-        ctx.beginPath();ctx.arc(px,py,dotR*2.5,0,Math.PI*2);
+        ctx.beginPath();ctx.arc(wpx,wpy,dotR*2.5,0,Math.PI*2);
         ctx.fillStyle=g;ctx.fill();
 
         // Dark backing circle
-        ctx.beginPath();ctx.arc(px,py,dotR+2,0,Math.PI*2);
+        ctx.beginPath();ctx.arc(wpx,wpy,dotR+2,0,Math.PI*2);
         ctx.fillStyle="rgba(0,0,0,0.75)";ctx.fill();
         ctx.strokeStyle=colour;ctx.lineWidth=1.5/zoom;ctx.stroke();
 
         // Crest or coloured dot
         const img=crestImgs[name];
         if(img){
-            ctx.drawImage(img,px-crestS/2,py-crestS/2,crestS,crestS);
+            ctx.drawImage(img,wpx-crestS/2,wpy-crestS/2,crestS,crestS);
         } else {
-            ctx.beginPath();ctx.arc(px,py,dotR,0,Math.PI*2);
+            ctx.beginPath();ctx.arc(wpx,wpy,dotR,0,Math.PI*2);
             ctx.fillStyle=colour;ctx.fill();
         }
 
-        // Label (only at zoom > 1.2 or always for clarity)
+        // Label
         const labelSize=Math.min(11,Math.max(7,9*zoom))/zoom;
         ctx.font=`bold ${labelSize}px 'JetBrains Mono',monospace`;
         ctx.textAlign="center";
-        const labelY=py+dotR+labelSize+2;
-        // Shadow
+        const labelY=wpy+dotR+labelSize+2;
         ctx.fillStyle="rgba(0,0,0,0.95)";
         [-1,0,1].forEach(dx=>[-1,0,1].forEach(dy=>{
-            if(dx||dy) ctx.fillText(short,px+dx/zoom,labelY+dy/zoom);
+            if(dx||dy) ctx.fillText(short,wpx+dx/zoom,labelY+dy/zoom);
         }));
         ctx.fillStyle="white";
-        ctx.fillText(short,px,labelY);
+        ctx.fillText(short,wpx,labelY);
+
+        // Store jittered position for hit testing
+        club._wpx = wpx; club._wpy = wpy;
     });
 
     ctx.restore();
@@ -429,7 +458,10 @@ function canvasCoords(e){
 function nearestClub(cx,cy){
     let minD=Infinity,best=CLUBS[0];
     for(const c of CLUBS){
-        const d=(c.px-cx)*(c.px-cx)+(c.py-cy)*(c.py-cy);
+        // Use jittered position for hit testing so clicks match visual dots
+        const wpx = c._wpx !== undefined ? c._wpx : c.px;
+        const wpy = c._wpy !== undefined ? c._wpy : c.py;
+        const d=(wpx-cx)*(wpx-cx)+(wpy-cy)*(wpy-cy);
         if(d<minD){minD=d;best=c;}
     }
     return{club:best,dist:Math.sqrt(minD)};
