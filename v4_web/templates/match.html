@@ -106,10 +106,73 @@
             </div>
         </div>
 
-        <!-- Centre panel: Bookmaker odds or match context -->
+        <!-- Centre panel: Lineup Adjusted (when available) or Bookmaker Odds -->
         <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl
                     flex flex-col items-center justify-center gap-3">
-            {% if featured.odds_home %}
+
+            {% if lineup_prior %}
+            <!-- Lineup-adjusted DC odds -->
+            <div class="text-center w-full">
+                <h3 class="text-xs font-bold text-slate-200 uppercase tracking-widest mb-0.5">
+                    Likelihood (Lineup Adj.)
+                </h3>
+                <span class="text-[10px] text-amber-400/70 font-mono">
+                    Post-Lineup · confirmed XI
+                </span>
+            </div>
+            <div class="flex items-end justify-center w-full gap-6" style="height:80px">
+                <div class="flex flex-col items-center justify-end h-full">
+                    <span class="text-sm font-mono font-bold mb-1"
+                          style="color:{{ home_colour }}">{{ lineup_prior[0] }}%</span>
+                    <div class="w-14 rounded-sm transition-all duration-500"
+                         style="height:{{ [lineup_prior[0],4]|max }}%;
+                                background:{{ home_colour }};opacity:0.85"></div>
+                    <span class="text-[10px] text-slate-400 mt-2 uppercase tracking-widest">Home</span>
+                </div>
+                <div class="flex flex-col items-center justify-end h-full">
+                    <span class="text-sm text-slate-400 font-mono font-bold mb-1">{{ lineup_prior[1] }}%</span>
+                    <div class="w-14 bg-slate-600 rounded-sm transition-all duration-500"
+                         style="height:{{ [lineup_prior[1],4]|max }}%"></div>
+                    <span class="text-[10px] text-slate-400 mt-2 uppercase tracking-widest">Draw</span>
+                </div>
+                <div class="flex flex-col items-center justify-end h-full">
+                    <span class="text-sm font-mono font-bold mb-1"
+                          style="color:{{ away_colour }}">{{ lineup_prior[2] }}%</span>
+                    <div class="w-14 rounded-sm transition-all duration-500"
+                         style="height:{{ [lineup_prior[2],4]|max }}%;
+                                background:{{ away_colour }};opacity:0.85"></div>
+                    <span class="text-[10px] text-slate-400 mt-2 uppercase tracking-widest">Away</span>
+                </div>
+            </div>
+
+            <!-- xG after adjustment + absent key players -->
+            <div class="w-full border-t border-slate-800 pt-2 space-y-1.5">
+                {% if adj_lam is not none %}
+                <div class="flex justify-between text-[10px] font-mono">
+                    <span class="text-slate-500">Adj. xG</span>
+                    <span class="text-slate-300">
+                        <span style="color:{{ home_colour }}">{{ "%.2f"|format(adj_lam) }}</span>
+                        –
+                        <span style="color:{{ away_colour }}">{{ "%.2f"|format(adj_mu) }}</span>
+                    </span>
+                </div>
+                {% endif %}
+                {% if absent_home %}
+                <div class="text-[9px] font-mono">
+                    <span style="color:{{ home_colour }}" class="font-bold">OUT:</span>
+                    <span class="text-rose-400">{{ absent_home|join(", ") }}</span>
+                </div>
+                {% endif %}
+                {% if absent_away %}
+                <div class="text-[9px] font-mono">
+                    <span style="color:{{ away_colour }}" class="font-bold">OUT:</span>
+                    <span class="text-rose-400">{{ absent_away|join(", ") }}</span>
+                </div>
+                {% endif %}
+            </div>
+
+            {% elif featured.odds_home %}
+            <!-- Bookmaker odds fallback -->
             <div class="text-center">
                 <h3 class="text-xs font-bold text-slate-200 uppercase tracking-widest mb-1">
                     Bookmaker Odds
@@ -139,24 +202,29 @@
                 <span class="text-[10px] text-slate-300 font-mono">{{ featured.referee }}</span>
             </div>
             {% endif %}
+
             {% else %}
+            <!-- Pre-game context (no lineup, no odds yet) -->
             <div class="text-center space-y-2">
+                <div class="text-[10px] text-slate-500 font-mono uppercase tracking-widest">
+                    Lineup Adjustment
+                </div>
+                <div class="text-[10px] text-slate-600 font-mono">
+                    {% if fotmob_available %}
+                        Awaiting confirmed lineup
+                    {% else %}
+                        Configure PARSE_BOT_KEY to enable
+                    {% endif %}
+                </div>
                 {% if featured.referee %}
-                <div>
-                    <span class="text-[10px] text-slate-500 font-mono uppercase tracking-widest">Referee</span>
-                    <div class="text-sm text-slate-300 font-mono mt-0.5">{{ featured.referee }}</div>
+                <div class="border-t border-slate-800 pt-2">
+                    <span class="text-[10px] text-slate-300 font-mono">{{ featured.referee }}</span>
                 </div>
                 {% endif %}
                 {% if featured.venue %}
                 <div>
-                    <span class="text-[10px] text-slate-500 font-mono uppercase tracking-widest">Venue</span>
-                    <div class="text-sm text-slate-300 font-mono mt-0.5">{{ featured.venue }}</div>
+                    <span class="text-[10px] text-slate-300 font-mono">{{ featured.venue }}</span>
                 </div>
-                {% endif %}
-                {% if not featured.referee and not featured.venue %}
-                <span class="text-[10px] text-slate-600 font-mono uppercase tracking-widest">
-                    Pre-game analysis
-                </span>
                 {% endif %}
             </div>
             {% endif %}
@@ -269,80 +337,158 @@
                     Team Ratings & Parameters
                 </div>
 
-                <!-- Home team -->
-                <div class="mb-4">
-                    <div class="text-xs font-bold uppercase tracking-widest mb-2"
+                <!-- Home team gauges -->
+                <div class="mb-3">
+                    <div class="text-[10px] font-bold uppercase tracking-widest mb-2"
                          style="color:{{ home_colour }}">
                         {{ featured.home_name }}
                     </div>
                     {% if home_alpha %}
-                    <div class="space-y-1.5 font-mono text-xs">
-                        <div class="flex justify-between">
-                            <span class="text-slate-500">α Attack</span>
-                            <span style="color:{{ home_colour }}" class="font-bold">
-                                {{ "%.3f"|format(home_alpha) }}
-                            </span>
+                    <div class="grid grid-cols-2 gap-2">
+                        <!-- Attack gauge (α): higher = better, range 0.4-1.8) -->
+                        <div>
+                            <svg viewBox="0 0 100 65" class="w-full" xmlns="http://www.w3.org/2000/svg">
+                                {% set pct = ((home_alpha - 0.4) / 1.4) | float %}
+                                {% set pct = [0.0, [1.0, pct] | min] | max %}
+                                {% set angle_deg = -180 + pct * 180 %}
+                                <path d="M 12 52 A 38 38 0 0 1 88 52"
+                                      fill="none" stroke="#1e293b" stroke-width="6" stroke-linecap="round"/>
+                                <path d="M 12 52 A 38 38 0 0 1 88 52"
+                                      fill="none" stroke="{{ home_colour }}" stroke-width="6"
+                                      stroke-linecap="round" opacity="0.2"
+                                      stroke-dasharray="{{ pct * 119.4 }} 119.4"/>
+                                <text x="50" y="46" fill="{{ home_colour }}" font-size="12"
+                                      font-weight="bold" text-anchor="middle"
+                                      font-family="JetBrains Mono,monospace">{{ "%.3f"|format(home_alpha) }}</text>
+                                <text x="50" y="57" fill="#64748b" font-size="6.5"
+                                      text-anchor="middle" font-family="JetBrains Mono,monospace">α Attack</text>
+                                <text x="10" y="60" fill="#334155" font-size="5"
+                                      text-anchor="middle" font-family="JetBrains Mono,monospace">0.4</text>
+                                <text x="90" y="60" fill="#334155" font-size="5"
+                                      text-anchor="middle" font-family="JetBrains Mono,monospace">1.8</text>
+                                <!-- League avg tick at 50% -->
+                                <line x1="50" y1="14" x2="50" y2="22" stroke="#334155" stroke-width="1.2"/>
+                                <text x="50" y="12" fill="#334155" font-size="4.5"
+                                      text-anchor="middle" font-family="JetBrains Mono,monospace">avg</text>
+                            </svg>
                         </div>
-                        <div class="flex justify-between">
-                            <span class="text-slate-500">β Defence</span>
-                            <span style="color:{{ home_colour }}" class="font-bold">
-                                {{ "%.3f"|format(home_beta) }}
-                            </span>
+                        <!-- Defence gauge (β): lower = better, range 0.8-2.1 -->
+                        <div>
+                            <svg viewBox="0 0 100 65" class="w-full" xmlns="http://www.w3.org/2000/svg">
+                                {% set pct = ((home_beta - 0.8) / 1.3) | float %}
+                                {% set pct = [0.0, [1.0, pct] | min] | max %}
+                                {% set inv_pct = 1.0 - pct %}
+                                <path d="M 12 52 A 38 38 0 0 1 88 52"
+                                      fill="none" stroke="#1e293b" stroke-width="6" stroke-linecap="round"/>
+                                <path d="M 12 52 A 38 38 0 0 1 88 52"
+                                      fill="none" stroke="{{ home_colour }}" stroke-width="6"
+                                      stroke-linecap="round" opacity="0.2"
+                                      stroke-dasharray="{{ inv_pct * 119.4 }} 119.4"/>
+                                <text x="50" y="46" fill="{{ home_colour }}" font-size="12"
+                                      font-weight="bold" text-anchor="middle"
+                                      font-family="JetBrains Mono,monospace">{{ "%.3f"|format(home_beta) }}</text>
+                                <text x="50" y="57" fill="#64748b" font-size="6.5"
+                                      text-anchor="middle" font-family="JetBrains Mono,monospace">β Defence</text>
+                                <text x="10" y="60" fill="#334155" font-size="5"
+                                      text-anchor="middle" font-family="JetBrains Mono,monospace">best</text>
+                                <text x="90" y="60" fill="#334155" font-size="5"
+                                      text-anchor="middle" font-family="JetBrains Mono,monospace">weak</text>
+                                <line x1="50" y1="14" x2="50" y2="22" stroke="#334155" stroke-width="1.2"/>
+                                <text x="50" y="12" fill="#334155" font-size="4.5"
+                                      text-anchor="middle" font-family="JetBrains Mono,monospace">avg</text>
+                            </svg>
                         </div>
-                        <div class="flex justify-between">
-                            <span class="text-slate-500">xG proj.</span>
-                            <span class="text-slate-300 font-bold">{{ "%.2f"|format(home_xg_proj) }}</span>
-                        </div>
+                    </div>
+                    <!-- xG projected -->
+                    <div class="flex justify-between text-[10px] font-mono mt-1 px-1">
+                        <span class="text-slate-500">xG projected</span>
+                        <span class="font-bold" style="color:{{ home_colour }}">
+                            {{ "%.2f"|format(home_xg_proj) }}
+                        </span>
                     </div>
                     {% endif %}
                 </div>
 
                 <div class="border-t border-slate-800 my-2"></div>
 
-                <!-- Away team -->
-                <div class="mb-4">
-                    <div class="text-xs font-bold uppercase tracking-widest mb-2"
+                <!-- Away team gauges -->
+                <div class="mb-3">
+                    <div class="text-[10px] font-bold uppercase tracking-widest mb-2"
                          style="color:{{ away_colour }}">
                         {{ featured.away_name }}
                     </div>
                     {% if away_alpha %}
-                    <div class="space-y-1.5 font-mono text-xs">
-                        <div class="flex justify-between">
-                            <span class="text-slate-500">α Attack</span>
-                            <span style="color:{{ away_colour }}" class="font-bold">
-                                {{ "%.3f"|format(away_alpha) }}
-                            </span>
+                    <div class="grid grid-cols-2 gap-2">
+                        <!-- Attack -->
+                        <div>
+                            <svg viewBox="0 0 100 65" class="w-full" xmlns="http://www.w3.org/2000/svg">
+                                {% set pct = ((away_alpha - 0.4) / 1.4) | float %}
+                                {% set pct = [0.0, [1.0, pct] | min] | max %}
+                                <path d="M 12 52 A 38 38 0 0 1 88 52"
+                                      fill="none" stroke="#1e293b" stroke-width="6" stroke-linecap="round"/>
+                                <path d="M 12 52 A 38 38 0 0 1 88 52"
+                                      fill="none" stroke="{{ away_colour }}" stroke-width="6"
+                                      stroke-linecap="round" opacity="0.2"
+                                      stroke-dasharray="{{ pct * 119.4 }} 119.4"/>
+                                <text x="50" y="46" fill="{{ away_colour }}" font-size="12"
+                                      font-weight="bold" text-anchor="middle"
+                                      font-family="JetBrains Mono,monospace">{{ "%.3f"|format(away_alpha) }}</text>
+                                <text x="50" y="57" fill="#64748b" font-size="6.5"
+                                      text-anchor="middle" font-family="JetBrains Mono,monospace">α Attack</text>
+                                <text x="10" y="60" fill="#334155" font-size="5"
+                                      text-anchor="middle" font-family="JetBrains Mono,monospace">0.4</text>
+                                <text x="90" y="60" fill="#334155" font-size="5"
+                                      text-anchor="middle" font-family="JetBrains Mono,monospace">1.8</text>
+                                <line x1="50" y1="14" x2="50" y2="22" stroke="#334155" stroke-width="1.2"/>
+                                <text x="50" y="12" fill="#334155" font-size="4.5"
+                                      text-anchor="middle" font-family="JetBrains Mono,monospace">avg</text>
+                            </svg>
                         </div>
-                        <div class="flex justify-between">
-                            <span class="text-slate-500">β Defence</span>
-                            <span style="color:{{ away_colour }}" class="font-bold">
-                                {{ "%.3f"|format(away_beta) }}
-                            </span>
+                        <!-- Defence -->
+                        <div>
+                            <svg viewBox="0 0 100 65" class="w-full" xmlns="http://www.w3.org/2000/svg">
+                                {% set pct = ((away_beta - 0.8) / 1.3) | float %}
+                                {% set pct = [0.0, [1.0, pct] | min] | max %}
+                                {% set inv_pct = 1.0 - pct %}
+                                <path d="M 12 52 A 38 38 0 0 1 88 52"
+                                      fill="none" stroke="#1e293b" stroke-width="6" stroke-linecap="round"/>
+                                <path d="M 12 52 A 38 38 0 0 1 88 52"
+                                      fill="none" stroke="{{ away_colour }}" stroke-width="6"
+                                      stroke-linecap="round" opacity="0.2"
+                                      stroke-dasharray="{{ inv_pct * 119.4 }} 119.4"/>
+                                <text x="50" y="46" fill="{{ away_colour }}" font-size="12"
+                                      font-weight="bold" text-anchor="middle"
+                                      font-family="JetBrains Mono,monospace">{{ "%.3f"|format(away_beta) }}</text>
+                                <text x="50" y="57" fill="#64748b" font-size="6.5"
+                                      text-anchor="middle" font-family="JetBrains Mono,monospace">β Defence</text>
+                                <text x="10" y="60" fill="#334155" font-size="5"
+                                      text-anchor="middle" font-family="JetBrains Mono,monospace">best</text>
+                                <text x="90" y="60" fill="#334155" font-size="5"
+                                      text-anchor="middle" font-family="JetBrains Mono,monospace">weak</text>
+                                <line x1="50" y1="14" x2="50" y2="22" stroke="#334155" stroke-width="1.2"/>
+                                <text x="50" y="12" fill="#334155" font-size="4.5"
+                                      text-anchor="middle" font-family="JetBrains Mono,monospace">avg</text>
+                            </svg>
                         </div>
-                        <div class="flex justify-between">
-                            <span class="text-slate-500">xG proj.</span>
-                            <span class="text-slate-300 font-bold">{{ "%.2f"|format(away_xg_proj) }}</span>
-                        </div>
+                    </div>
+                    <div class="flex justify-between text-[10px] font-mono mt-1 px-1">
+                        <span class="text-slate-500">xG projected</span>
+                        <span class="font-bold" style="color:{{ away_colour }}">
+                            {{ "%.2f"|format(away_xg_proj) }}
+                        </span>
                     </div>
                     {% endif %}
                 </div>
 
                 <div class="border-t border-slate-800 my-2"></div>
 
-                <!-- League parameters -->
+                <!-- League parameters (compact) -->
                 {% if league_gamma %}
-                <div class="space-y-1.5 font-mono text-xs">
-                    <div class="text-[10px] text-slate-500 uppercase tracking-widest mb-1">
-                        League Parameters
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="text-slate-500">γ Home adv.</span>
-                        <span class="text-slate-300">{{ "%.3f"|format(league_gamma) }}</span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="text-slate-500">ρ Draw corr.</span>
-                        <span class="text-slate-300">{{ "%.4f"|format(league_rho) }}</span>
-                    </div>
+                <div class="grid grid-cols-2 gap-x-2 text-[10px] font-mono">
+                    <div class="text-slate-500">γ Home adv.</div>
+                    <div class="text-slate-300 text-right">{{ "%.3f"|format(league_gamma) }}</div>
+                    <div class="text-slate-500">ρ Draw corr.</div>
+                    <div class="text-slate-300 text-right">{{ "%.4f"|format(league_rho) }}</div>
                 </div>
                 {% endif %}
 
@@ -428,6 +574,7 @@ body { background-color: #0b0f19 !important; }
 // ── Live xG polling (FotMob via /live/{match_id}) ─────────────────────────────
 (function () {
     const matchId   = "{{ featured.fixture_id if featured.fixture_id else '' }}";
+    const fotmobId  = "{{ featured.fotmob_id if featured.fotmob_id else '' }}";
     const status    = "{{ featured.status if featured.status else '' }}";
     const homeXgEl  = document.getElementById("home-xg");
     const awayXgEl  = document.getElementById("away-xg");
@@ -449,7 +596,7 @@ body { background-color: #0b0f19 !important; }
 
     async function poll() {
         try {
-            const resp = await fetch(`/live/${matchId}`);
+            const resp = await fetch(`/live/${matchId}${fotmobId ? '?fotmob_id=' + fotmobId : ''}`);
             if (resp.status === 204) {
                 if (statusEl) statusEl.textContent = "FotMob key not configured";
                 return;

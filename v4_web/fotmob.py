@@ -209,7 +209,47 @@ def clear_cache(match_id: str | int | None = None):
         _xg_cache.pop(key, None)
 
 
-def fotmob_to_fpl_team_name(fotmob_name: str) -> str:
+def get_fotmob_match_id(home_name: str, away_name: str, date_str: str | None = None) -> str | None:
+    """
+    Look up the FotMob match ID for a given fixture by team names.
+    date_str: YYYYMMDD format, defaults to today (UTC).
+
+    FotMob IDs (e.g. 5795445) differ from FPL codes (e.g. 2645229).
+    This resolves the correct ID from the matches-by-date endpoint.
+    Costs 3 credits -- result is cached per date.
+    """
+    if not API_KEY:
+        return None
+
+    if date_str is None:
+        from datetime import datetime, timezone
+        date_str = datetime.now(timezone.utc).strftime("%Y%m%d")
+
+    cache_key = f"matches_{date_str}"
+    if cache_key not in _lineup_cache:
+        data = _fetch("get_matches_by_date", {"date": date_str})
+        if data.get("status") == "success":
+            _lineup_cache[cache_key] = data
+        else:
+            return None
+    else:
+        data = _lineup_cache[cache_key]
+
+    # Normalise names for matching
+    def norm(s: str) -> str:
+        return s.lower().replace("fc", "").replace("afc", "").strip()
+
+    home_n = norm(fotmob_to_fpl_team_name(home_name) or home_name)
+    away_n = norm(fotmob_to_fpl_team_name(away_name) or away_name)
+
+    leagues = data.get("data", {}).get("leagues", [])
+    for league in leagues:
+        for match in league.get("matches", []):
+            mh = norm(match.get("home", {}).get("name", ""))
+            ma = norm(match.get("away", {}).get("name", ""))
+            if (home_n in mh or mh in home_n) and (away_n in ma or ma in away_n):
+                return str(match.get("id"))
+    return None
     """
     FotMob uses full official club names. Map to our internal short names
     that match TEAM_NAME_ALIASES and DEFAULT_SQUADS.

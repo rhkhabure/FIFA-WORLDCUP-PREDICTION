@@ -41,7 +41,9 @@ from utils import (generate_pitch_svg_horizontal, get_theme_for_team,
 from timeline import build_match_timeline_svg
 from scoreline_matrix import build_scoreline_svg
 from fpl import get_upcoming_fixtures
-from fotmob import get_lineup, get_live_xg, fotmob_to_fpl_team_name, has_key as fotmob_available
+from fotmob import (get_lineup, get_live_xg, get_fotmob_match_id,
+                    fotmob_to_fpl_team_name, has_key as fotmob_available)
+from lineup_adjustment import compute_lineup_adjusted_odds, get_absent_key_players
 from v4_backend.feature_builder import DCStrengthLookup, TEAM_NAME_ALIASES
 
 # ── Constants ─────────────────────────────────────────────────────────────────
@@ -196,20 +198,17 @@ async def crest_proxy(team_name: str):
 
 
 @app.get("/live/{match_id}")
-async def live_poll(match_id: str):
+async def live_poll(match_id: str, request: Request):
     """
     Live polling endpoint called by the frontend every N minutes.
-    Returns: live xG, score, minute from FotMob (1 credit per call).
-    The frontend decides the interval via the dropdown.
-
-    Only makes the FotMob API call if PARSE_BOT_KEY is configured.
-    Returns 204 No Content when FotMob is unavailable so the JS
-    can handle it gracefully without showing an error.
+    Accepts optional ?fotmob_id= to use the resolved FotMob match ID.
+    Falls back to looking up by match_id if not provided.
     """
     if not fotmob_available():
         return _Response(status_code=204)
 
-    xg = get_live_xg(match_id, max_age_seconds=60)
+    fotmob_id = request.query_params.get("fotmob_id") or match_id
+    xg = get_live_xg(fotmob_id, max_age_seconds=60)
     if not xg:
         return JSONResponse({"status": "no_data"})
 
@@ -250,6 +249,11 @@ async def match(request: Request):
     pitch_svg    = ""
     timeline_svg = ""
     matrix_svg   = ""
+    lineup_prior = None
+    adj_lam      = None
+    adj_mu       = None
+    absent_home  = []
+    absent_away  = []
     home_colour  = "#14b8a6"
     away_colour  = "#f43f5e"
     home_formation = "4-3-3"
@@ -287,8 +291,15 @@ async def match(request: Request):
         home_colour    = home_theme["primary"]
         away_colour    = away_theme["primary"]
 
-        # Try FotMob for confirmed lineup (uses match_id = FPL code)
-        fotmob_lineup  = get_lineup(fpl_match.get("match_id")) if fotmob_available() else None
+        # Try FotMob for confirmed lineup
+        # FotMob IDs differ from FPL codes -- resolve via team name lookup
+        fotmob_lineup = None
+        if fotmob_available():
+            fotmob_id = get_fotmob_match_id(home_name, away_name)
+            if fotmob_id:
+                fotmob_lineup = get_lineup(fotmob_id)
+                # Store fotmob_id in featured so /live polling uses it
+                featured["fotmob_id"] = fotmob_id
         if fotmob_lineup and fotmob_lineup.get("home_players"):
             home_formation = fotmob_lineup["home_formation"]
             away_formation = fotmob_lineup["away_formation"]
@@ -299,6 +310,31 @@ async def match(request: Request):
             away_formation = get_formation_for_team(away_name)
             home_players   = None   # pitch generator uses DEFAULT_SQUADS
             away_players   = None
+
+        # Lineup-adjusted odds (only when confirmed lineups available)
+        lineup_prior = None
+        adj_lam = adj_mu = None
+        absent_home = absent_away = []
+        if fotmob_lineup and home_players and priors_db:
+            league_data = priors_db.get(LEAGUE_KEY, {})
+            teams = league_data.get("teams", {})
+            meta  = league_data.get("meta", {})
+            hk = TEAM_NAME_ALIASES.get(home_name, home_name)
+            ak = TEAM_NAME_ALIASES.get(away_name, away_name)
+            h_p = teams.get(hk, {})
+            a_p = teams.get(ak, {})
+            if h_p and a_p:
+                gamma    = meta.get("gamma_home_advantage", 1.25)
+                rho      = meta.get("rho_draw_correction", 0.0)
+                base_lam = float(np.clip(h_p["alpha"] * a_p["beta"] * gamma, 1e-5, 15.0))
+                base_mu  = float(np.clip(a_p["alpha"] * h_p["beta"], 1e-5, 15.0))
+                lineup_prior, adj_lam, adj_mu = compute_lineup_adjusted_odds(
+                    home_name=home_name, away_name=away_name,
+                    home_lineup=home_players, away_lineup=away_players,
+                    base_lam=base_lam, base_mu=base_mu, rho=rho,
+                )
+                absent_home = get_absent_key_players(home_name, home_players)
+                absent_away = get_absent_key_players(away_name, away_players)
         matrix_svg = build_scoreline_svg(
             home_name=home_name, away_name=away_name,
             league=LEAGUE_KEY, priors_db=priors_db,
@@ -468,6 +504,11 @@ async def match(request: Request):
         "league_gamma"     : league_gamma,
         "league_rho"       : league_rho,
         "fotmob_available" : fotmob_available(),
+        "lineup_prior"     : lineup_prior,
+        "adj_lam"          : adj_lam,
+        "adj_mu"           : adj_mu,
+        "absent_home"      : absent_home,
+        "absent_away"      : absent_away,
     }
     return templates.TemplateResponse(request=request, name="match.html", context=ctx)
 
