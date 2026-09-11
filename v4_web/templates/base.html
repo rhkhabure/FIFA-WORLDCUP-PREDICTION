@@ -3,24 +3,223 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Quantitative Match Terminal</title>
+    <title>V4.2 Quant Terminal</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;700&display=swap');
-        body { 
-            background-color: #0b0f19; 
-            color: #f8fafc; 
-            font-family: 'Inter', sans-serif; 
-            margin: 0; 
+        body {
+            background-color: #0b0f19;
+            color: #f8fafc;
+            font-family: 'Inter', sans-serif;
+            margin: 0;
         }
         .font-mono { font-family: 'JetBrains Mono', monospace; }
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+
+        /* Sidebar */
+        #sidebar {
+            width: 220px;
+            flex-shrink: 0;
+            transition: width 0.2s ease;
+        }
+        #sidebar.collapsed { width: 52px; }
+        #sidebar.collapsed .nav-label { display: none; }
+        #sidebar.collapsed .nav-section-label { display: none; }
+        #sidebar.collapsed .sidebar-logo-text { display: none; }
+        #sidebar.collapsed .nav-item { justify-content: center; padding: 10px 0; }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            color: #94a3b8;
+            text-decoration: none;
+            transition: background 0.15s, color 0.15s;
+            white-space: nowrap;
+        }
+        .nav-item:hover { background: rgba(255,255,255,0.06); color: #e2e8f0; }
+        .nav-item.active { background: rgba(255,255,255,0.08); color: #ffffff; }
+        .nav-item .nav-icon { font-size: 15px; flex-shrink: 0; width: 20px; text-align: center; }
+
+        .nav-section-label {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 9px;
+            color: #334155;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            padding: 16px 14px 4px;
+        }
+
+        /* Page content shifts right of sidebar */
+        #main-content {
+            flex: 1;
+            min-width: 0;
+            padding: 20px 24px;
+            overflow-x: hidden;
+        }
     </style>
 </head>
-<body class="flex flex-col min-h-screen">
-    <div class="flex-1 p-6 relative">
+<body class="flex min-h-screen">
+
+    <!-- SIDEBAR -->
+    <div id="sidebar"
+         class="flex flex-col h-screen sticky top-0 bg-[#080d16]
+                border-r border-slate-800/60 overflow-hidden">
+
+        <!-- Logo + collapse toggle -->
+        <div class="flex items-center justify-between px-3 py-4
+                    border-b border-slate-800/60">
+            <div class="flex items-center gap-2">
+                <span style="font-size:18px">⚽</span>
+                <span class="sidebar-logo-text font-mono text-xs font-bold
+                             text-slate-200 tracking-wide">
+                    V4.2 Terminal
+                </span>
+            </div>
+            <button id="sidebar-toggle"
+                    class="text-slate-600 hover:text-slate-400 transition
+                           w-6 h-6 flex items-center justify-center rounded"
+                    title="Toggle sidebar">
+                <span id="toggle-icon" style="font-size:12px">◀</span>
+            </button>
+        </div>
+
+        <!-- Nav -->
+        <nav class="flex-1 py-2 overflow-y-auto overflow-x-hidden">
+
+            <div class="nav-section-label">Navigation</div>
+
+            <a href="/" class="nav-item" data-page="home">
+                <span class="nav-icon">🏠</span>
+                <span class="nav-label">Home</span>
+            </a>
+
+            <a href="/match" class="nav-item" data-page="match">
+                <span class="nav-icon">📊</span>
+                <span class="nav-label">Match Dashboard</span>
+            </a>
+
+            <a href="/teams" class="nav-item" data-page="teams">
+                <span class="nav-icon">🗺️</span>
+                <span class="nav-label">Team Map</span>
+            </a>
+
+            <div class="nav-section-label">Quick Teams</div>
+
+            <!-- Top 6 quick links — most likely to be visited -->
+            {% set quick_teams = [
+                ("Arsenal",          57,  "#EF0107"),
+                ("Liverpool",        64,  "#C8102E"),
+                ("Manchester City",  65,  "#6CABDD"),
+                ("Manchester United",66,  "#8B0000"),
+                ("Chelsea",          61,  "#034694"),
+                ("Tottenham",        73,  "#3355AA"),
+            ] %}
+            {% for name, tid, colour in quick_teams %}
+            <a href="/team/{{ tid }}" class="nav-item" data-page="team-{{ tid }}">
+                <span class="nav-icon">
+                    <img src="/crest/{{ name }}"
+                         style="width:16px;height:16px;object-fit:contain"
+                         onerror="this.replaceWith(document.createTextNode('●'))"/>
+                </span>
+                <span class="nav-label" style="color:inherit">{{ name }}</span>
+            </a>
+            {% endfor %}
+
+            <div class="nav-section-label">All Teams</div>
+
+            {% set all_teams = [
+                ("Aston Villa",             58,  "#670E36"),
+                ("Bournemouth",             1044,"#DA291C"),
+                ("Brentford",               402, "#D40000"),
+                ("Brighton",                397, "#0057B8"),
+                ("Burnley",                 328, "#6C1D45"),
+                ("Crystal Palace",          354, "#C4122E"),
+                ("Everton",                 62,  "#003399"),
+                ("Fulham",                  63,  "#888888"),
+                ("Ipswich",                 610, "#0044A9"),
+                ("Leeds",                   341, "#CCAA00"),
+                ("Leicester",               338, "#003090"),
+                ("Newcastle United",        67,  "#4a5568"),
+                ("Nottingham Forest",       351, "#DD0000"),
+                ("Southampton",             340, "#D71920"),
+                ("Sunderland",              71,  "#EB172B"),
+                ("West Ham",                563, "#7A263A"),
+                ("Wolverhampton Wanderers", 76,  "#FDB913"),
+            ] %}
+            {% for name, tid, colour in all_teams %}
+            <a href="/team/{{ tid }}" class="nav-item" data-page="team-{{ tid }}">
+                <span class="nav-icon">
+                    <img src="/crest/{{ name }}"
+                         style="width:16px;height:16px;object-fit:contain"
+                         onerror="this.replaceWith(document.createTextNode('●'))"/>
+                </span>
+                <span class="nav-label">{{ name }}</span>
+            </a>
+            {% endfor %}
+
+        </nav>
+
+        <!-- Footer -->
+        <div class="border-t border-slate-800/60 px-3 py-3">
+            <div class="sidebar-logo-text font-mono text-[9px] text-slate-700
+                        uppercase tracking-widest">
+                Dixon-Coles + Neural Net
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div id="main-content">
         {% block content %}{% endblock %}
     </div>
+
+<script>
+// ── Sidebar collapse ──────────────────────────────────────────────────────────
+const sidebar     = document.getElementById('sidebar');
+const toggleBtn   = document.getElementById('sidebar-toggle');
+const toggleIcon  = document.getElementById('toggle-icon');
+const STORAGE_KEY = 'sidebar-collapsed';
+
+function setCollapsed(collapsed) {
+    if (collapsed) {
+        sidebar.classList.add('collapsed');
+        toggleIcon.textContent = '▶';
+    } else {
+        sidebar.classList.remove('collapsed');
+        toggleIcon.textContent = '◀';
+    }
+    try { sessionStorage.setItem(STORAGE_KEY, collapsed ? '1' : '0'); } catch(e) {}
+}
+
+// Restore state
+try {
+    const saved = sessionStorage.getItem(STORAGE_KEY);
+    if (saved === '1') setCollapsed(true);
+} catch(e) {}
+
+toggleBtn.addEventListener('click', () => {
+    setCollapsed(!sidebar.classList.contains('collapsed'));
+});
+
+// ── Active page highlight ─────────────────────────────────────────────────────
+(function() {
+    const path = window.location.pathname;
+    document.querySelectorAll('.nav-item').forEach(link => {
+        const href = link.getAttribute('href');
+        if (!href) return;
+        const isActive =
+            (href === '/' && path === '/') ||
+            (href !== '/' && path.startsWith(href));
+        if (isActive) link.classList.add('active');
+    });
+})();
+</script>
+
 </body>
 </html>

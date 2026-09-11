@@ -34,6 +34,43 @@
         </div>
     </div>
 
+    <!-- UPCOMING FIXTURES STRIP -->
+    {% if team_fixtures %}
+    <div class="bg-[#0f172a] border border-slate-800 rounded-xl px-4 py-2.5 shadow-xl">
+        <div class="text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-1.5">
+            Upcoming Fixtures · All times EAT (UTC+3)
+        </div>
+        <div class="flex gap-2 overflow-x-auto pb-1"
+             style="-ms-overflow-style:none;scrollbar-width:none">
+            {% for f in team_fixtures %}
+            {% set is_home = (f.home == profile.name or
+                              f.home in [profile.short_name, profile.tla]) %}
+            <a href="/match?match_id={{ f.match_id }}"
+               class="flex-none border rounded-lg px-3 py-1.5 text-center
+                      min-w-[115px] transition cursor-pointer
+                      border-slate-700 bg-slate-900/40 text-slate-300
+                      hover:border-cyan-700 hover:bg-cyan-950/20">
+                <div class="text-[9px] font-mono text-slate-500 mb-0.5">
+                    {{ f.kickoff_eat }}
+                </div>
+                <div class="text-[10px] font-bold truncate"
+                     style="color:{{ team_colour }}">
+                    {{ f.home }}
+                </div>
+                <div class="text-[9px] text-slate-600">vs</div>
+                <div class="text-[10px] font-bold truncate text-slate-300">
+                    {{ f.away }}
+                </div>
+                <div class="text-[8px] font-mono mt-1
+                            {% if is_home %}text-cyan-600{% else %}text-amber-700{% endif %}">
+                    {{ "HOME" if is_home else "AWAY" }}
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
     <!-- THREE-COLUMN MAIN -->
     <div class="grid gap-3 items-start" style="grid-template-columns: 1fr 2fr 1fr;">
 
