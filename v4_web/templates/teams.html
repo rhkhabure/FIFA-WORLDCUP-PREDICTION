@@ -1,286 +1,499 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="max-w-screen-2xl mx-auto space-y-4">
+<div class="max-w-screen-2xl mx-auto space-y-3">
 
-    <div class="flex items-center justify-between">
+    <!-- Header + Search -->
+    <div class="flex items-center justify-between gap-4">
         <div>
             <h1 class="text-lg font-bold text-white tracking-wide">Premier League 2025/26</h1>
             <p class="text-[10px] font-mono text-slate-500">
-                Territory shows nearest club · click any region to open profile
+                Scroll to zoom · drag to pan · click club to open profile
             </p>
         </div>
-        <a href="/" class="text-[10px] font-mono text-slate-500 hover:text-slate-300
-                           border border-slate-700 px-2 py-1 rounded transition">← Home</a>
+        <div class="flex items-center gap-3">
+            <div class="relative">
+                <input id="search" type="text" placeholder="Search club..."
+                       autocomplete="off"
+                       class="bg-[#0f172a] border border-slate-700 text-slate-200
+                              text-sm font-mono rounded-lg px-3 py-2 w-56
+                              focus:outline-none focus:border-cyan-700 placeholder-slate-600"/>
+                <div id="search-results"
+                     class="absolute top-full left-0 mt-1 w-full bg-[#0f172a]
+                            border border-slate-700 rounded-lg shadow-xl z-50 hidden">
+                </div>
+            </div>
+            <!-- Zoom controls -->
+            <div class="flex gap-1">
+                <button id="zoom-in"
+                        class="bg-[#0f172a] border border-slate-700 text-slate-300
+                               hover:border-slate-500 w-8 h-8 rounded font-mono text-sm
+                               flex items-center justify-center transition">+</button>
+                <button id="zoom-out"
+                        class="bg-[#0f172a] border border-slate-700 text-slate-300
+                               hover:border-slate-500 w-8 h-8 rounded font-mono text-sm
+                               flex items-center justify-center transition">−</button>
+                <button id="zoom-reset"
+                        class="bg-[#0f172a] border border-slate-700 text-slate-300
+                               hover:border-slate-500 px-2 h-8 rounded font-mono text-[10px]
+                               flex items-center justify-center transition">Reset</button>
+            </div>
+            <a href="/" class="text-[10px] font-mono text-slate-500 hover:text-slate-300
+                               border border-slate-700 px-2 py-1.5 rounded transition">← Home</a>
+        </div>
     </div>
 
-    <div class="flex gap-4 items-start">
-
-        <!-- Map -->
-        <div class="flex-none bg-[#0b1220] border border-slate-800 rounded-xl
-                    overflow-hidden shadow-xl" style="width:490px;height:570px">
-            <canvas id="map-canvas" width="490" height="570"
-                    style="display:block;cursor:pointer"></canvas>
-        </div>
-
-        <!-- Club list -->
-        <div class="flex-1 bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl
-                    overflow-y-auto" style="max-height:570px">
-            <div class="text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-3">
-                All Clubs
-            </div>
-            <div id="club-list" class="space-y-0.5"></div>
+    <!-- Map -->
+    <div id="map-wrap"
+         class="bg-[#07111f] border border-slate-800 rounded-xl overflow-hidden shadow-xl"
+         style="height:calc(100vh - 145px);min-height:520px;position:relative">
+        <canvas id="map-canvas"
+                style="display:block;width:100%;height:100%;cursor:grab"></canvas>
+        <!-- Zoom hint -->
+        <div id="zoom-hint"
+             class="absolute bottom-3 right-3 text-[9px] font-mono text-slate-700
+                    bg-[#0b1220]/80 px-2 py-1 rounded pointer-events-none">
+            Scroll to zoom · drag to pan
         </div>
     </div>
 
     <!-- Tooltip -->
-    <div id="tooltip" style="position:fixed;pointer-events:none;display:none;z-index:100"
+    <div id="tooltip"
+         style="position:fixed;pointer-events:none;display:none;z-index:200"
          class="bg-[#0f172a] border border-slate-700 rounded-lg px-3 py-2 shadow-xl">
-        <div id="tt-name" class="text-xs font-bold text-white font-mono"></div>
+        <div class="flex items-center gap-2 mb-0.5">
+            <img id="tt-crest" src="" class="w-6 h-6 object-contain"
+                 onerror="this.style.display='none'"/>
+            <div id="tt-name" class="text-sm font-bold text-white font-mono"></div>
+        </div>
         <div id="tt-city" class="text-[10px] text-slate-400 font-mono"></div>
+        <div class="text-[9px] text-slate-600 font-mono mt-0.5">Click to open profile →</div>
     </div>
 </div>
 
-<style>body { background-color: #0b0f19 !important; }</style>
+<style>
+body { background-color: #0b0f19 !important; }
+#search-results a {
+    display:flex; align-items:center; gap:8px;
+    padding:7px 12px; font-size:11px; font-family:monospace;
+    color:#94a3b8; border-bottom:1px solid #1e293b; text-decoration:none;
+}
+#search-results a:hover { background:#1e293b; color:white; }
+#search-results a:last-child { border-bottom:none; }
+#map-canvas.grabbing { cursor: grabbing; }
+</style>
 
 <script>
 // ── Club data ──────────────────────────────────────────────────────────────────
 const CLUBS = [
-    { name:"Arsenal",                  city:"London (N)",    id:57,   lat:51.5549, lon:-0.1084, colour:"#EF0107" },
-    { name:"Aston Villa",              city:"Birmingham",    id:58,   lat:52.5092, lon:-1.8847, colour:"#670E36" },
-    { name:"Bournemouth",              city:"Bournemouth",   id:1044, lat:50.7353, lon:-1.8382, colour:"#DA291C" },
-    { name:"Brentford",               city:"London (W)",    id:402,  lat:51.4882, lon:-0.2886, colour:"#D40000" },
-    { name:"Brighton",                city:"Brighton",      id:397,  lat:50.8617, lon:-0.0836, colour:"#0057B8" },
-    { name:"Burnley",                 city:"Burnley",       id:328,  lat:53.7890, lon:-2.2300, colour:"#6C1D45" },
-    { name:"Chelsea",                 city:"London (SW)",   id:61,   lat:51.4816, lon:-0.1910, colour:"#034694" },
-    { name:"Crystal Palace",          city:"London (SE)",   id:354,  lat:51.3983, lon:-0.0855, colour:"#1B458F" },
-    { name:"Everton",                 city:"Liverpool",     id:62,   lat:53.4388, lon:-2.9609, colour:"#003399" },
-    { name:"Fulham",                  city:"London (SW)",   id:63,   lat:51.4750, lon:-0.2218, colour:"#888888" },
-    { name:"Ipswich",                 city:"Ipswich",       id:610,  lat:52.0550, lon: 1.1450, colour:"#0044A9" },
-    { name:"Leeds",                   city:"Leeds",         id:341,  lat:53.7775, lon:-1.5722, colour:"#CCAA00" },
-    { name:"Leicester",               city:"Leicester",     id:338,  lat:52.6204, lon:-1.1421, colour:"#003090" },
-    { name:"Liverpool",               city:"Liverpool",     id:64,   lat:53.4088, lon:-2.9508, colour:"#C8102E" },
-    { name:"Manchester City",         city:"Manchester",    id:65,   lat:53.4831, lon:-2.2004, colour:"#6CABDD" },
-    { name:"Manchester United",       city:"Manchester",    id:66,   lat:53.4631, lon:-2.2913, colour:"#990000" },
-    { name:"Newcastle United",        city:"Newcastle",     id:67,   lat:54.9756, lon:-1.6216, colour:"#334155" },
-    { name:"Nottingham Forest",       city:"Nottingham",    id:351,  lat:52.9399, lon:-1.1323, colour:"#DD0000" },
-    { name:"Southampton",             city:"Southampton",   id:340,  lat:50.9058, lon:-1.3914, colour:"#D71920" },
-    { name:"Sunderland",              city:"Sunderland",    id:71,   lat:54.9145, lon:-1.3883, colour:"#EB172B" },
-    { name:"Tottenham",               city:"London (N)",    id:73,   lat:51.6042, lon:-0.0661, colour:"#4466AA" },
-    { name:"West Ham",                city:"London (E)",    id:563,  lat:51.5388, lon: 0.0169, colour:"#7A263A" },
-    { name:"Wolverhampton Wanderers", city:"Wolverhampton", id:76,   lat:52.5900, lon:-2.1305, colour:"#FDB913" },
+    {name:"Arsenal",                  city:"London (N)",    id:57,   lat:51.5549,lon:-0.1084,colour:"#EF0107"},
+    {name:"Aston Villa",              city:"Birmingham",    id:58,   lat:52.5092,lon:-1.8847,colour:"#670E36"},
+    {name:"Bournemouth",              city:"Bournemouth",   id:1044, lat:50.7353,lon:-1.8382,colour:"#DA291C"},
+    {name:"Brentford",               city:"London (W)",    id:402,  lat:51.4882,lon:-0.2886,colour:"#D40000"},
+    {name:"Brighton",                city:"Brighton",      id:397,  lat:50.8617,lon:-0.0836,colour:"#0057B8"},
+    {name:"Burnley",                 city:"Burnley",       id:328,  lat:53.7890,lon:-2.2300,colour:"#6C1D45"},
+    {name:"Chelsea",                 city:"London (SW)",   id:61,   lat:51.4816,lon:-0.1910,colour:"#034694"},
+    {name:"Crystal Palace",          city:"London (SE)",   id:354,  lat:51.3983,lon:-0.0855,colour:"#C4122E"},
+    {name:"Everton",                 city:"Liverpool",     id:62,   lat:53.4388,lon:-2.9609,colour:"#003399"},
+    {name:"Fulham",                  city:"London (SW)",   id:63,   lat:51.4750,lon:-0.2218,colour:"#888888"},
+    {name:"Ipswich",                 city:"Ipswich",       id:610,  lat:52.0550,lon: 1.1450,colour:"#0044A9"},
+    {name:"Leeds",                   city:"Leeds",         id:341,  lat:53.7775,lon:-1.5722,colour:"#CCAA00"},
+    {name:"Leicester",               city:"Leicester",     id:338,  lat:52.6204,lon:-1.1421,colour:"#003090"},
+    {name:"Liverpool",               city:"Liverpool",     id:64,   lat:53.4088,lon:-2.9508,colour:"#C8102E"},
+    {name:"Manchester City",         city:"Manchester",    id:65,   lat:53.4831,lon:-2.2004,colour:"#6CABDD"},
+    {name:"Manchester United",       city:"Manchester",    id:66,   lat:53.4631,lon:-2.2913,colour:"#8B0000"},
+    {name:"Newcastle United",        city:"Newcastle",     id:67,   lat:54.9756,lon:-1.6216,colour:"#4a5568"},
+    {name:"Nottingham Forest",       city:"Nottingham",    id:351,  lat:52.9399,lon:-1.1323,colour:"#DD0000"},
+    {name:"Southampton",             city:"Southampton",   id:340,  lat:50.9058,lon:-1.3914,colour:"#D71920"},
+    {name:"Sunderland",              city:"Sunderland",    id:71,   lat:54.9145,lon:-1.3883,colour:"#EB172B"},
+    {name:"Tottenham",               city:"London (N)",    id:73,   lat:51.6042,lon:-0.0661,colour:"#3355AA"},
+    {name:"West Ham",                city:"London (E)",    id:563,  lat:51.5388,lon: 0.0169,colour:"#7A263A"},
+    {name:"Wolverhampton Wanderers", city:"Wolverhampton", id:76,   lat:52.5900,lon:-2.1305,colour:"#FDB913"},
 ];
+const SHORT = {
+    "Wolverhampton Wanderers":"Wolves","Manchester United":"Man Utd",
+    "Manchester City":"Man City","Newcastle United":"Newcastle",
+    "Nottingham Forest":"Forest","Crystal Palace":"Palace",
+};
+CLUBS.forEach(c => c.short = SHORT[c.name] || c.name.split(" ")[0]);
 
-// ── Mercator projection (same as server-side calculation) ─────────────────────
-const LAT_MIN=49.9, LAT_MAX=55.9, LON_MIN=-5.7, LON_MAX=1.8;
-const CW=490, CH=570;
-
-function merc(latDeg) {
-    const r = latDeg * Math.PI / 180;
-    return Math.log(Math.tan(Math.PI/4 + r/2));
-}
-const yMin = merc(LAT_MIN), yMax = merc(LAT_MAX);
-
-function project(lat, lon) {
-    const x = (lon - LON_MIN) / (LON_MAX - LON_MIN) * CW;
-    const y = (1 - (merc(lat) - yMin) / (yMax - yMin)) * CH;
-    return [x, y];
+// ── Projection ────────────────────────────────────────────────────────────────
+const LAT_MIN=49.9,LAT_MAX=55.9,LON_MIN=-5.7,LON_MAX=1.8;
+function merc(lat){const r=lat*Math.PI/180;return Math.log(Math.tan(Math.PI/4+r/2));}
+const yMin=merc(LAT_MIN),yMax=merc(LAT_MAX);
+function project(lat,lon,W,H){
+    return [(lon-LON_MIN)/(LON_MAX-LON_MIN)*W,(1-(merc(lat)-yMin)/(yMax-yMin))*H];
 }
 
-CLUBS.forEach(c => { [c.px, c.py] = project(c.lat, c.lon); });
-
-// ── England outline path (Mercator-projected polygon points) ──────────────────
-// Manually traced from a geographic reference — geographically accurate
-// coastline at a level of detail appropriate for a 490×570 canvas.
-// Coordinates are [lon, lat] pairs traced clockwise from Berwick-upon-Tweed.
-const ENGLAND_OUTLINE = [
-    // Northeast coast down to the Thames estuary
+const OUTLINE_COORDS=[
     [-2.00,55.80],[-1.70,55.60],[-1.50,55.20],[-1.30,55.10],[-1.10,54.90],
     [-0.90,54.70],[-0.80,54.30],[-0.20,53.60],[ 0.10,53.50],[ 0.20,53.00],
     [ 0.30,52.60],[ 1.20,52.60],[ 1.60,52.30],[ 1.80,51.80],[ 1.50,51.40],
     [ 1.20,51.20],[ 0.80,51.10],[ 0.50,51.00],[ 0.20,51.00],
-    // Thames estuary / southeast
     [ 0.10,51.30],[ 0.00,51.50],[-0.10,51.40],[-0.50,51.20],[-0.80,51.00],
     [-1.00,50.80],[-1.20,50.70],[-1.50,50.60],[-2.00,50.60],[-2.50,50.50],
     [-3.00,50.20],[-3.50,50.20],[-4.00,50.30],[-4.50,50.20],[-5.00,50.10],
     [-5.30,50.00],[-5.50,50.10],[-5.70,50.20],
-    // Southwest peninsula (Cornwall & Devon)
     [-5.70,50.40],[-5.20,50.40],[-4.80,50.60],[-4.30,50.70],[-4.00,50.80],
     [-3.50,51.00],[-3.20,51.20],[-3.00,51.30],[-2.70,51.60],[-2.50,51.70],
-    // Bristol Channel / Wales border
     [-2.70,51.80],[-3.00,51.60],[-3.20,51.60],[-3.50,51.80],[-3.80,51.90],
     [-4.00,52.10],[-4.20,52.30],[-4.30,52.60],[-4.10,52.80],[-4.20,53.00],
     [-4.00,53.30],[-4.10,53.40],
-    // North Wales coast
     [-4.30,53.30],[-3.60,53.30],[-3.20,53.40],[-3.00,53.40],[-3.00,53.60],
     [-2.80,53.80],[-2.90,54.00],
-    // Lancashire / Cumbria coast
     [-3.10,54.10],[-3.30,54.30],[-3.50,54.50],[-3.30,54.70],[-3.00,54.70],
     [-2.70,54.90],[-2.50,55.00],[-2.20,55.10],[-2.00,55.20],
-    // Back to start
     [-2.00,55.80],
-].map(([lon,lat]) => project(lat, lon));
+];
 
-// ── Canvas rendering ───────────────────────────────────────────────────────────
-const canvas = document.getElementById("map-canvas");
-const ctx = canvas.getContext("2d");
-
-// Helper
-function hexToRgb(hex) {
-    hex = hex.replace("#","");
-    if (hex.length === 3) hex = hex.split("").map(c=>c+c).join("");
-    return { r: parseInt(hex.slice(0,2),16), g: parseInt(hex.slice(2,4),16), b: parseInt(hex.slice(4,6),16) };
+function hexToRgb(hex){
+    hex=hex.replace("#","");
+    if(hex.length===3)hex=hex.split("").map(c=>c+c).join("");
+    return{r:parseInt(hex.slice(0,2),16),g:parseInt(hex.slice(2,4),16),b:parseInt(hex.slice(4,6),16)};
 }
 
-function drawEnglandPath() {
-    ctx.beginPath();
-    ENGLAND_OUTLINE.forEach(([x,y], i) => i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y));
-    ctx.closePath();
+// ── State ─────────────────────────────────────────────────────────────────────
+let zoom=1, panX=0, panY=0;
+let dragging=false, dragStart={x:0,y:0}, panStart={x:0,y:0};
+let baseW=0, baseH=0;
+
+// Preloaded crest images
+const crestImgs = {};
+let crests_loaded = 0;
+function preloadCrests(cb) {
+    let pending = CLUBS.length;
+    CLUBS.forEach(club => {
+        const img = new Image();
+        img.onload  = () => { crestImgs[club.name] = img; if(--pending===0) cb(); };
+        img.onerror = () => { if(--pending===0) cb(); };
+        img.src = `/crest/${encodeURIComponent(club.name)}`;
+    });
 }
 
-// STEP 1: Sea background
-ctx.fillStyle = "#0a1628";
-ctx.fillRect(0, 0, CW, CH);
+// ── Voronoi pixel grid (base resolution) ──────────────────────────────────────
+let voronoiCanvas = null;
 
-// STEP 2: Build Voronoi pixel grid
-const SCALE = 3;
-const GW = Math.ceil(CW / SCALE);
-const GH = Math.ceil(CH / SCALE);
-const pixels = new Uint8ClampedArray(GW * GH * 4);
-
-for (let gy = 0; gy < GH; gy++) {
-    for (let gx = 0; gx < GW; gx++) {
-        const x = gx * SCALE + SCALE/2;
-        const y = gy * SCALE + SCALE/2;
-        let minDist = Infinity, nearest = CLUBS[0];
-        for (const club of CLUBS) {
-            const dx = club.px - x, dy = club.py - y;
-            const d = dx*dx + dy*dy;
-            if (d < minDist) { minDist = d; nearest = club; }
+function buildVoronoi(W, H) {
+    const stride = 3;
+    const gw = Math.ceil(W/stride), gh = Math.ceil(H/stride);
+    const pixels = new Uint8ClampedArray(gw*gh*4);
+    for(let gy=0;gy<gh;gy++){
+        for(let gx=0;gx<gw;gx++){
+            const x=gx*stride+stride/2, y=gy*stride+stride/2;
+            let minD=Infinity, best=CLUBS[0];
+            for(const c of CLUBS){
+                const d=(c.px-x)*(c.px-x)+(c.py-y)*(c.py-y);
+                if(d<minD){minD=d;best=c;}
+            }
+            const {r,g,b}=hexToRgb(best.colour);
+            const i=(gy*gw+gx)*4;
+            pixels[i]=r;pixels[i+1]=g;pixels[i+2]=b;pixels[i+3]=255;
         }
-        const col = hexToRgb(nearest.colour);
-        const idx = (gy * GW + gx) * 4;
-        pixels[idx]   = col.r;
-        pixels[idx+1] = col.g;
-        pixels[idx+2] = col.b;
-        pixels[idx+3] = 200;  // full draw, we'll control opacity via globalAlpha
     }
+    const oc=document.createElement("canvas");
+    oc.width=gw;oc.height=gh;
+    oc.getContext("2d").putImageData(new ImageData(pixels,gw,gh),0,0);
+    return oc;
 }
 
-const offscreen = document.createElement("canvas");
-offscreen.width = GW; offscreen.height = GH;
-offscreen.getContext("2d").putImageData(new ImageData(pixels, GW, GH), 0, 0);
+// ── Main draw ──────────────────────────────────────────────────────────────────
+function draw() {
+    const canvas = document.getElementById("map-canvas");
+    const ctx    = canvas.getContext("2d");
+    const W = canvas.width, H = canvas.height;
 
-// STEP 3: Draw Voronoi CLIPPED to England outline
-ctx.save();
-drawEnglandPath();
-ctx.clip();
-ctx.globalAlpha = 0.45;
-ctx.imageSmoothingEnabled = false;
-ctx.drawImage(offscreen, 0, 0, CW, CH);
-ctx.globalAlpha = 1.0;
-ctx.restore();
+    // Effective transform: scale around centre then pan
+    const cx = W/2, cy = H/2;
+    const tx = cx + (panX + (CLUBS[0].px - cx)) * 0 + panX;
+    const ty = cy + panY;
 
-// STEP 4: England border on top
-drawEnglandPath();
-ctx.strokeStyle = "#4a6fa5";
-ctx.lineWidth = 1.8;
-ctx.stroke();
+    ctx.clearRect(0,0,W,H);
+    ctx.save();
+    ctx.translate(cx + panX, cy + panY);
+    ctx.scale(zoom, zoom);
+    ctx.translate(-cx, -cy);
 
-// 3. Draw club dots on top
-CLUBS.forEach(club => {
-    const { px, py, colour } = club;
+    const outline = OUTLINE_COORDS.map(([lon,lat])=>project(lat,lon,W,H));
 
-    // Glow
-    const grad = ctx.createRadialGradient(px, py, 4, px, py, 14);
-    grad.addColorStop(0, colour + "60");
-    grad.addColorStop(1, colour + "00");
-    ctx.beginPath();
-    ctx.arc(px, py, 14, 0, Math.PI*2);
-    ctx.fillStyle = grad;
-    ctx.fill();
+    function drawPath(){
+        ctx.beginPath();
+        outline.forEach(([x,y],i)=>i===0?ctx.moveTo(x,y):ctx.lineTo(x,y));
+        ctx.closePath();
+    }
 
-    // Dot
-    ctx.beginPath();
-    ctx.arc(px, py, 7, 0, Math.PI*2);
-    ctx.fillStyle = colour;
-    ctx.strokeStyle = "#0b1220";
-    ctx.lineWidth = 1.5;
-    ctx.fill();
+    // Sea
+    ctx.fillStyle="#07111f";
+    ctx.fillRect(-cx/zoom-panX/zoom, -cy/zoom-panY/zoom, W/zoom*3, H/zoom*3);
+
+    // Voronoi crest fill - clip to England
+    if(voronoiCanvas){
+        ctx.save();
+        drawPath();
+        ctx.clip();
+        // Base colour voronoi (subtle)
+        ctx.globalAlpha=0.35;
+        ctx.imageSmoothingEnabled=true;
+        ctx.imageSmoothingQuality="high";
+        ctx.drawImage(voronoiCanvas,0,0,W,H);
+        ctx.globalAlpha=1;
+
+        // Tile crests across each territory
+        const CREST_SPACING = 60;
+        const rows = Math.ceil(H/CREST_SPACING)+2;
+        const cols = Math.ceil(W/CREST_SPACING)+2;
+        for(let r=0;r<rows;r++){
+            for(let c=0;c<cols;c++){
+                const px=c*CREST_SPACING, py=r*CREST_SPACING;
+                // Find nearest club to this tile position
+                let minD=Infinity,best=CLUBS[0];
+                for(const club of CLUBS){
+                    const d=(club.px-px)*(club.px-px)+(club.py-py)*(club.py-py);
+                    if(d<minD){minD=d;best=club;}
+                }
+                const img=crestImgs[best.name];
+                if(img){
+                    ctx.globalAlpha=0.12;
+                    ctx.drawImage(img,px-20,py-20,40,40);
+                }
+            }
+        }
+        ctx.globalAlpha=1;
+
+        // Dark land tint
+        ctx.fillStyle="rgba(4,14,8,0.30)";
+        ctx.fill();
+        ctx.restore();
+    }
+
+    // England border
+    drawPath();
+    ctx.strokeStyle="#4a7fa5";
+    ctx.lineWidth=2/zoom;
     ctx.stroke();
 
-    // Label
-    const short = club.name === "Wolverhampton Wanderers" ? "Wolves"
-                : club.name === "Manchester United" ? "Man Utd"
-                : club.name === "Manchester City"   ? "Man City"
-                : club.name === "Newcastle United"  ? "Newcastle"
-                : club.name === "Nottingham Forest" ? "Forest"
-                : club.name === "Crystal Palace"    ? "Palace"
-                : club.name.split(" ")[0];
+    // Club markers
+    CLUBS.forEach(club => {
+        const {px,py,colour,name,short,id}=club;
+        const dotR = Math.max(10, 14/zoom);
+        const crestS = dotR*1.6;
 
-    ctx.font = "bold 6px 'JetBrains Mono', monospace";
-    ctx.textAlign = "center";
-    ctx.fillStyle = "rgba(0,0,0,0.8)";
-    ctx.fillText(short, px+1, py+19);
-    ctx.fillStyle = "white";
-    ctx.fillText(short, px, py+18);
-});
+        // Glow
+        const g=ctx.createRadialGradient(px,py,dotR,px,py,dotR*2.5);
+        g.addColorStop(0,colour+"70");g.addColorStop(1,colour+"00");
+        ctx.beginPath();ctx.arc(px,py,dotR*2.5,0,Math.PI*2);
+        ctx.fillStyle=g;ctx.fill();
 
-// ── Hit testing: click / hover ─────────────────────────────────────────────────
-const tooltip  = document.getElementById("tooltip");
-const ttName   = document.getElementById("tt-name");
-const ttCity   = document.getElementById("tt-city");
+        // Dark backing circle
+        ctx.beginPath();ctx.arc(px,py,dotR+2,0,Math.PI*2);
+        ctx.fillStyle="rgba(0,0,0,0.75)";ctx.fill();
+        ctx.strokeStyle=colour;ctx.lineWidth=1.5/zoom;ctx.stroke();
 
-function nearestClub(ex, ey) {
-    const rect = canvas.getBoundingClientRect();
-    const x = (ex - rect.left) * (CW / rect.width);
-    const y = (ey - rect.top)  * (CH / rect.height);
-    let minD = Infinity, best = null;
-    for (const club of CLUBS) {
-        const dx = club.px - x, dy = club.py - y;
-        const d = dx*dx + dy*dy;
-        if (d < minD) { minD = d; best = club; }
-    }
-    return { club: best, dist: Math.sqrt(minD) };
+        // Crest or coloured dot
+        const img=crestImgs[name];
+        if(img){
+            ctx.drawImage(img,px-crestS/2,py-crestS/2,crestS,crestS);
+        } else {
+            ctx.beginPath();ctx.arc(px,py,dotR,0,Math.PI*2);
+            ctx.fillStyle=colour;ctx.fill();
+        }
+
+        // Label (only at zoom > 1.2 or always for clarity)
+        const labelSize=Math.min(11,Math.max(7,9*zoom))/zoom;
+        ctx.font=`bold ${labelSize}px 'JetBrains Mono',monospace`;
+        ctx.textAlign="center";
+        const labelY=py+dotR+labelSize+2;
+        // Shadow
+        ctx.fillStyle="rgba(0,0,0,0.95)";
+        [-1,0,1].forEach(dx=>[-1,0,1].forEach(dy=>{
+            if(dx||dy) ctx.fillText(short,px+dx/zoom,labelY+dy/zoom);
+        }));
+        ctx.fillStyle="white";
+        ctx.fillText(short,px,labelY);
+    });
+
+    ctx.restore();
 }
 
-canvas.addEventListener("mousemove", e => {
-    const { club, dist } = nearestClub(e.clientX, e.clientY);
-    if (club) {
-        ttName.textContent = club.name;
-        ttCity.textContent = club.city;
-        tooltip.style.display = "block";
-        tooltip.style.left = (e.clientX + 14) + "px";
-        tooltip.style.top  = (e.clientY - 10) + "px";
+// ── Init ──────────────────────────────────────────────────────────────────────
+function init() {
+    const canvas=document.getElementById("map-canvas");
+    const wrap=document.getElementById("map-wrap");
+    baseW=wrap.clientWidth; baseH=wrap.clientHeight;
+    canvas.width=baseW; canvas.height=baseH;
+
+    // Project clubs at base resolution
+    CLUBS.forEach(c=>{[c.px,c.py]=project(c.lat,c.lon,baseW,baseH);});
+
+    voronoiCanvas=buildVoronoi(baseW,baseH);
+    draw();
+}
+
+preloadCrests(()=>{
+    init();
+    window.addEventListener("resize",()=>{ setTimeout(init,120); });
+});
+
+// ── Zoom & Pan ────────────────────────────────────────────────────────────────
+const canvas=document.getElementById("map-canvas");
+
+function clampPan(){
+    const maxPan=baseW*(zoom-1)*0.6;
+    panX=Math.max(-maxPan,Math.min(maxPan,panX));
+    panY=Math.max(-maxPan,Math.min(maxPan,panY));
+}
+
+canvas.addEventListener("wheel",e=>{
+    e.preventDefault();
+    const delta=e.deltaY>0?0.85:1.18;
+    zoom=Math.max(1,Math.min(8,zoom*delta));
+    clampPan();
+    draw();
+},{passive:false});
+
+canvas.addEventListener("mousedown",e=>{
+    if(e.button!==0)return;
+    dragging=true;
+    dragStart={x:e.clientX,y:e.clientY};
+    panStart={x:panX,y:panY};
+    canvas.classList.add("grabbing");
+});
+
+window.addEventListener("mousemove",e=>{
+    if(!dragging)return;
+    panX=panStart.x+(e.clientX-dragStart.x);
+    panY=panStart.y+(e.clientY-dragStart.y);
+    clampPan();
+    draw();
+});
+
+window.addEventListener("mouseup",()=>{
+    dragging=false;
+    canvas.classList.remove("grabbing");
+});
+
+// Touch support
+let lastTouchDist=0;
+canvas.addEventListener("touchstart",e=>{
+    if(e.touches.length===1){
+        dragging=true;
+        dragStart={x:e.touches[0].clientX,y:e.touches[0].clientY};
+        panStart={x:panX,y:panY};
+    } else if(e.touches.length===2){
+        const dx=e.touches[0].clientX-e.touches[1].clientX;
+        const dy=e.touches[0].clientY-e.touches[1].clientY;
+        lastTouchDist=Math.sqrt(dx*dx+dy*dy);
+    }
+},{passive:true});
+
+canvas.addEventListener("touchmove",e=>{
+    if(e.touches.length===1&&dragging){
+        panX=panStart.x+(e.touches[0].clientX-dragStart.x);
+        panY=panStart.y+(e.touches[0].clientY-dragStart.y);
+        clampPan(); draw();
+    } else if(e.touches.length===2){
+        const dx=e.touches[0].clientX-e.touches[1].clientX;
+        const dy=e.touches[0].clientY-e.touches[1].clientY;
+        const dist=Math.sqrt(dx*dx+dy*dy);
+        zoom=Math.max(1,Math.min(8,zoom*(dist/lastTouchDist)));
+        lastTouchDist=dist; clampPan(); draw();
+    }
+},{passive:true});
+
+canvas.addEventListener("touchend",()=>{ dragging=false; });
+
+// Button controls
+document.getElementById("zoom-in").addEventListener("click",()=>{
+    zoom=Math.min(8,zoom*1.4); clampPan(); draw();
+});
+document.getElementById("zoom-out").addEventListener("click",()=>{
+    zoom=Math.max(1,zoom/1.4); clampPan(); draw();
+});
+document.getElementById("zoom-reset").addEventListener("click",()=>{
+    zoom=1; panX=0; panY=0; draw();
+});
+
+// ── Hit testing ───────────────────────────────────────────────────────────────
+const tooltip=document.getElementById("tooltip");
+const ttName=document.getElementById("tt-name");
+const ttCity=document.getElementById("tt-city");
+const ttCrest=document.getElementById("tt-crest");
+
+function canvasCoords(e){
+    const r=canvas.getBoundingClientRect();
+    const cx=baseW/2, cy=baseH/2;
+    // Reverse the transform: translate(-panX-cx) scale(1/zoom) translate(cx)
+    const sx=(e.clientX-r.left-r.width/2-panX)/zoom+cx;
+    const sy=(e.clientY-r.top-r.height/2-panY)/zoom+cy;
+    return[sx,sy];
+}
+
+function nearestClub(cx,cy){
+    let minD=Infinity,best=CLUBS[0];
+    for(const c of CLUBS){
+        const d=(c.px-cx)*(c.px-cx)+(c.py-cy)*(c.py-cy);
+        if(d<minD){minD=d;best=c;}
+    }
+    return{club:best,dist:Math.sqrt(minD)};
+}
+
+let hovering=false;
+canvas.addEventListener("mousemove",e=>{
+    if(dragging)return;
+    const[cx,cy]=canvasCoords(e);
+    const{club,dist}=nearestClub(cx,cy);
+    const dotR=Math.max(10,14/zoom);
+    if(dist<dotR*3){
+        ttName.textContent=club.name;
+        ttCity.textContent=club.city;
+        ttCrest.src=`/crest/${encodeURIComponent(club.name)}`;
+        tooltip.style.display="block";
+        tooltip.style.left=(e.clientX+16)+"px";
+        tooltip.style.top=(e.clientY-10)+"px";
+    } else {
+        tooltip.style.display="none";
     }
 });
 
-canvas.addEventListener("mouseleave", () => {
-    tooltip.style.display = "none";
+canvas.addEventListener("mouseleave",()=>{tooltip.style.display="none";});
+
+canvas.addEventListener("click",e=>{
+    if(Math.abs(panX-panStart.x)>5||Math.abs(panY-panStart.y)>5)return;
+    const[cx,cy]=canvasCoords(e);
+    const{club,dist}=nearestClub(cx,cy);
+    const dotR=Math.max(10,20/zoom);
+    if(dist<dotR*4) window.location.href=`/team/${club.id}`;
 });
 
-canvas.addEventListener("click", e => {
-    const { club } = nearestClub(e.clientX, e.clientY);
-    if (club) window.location.href = `/team/${club.id}`;
+// ── Search ────────────────────────────────────────────────────────────────────
+const searchInput=document.getElementById("search");
+const searchResults=document.getElementById("search-results");
+
+searchInput.addEventListener("input",()=>{
+    const q=searchInput.value.trim().toLowerCase();
+    searchResults.innerHTML="";
+    if(!q){searchResults.classList.add("hidden");return;}
+    const hits=CLUBS.filter(c=>c.name.toLowerCase().includes(q)||c.city.toLowerCase().includes(q));
+    if(!hits.length){searchResults.classList.add("hidden");return;}
+    hits.slice(0,6).forEach(club=>{
+        const a=document.createElement("a");
+        a.href=`/team/${club.id}`;
+        const img=crestImgs[club.name];
+        a.innerHTML=`
+            ${img?`<img src="${img.src}" style="width:18px;height:18px;object-fit:contain"/>`:
+                   `<span style="width:8px;height:8px;border-radius:50%;background:${club.colour};flex-shrink:0"></span>`}
+            <span style="color:inherit">${club.name}</span>
+            <span style="color:#475569;font-size:9px;margin-left:auto">${club.city}</span>
+        `;
+        searchResults.appendChild(a);
+    });
+    searchResults.classList.remove("hidden");
 });
 
-// ── Sidebar ───────────────────────────────────────────────────────────────────
-const list = document.getElementById("club-list");
-[...CLUBS].sort((a,b) => a.name.localeCompare(b.name)).forEach(club => {
-    const el = document.createElement("a");
-    el.href = `/team/${club.id}`;
-    el.className = "flex items-center gap-2 px-2 py-1.5 rounded hover:bg-slate-800/40 transition group";
-    el.innerHTML = `
-        <img src="/crest/${encodeURIComponent(club.name)}"
-             class="w-5 h-5 object-contain flex-none"
-             onerror="this.style.display='none'"/>
-        <span class="w-2 h-2 rounded-full flex-none"
-              style="background:${club.colour}"></span>
-        <span class="text-[11px] font-mono text-slate-400 group-hover:text-white transition flex-1">
-            ${club.name}
-        </span>
-        <span class="text-[9px] font-mono text-slate-700 group-hover:text-slate-500">→</span>
-    `;
-    list.appendChild(el);
+document.addEventListener("click",e=>{
+    if(!e.target.closest("#search")&&!e.target.closest("#search-results"))
+        searchResults.classList.add("hidden");
+});
+searchInput.addEventListener("keydown",e=>{
+    if(e.key==="Escape"){searchResults.classList.add("hidden");searchInput.blur();}
 });
 </script>
 {% endblock %}
