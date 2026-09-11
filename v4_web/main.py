@@ -37,13 +37,14 @@ sys.path.append(str(ROOT.parent))
 from footballdata import get_live_match_data, get_last_completed_pl_match
 from utils import (generate_pitch_svg_horizontal, get_theme_for_team,
                    get_formation_for_team, get_squad_for_team,
-                   get_crest_url, get_crest_proxy_url)
+                   get_crest_url, get_crest_proxy_url, _CREST_IDS)
 from timeline import build_match_timeline_svg
 from scoreline_matrix import build_scoreline_svg
 from fpl import get_upcoming_fixtures
 from fotmob import (get_lineup, get_live_xg, get_fotmob_match_id,
                     has_key as fotmob_available)
 from lineup_adjustment import compute_lineup_adjusted_odds, get_absent_key_players
+from teamdata import get_team_profile, get_team_season_results, get_next_fixture, get_last_n_results
 from v4_backend.feature_builder import DCStrengthLookup, TEAM_NAME_ALIASES
 
 # ── Constants ─────────────────────────────────────────────────────────────────
@@ -221,6 +222,111 @@ async def live_poll(match_id: str, request: Request):
         "home_xg_h2" : xg["home_xg_h2"],
         "away_xg_h2" : xg["away_xg_h2"],
     })
+
+
+@app.get("/teams", response_class=HTMLResponse)
+async def teams_hub(request: Request):
+    """Teams hub — grid of all PL teams linking to profiles."""
+    from utils import get_theme_for_team, _CREST_IDS
+    teams = []
+    for name, tid in sorted(_CREST_IDS.items()):
+        if tid > 1000:   # skip Big 5 non-PL clubs
+            continue
+        theme = get_theme_for_team(name)
+        teams.append({
+            "id"    : tid,
+            "name"  : name,
+            "colour": theme["primary"],
+        })
+    return templates.TemplateResponse(
+        request=request, name="teams.html",
+        context={"request": request, "teams": teams}
+    )
+
+
+@app.get("/team/{team_id}", response_class=HTMLResponse)
+async def team_profile(request: Request, team_id: int):
+    """Team profile page — squad, ratings, form, season results."""
+    from utils import (generate_pitch_svg_vertical, get_theme_for_team,
+                       get_formation_for_team, get_squad_for_team,
+                       get_crest_proxy_url, TEAM_MANAGERS)
+    from v4_backend.feature_builder import TEAM_NAME_ALIASES
+
+    profile  = get_team_profile(team_id)
+    if not profile:
+        return HTMLResponse("<h1>Team not found</h1>", status_code=404)
+
+    team_name = profile["name"]
+
+    # Coach: API often returns null -- fall back to our dict
+    coach = profile.get("coach") or TEAM_MANAGERS.get(team_name, "Unknown")
+
+    # Theme
+    theme       = get_theme_for_team(team_name)
+    team_colour = theme["primary"]
+    crest_url   = get_crest_proxy_url(team_name) or profile.get("crest", "")
+
+    # Formation + squad
+    formation = get_formation_for_team(team_name)
+    players   = get_squad_for_team(team_name)
+
+    # Vertical pitch SVG
+    pitch_svg = generate_pitch_svg_vertical(
+        formation=formation,
+        team_color=team_colour,
+        players=players,
+        team_name=team_name,
+    )
+
+    # DC ratings
+    dc_alpha = dc_beta = xg_proj = None
+    dc_estimated = False
+    if priors_db:
+        league_data = priors_db.get(LEAGUE_KEY, {})
+        teams_data  = league_data.get("teams", {})
+        meta        = league_data.get("meta", {})
+        all_alpha   = [v["alpha"] for v in teams_data.values()]
+        all_beta    = [v["beta"]  for v in teams_data.values()]
+        q25_alpha   = float(np.percentile(all_alpha, 25))
+        q75_beta    = float(np.percentile(all_beta,  75))
+        tkey        = TEAM_NAME_ALIASES.get(team_name, team_name)
+        t_params    = teams_data.get(tkey)
+        if t_params:
+            dc_alpha = t_params["alpha"]
+            dc_beta  = t_params["beta"]
+            gamma    = meta.get("gamma_home_advantage", 1.25)
+            # xG projection = how many goals this team expects at home vs average defence
+            avg_beta = float(np.mean(all_beta))
+            xg_proj  = round(dc_alpha * avg_beta * gamma, 2)
+        else:
+            dc_alpha     = q25_alpha
+            dc_beta      = q75_beta
+            dc_estimated = True
+
+    # Season results
+    all_results  = get_team_season_results(team_id, season=2025)
+    last_5       = get_last_n_results(all_results, n=5)
+    next_fixture = get_next_fixture(all_results)
+
+    ctx = {
+        "request"     : request,
+        "profile"     : profile,
+        "coach"       : coach,
+        "team_colour" : team_colour,
+        "crest_url"   : crest_url,
+        "formation"   : formation,
+        "pitch_svg"   : pitch_svg,
+        "dc_alpha"    : dc_alpha,
+        "dc_beta"     : dc_beta,
+        "xg_proj"     : xg_proj,
+        "dc_estimated": dc_estimated,
+        "all_results" : all_results,
+        "last_5"      : last_5,
+        "next_fixture": next_fixture,
+    }
+    return templates.TemplateResponse(
+        request=request, name="team.html", context=ctx
+    )
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -524,12 +630,14 @@ async def match(request: Request):
         "league_rho"              : league_rho,
         "home_alpha_estimated"    : home_alpha_estimated,
         "away_alpha_estimated"    : away_alpha_estimated,
-        "fotmob_available" : fotmob_available(),
-        "lineup_prior"     : lineup_prior,
-        "adj_lam"          : adj_lam,
-        "adj_mu"           : adj_mu,
-        "absent_home"      : absent_home,
-        "absent_away"      : absent_away,
+        "fotmob_available"        : fotmob_available(),
+        "lineup_prior"            : lineup_prior,
+        "adj_lam"                 : adj_lam,
+        "adj_mu"                  : adj_mu,
+        "absent_home"             : absent_home,
+        "absent_away"             : absent_away,
+        "home_team_id"            : _CREST_IDS.get(home_name if featured else "", 0),
+        "away_team_id"            : _CREST_IDS.get(away_name if featured else "", 0),
     }
     return templates.TemplateResponse(request=request, name="match.html", context=ctx)
 

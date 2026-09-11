@@ -308,16 +308,20 @@
                     </span>
                     <div class="flex items-center gap-3 text-[9px] font-mono">
                         {% if featured.home_name %}
-                        <span class="flex items-center gap-1">
+                        <a href="/team/{{ home_team_id }}"
+                           class="flex items-center gap-1 hover:text-white transition"
+                           style="color:{{ home_colour }}">
                             <span class="w-1.5 h-1.5 rounded-full inline-block"
                                   style="background:{{ home_colour }}"></span>
                             {{ featured.home_name }} · {{ home_formation }}
-                        </span>
-                        <span class="flex items-center gap-1">
+                        </a>
+                        <a href="/team/{{ away_team_id }}"
+                           class="flex items-center gap-1 hover:text-white transition"
+                           style="color:{{ away_colour }}">
                             <span class="w-1.5 h-1.5 rounded-full inline-block"
                                   style="background:{{ away_colour }}"></span>
                             {{ featured.away_name }} · {{ away_formation }}
-                        </span>
+                        </a>
                         {% endif %}
                     </div>
                 </div>

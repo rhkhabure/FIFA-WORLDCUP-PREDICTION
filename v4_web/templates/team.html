@@ -1,131 +1,316 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="space-y-6">
-    
-    <!-- HEADER BAR: QUANT DATA ANCHOR -->
-    <div class="flex flex-col md:flex-row md:items-center md:justify-between border-b border-slate-800 pb-4">
-        <div class="flex items-center space-x-4">
-            <div class="w-12 h-12 bg-slate-900 border border-slate-700 rounded-full flex items-center justify-center shadow-lg" style="border-color: {{ team_color }};">
-                <span class="text-lg font-black text-white">{{ current_team[:3]|upper }}</span>
-            </div>
+<div class="space-y-3 max-w-screen-2xl mx-auto">
+
+    <!-- HEADER -->
+    <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3">
+            {% if crest_url %}
+            <img src="{{ crest_url }}" alt="{{ profile.name }}" class="w-10 h-10 object-contain"/>
+            {% endif %}
             <div>
-                <h1 class="text-2xl font-bold text-slate-100 uppercase tracking-wide">{{ current_team }}</h1>
-                <p class="text-xs text-slate-400">Manager: <span class="text-slate-200 font-mono">{{ manager }}</span></p>
+                <h1 class="text-xl font-bold text-white tracking-wide">{{ profile.name }}</h1>
+                <div class="text-[10px] font-mono text-slate-500 uppercase tracking-widest">
+                    {{ profile.venue }}
+                    {% if profile.founded %} · Est. {{ profile.founded }}{% endif %}
+                    {% if profile.colours %} · {{ profile.colours }}{% endif %}
+                </div>
             </div>
         </div>
-        <!-- Live Parameter Badges -->
-        <div class="flex items-center space-x-3 mt-4 md:mt-0 font-mono text-xs">
-            <div class="bg-slate-800 border border-slate-700 px-3 py-1.5 rounded shadow-inner">
-                <span class="text-slate-400">LEAGUE POSITION:</span> 
-                <span class="text-slate-100 font-bold ml-1">#2</span>
-            </div>
-            <div class="bg-slate-800 border border-slate-700 px-3 py-1.5 rounded shadow-inner">
-                <span class="text-slate-400">ROSTER STATUS:</span> 
-                <span class="text-emerald-400 font-bold ml-1">HEALTHY</span>
-            </div>
-        </div>
+        <a href="/" class="text-[10px] font-mono text-slate-500 hover:text-slate-300
+                           border border-slate-700 px-2 py-1 rounded transition">
+            ← Dashboard
+        </a>
     </div>
 
-    <!-- MAIN TWO-COLUMN DASHBOARD GRID -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        <!-- LEFT COLUMN: MATRIX & DNA PROFILE (1/3 Width) -->
-        <div class="space-y-6 lg:col-span-1">
-            <!-- Team DNA Barometers -->
-            <div class="bg-slate-900 border border-slate-800 rounded-lg p-5 shadow-xl relative overflow-hidden">
-                <h3 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center">
-                    📊 Team DNA Metrics
-                </h3>
-                <div class="space-y-5">
-                    <!-- Attack Alpha -->
-                    <div>
-                        <div class="flex justify-between text-xs font-mono mb-1">
-                            <span class="text-slate-300">Attack Potency (&alpha;)</span>
-                            <span class="text-cyan-400 font-bold">{{ "%.2f"|format(prior_alpha) }}</span>
-                        </div>
-                        <div class="w-full bg-slate-950 rounded-full h-2 border border-slate-800 overflow-hidden shadow-inner">
-                            <div class="bg-cyan-500 h-2 rounded-full" style="width: {{ [((prior_alpha / 2.0) * 100), 100]|min }}%;"></div>
-                        </div>
-                        <p class="text-[9px] text-slate-500 mt-1 font-mono uppercase tracking-wider">League baseline: 1.00. Higher = greater threat.</p>
-                    </div>
+    <!-- THREE-COLUMN MAIN -->
+    <div class="grid gap-3 items-start" style="grid-template-columns: 1fr 2fr 1fr;">
 
-                    <!-- Defense Beta -->
-                    <div class="pt-3 border-t border-slate-800/50">
-                        <div class="flex justify-between text-xs font-mono mb-1">
-                            <span class="text-slate-300">Defensive Fragility (&beta;)</span>
-                            <span class="text-amber-500 font-bold">{{ "%.2f"|format(prior_beta) }}</span>
-                        </div>
-                        <div class="w-full bg-slate-950 rounded-full h-2 border border-slate-800 overflow-hidden shadow-inner">
-                            <!-- Inverted scale: lower beta is better defense -->
-                            <div class="bg-amber-500 h-2 rounded-full" style="width: {{ [(((2.0 - prior_beta) / 2.0) * 100), 100]|min }}%;"></div>
-                        </div>
-                        <p class="text-[9px] text-slate-500 mt-1 font-mono uppercase tracking-wider">League baseline: 1.00. Lower = stronger defense.</p>
+        <!-- LEFT: DC Ratings + Coach + Competitions -->
+        <div class="space-y-3">
+
+            <!-- DC Ratings gauges -->
+            <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl">
+                <div class="text-[10px] font-mono text-slate-400 uppercase tracking-widest mb-3">
+                    DC Ratings
+                </div>
+
+                {% if dc_alpha %}
+                <div class="grid grid-cols-2 gap-2 mb-3">
+                    <!-- α Attack -->
+                    <div>
+                        <svg viewBox="0 0 100 65" class="w-full" xmlns="http://www.w3.org/2000/svg">
+                            {% set pct = ((dc_alpha - 0.4) / 1.4) | float %}
+                            {% set pct = [0.0, [1.0, pct] | min] | max %}
+                            <path d="M 12 52 A 38 38 0 0 1 88 52"
+                                  fill="none" stroke="#1e293b" stroke-width="6" stroke-linecap="round"/>
+                            <path d="M 12 52 A 38 38 0 0 1 88 52"
+                                  fill="none" stroke="{{ team_colour }}" stroke-width="6"
+                                  stroke-linecap="round" opacity="0.25"
+                                  stroke-dasharray="{{ pct * 119.4 }} 119.4"/>
+                            <text x="50" y="46" fill="{{ team_colour }}" font-size="12"
+                                  font-weight="bold" text-anchor="middle"
+                                  font-family="JetBrains Mono,monospace">{{ "%.3f"|format(dc_alpha) }}</text>
+                            <text x="50" y="57" fill="#64748b" font-size="6.5"
+                                  text-anchor="middle" font-family="JetBrains Mono,monospace">α Attack</text>
+                            <text x="10" y="60" fill="#334155" font-size="5"
+                                  text-anchor="middle" font-family="JetBrains Mono,monospace">0.4</text>
+                            <text x="90" y="60" fill="#334155" font-size="5"
+                                  text-anchor="middle" font-family="JetBrains Mono,monospace">1.8</text>
+                            <line x1="50" y1="14" x2="50" y2="22" stroke="#334155" stroke-width="1.2"/>
+                            <text x="50" y="12" fill="#334155" font-size="4.5"
+                                  text-anchor="middle" font-family="JetBrains Mono,monospace">avg</text>
+                        </svg>
                     </div>
+                    <!-- β Defence -->
+                    <div>
+                        <svg viewBox="0 0 100 65" class="w-full" xmlns="http://www.w3.org/2000/svg">
+                            {% set pct = ((dc_beta - 0.8) / 1.3) | float %}
+                            {% set pct = [0.0, [1.0, pct] | min] | max %}
+                            {% set inv_pct = 1.0 - pct %}
+                            <path d="M 12 52 A 38 38 0 0 1 88 52"
+                                  fill="none" stroke="#1e293b" stroke-width="6" stroke-linecap="round"/>
+                            <path d="M 12 52 A 38 38 0 0 1 88 52"
+                                  fill="none" stroke="{{ team_colour }}" stroke-width="6"
+                                  stroke-linecap="round" opacity="0.25"
+                                  stroke-dasharray="{{ inv_pct * 119.4 }} 119.4"/>
+                            <text x="50" y="46" fill="{{ team_colour }}" font-size="12"
+                                  font-weight="bold" text-anchor="middle"
+                                  font-family="JetBrains Mono,monospace">{{ "%.3f"|format(dc_beta) }}</text>
+                            <text x="50" y="57" fill="#64748b" font-size="6.5"
+                                  text-anchor="middle" font-family="JetBrains Mono,monospace">β Defence</text>
+                            <text x="10" y="60" fill="#334155" font-size="5"
+                                  text-anchor="middle" font-family="JetBrains Mono,monospace">best</text>
+                            <text x="90" y="60" fill="#334155" font-size="5"
+                                  text-anchor="middle" font-family="JetBrains Mono,monospace">weak</text>
+                            <line x1="50" y1="14" x2="50" y2="22" stroke="#334155" stroke-width="1.2"/>
+                            <text x="50" y="12" fill="#334155" font-size="4.5"
+                                  text-anchor="middle" font-family="JetBrains Mono,monospace">avg</text>
+                        </svg>
+                    </div>
+                </div>
+                <div class="flex justify-between text-[10px] font-mono px-1">
+                    <span class="text-slate-500">xG projected</span>
+                    <span style="color:{{ team_colour }}" class="font-bold">
+                        {{ "%.2f"|format(xg_proj) if xg_proj else "—" }}
+                    </span>
+                </div>
+                {% if dc_estimated %}
+                <p class="text-[9px] text-slate-600 font-mono text-center mt-2">
+                    ⚠ Estimated — team not in training data
+                </p>
+                {% endif %}
+                {% endif %}
+            </div>
+
+            <!-- Coach + club info -->
+            <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl">
+                <div class="text-[10px] font-mono text-slate-400 uppercase tracking-widest mb-3">
+                    Club Info
+                </div>
+                <div class="space-y-2 text-xs font-mono">
+                    <div class="flex justify-between">
+                        <span class="text-slate-500">Manager</span>
+                        <span class="text-slate-200 font-bold">{{ coach }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-500">Stadium</span>
+                        <span class="text-slate-300">{{ profile.venue }}</span>
+                    </div>
+                    {% if profile.founded %}
+                    <div class="flex justify-between">
+                        <span class="text-slate-500">Founded</span>
+                        <span class="text-slate-300">{{ profile.founded }}</span>
+                    </div>
+                    {% endif %}
+                    {% if profile.colours %}
+                    <div class="flex justify-between">
+                        <span class="text-slate-500">Colours</span>
+                        <span class="text-slate-300">{{ profile.colours }}</span>
+                    </div>
+                    {% endif %}
+                    {% for comp in profile.competitions %}
+                    {% if loop.first %}
+                    <div class="flex justify-between">
+                        <span class="text-slate-500">Competitions</span>
+                        <div class="text-right">
+                    {% endif %}
+                            <span class="text-slate-300">{{ comp }}</span><br>
+                    {% if loop.last %}
+                        </div>
+                    </div>
+                    {% endif %}
+                    {% endfor %}
                 </div>
             </div>
 
-            <!-- Form Ledger -->
-            <div class="bg-slate-900 border border-slate-800 rounded-lg p-5 shadow-xl">
-                <h3 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center">
-                    🗒️ Performance Form Ledger
-                </h3>
-                <div class="divide-y divide-slate-800/60 font-mono text-[10px] sm:text-xs">
-                    {% for match in match_history %}
-                    <div class="py-2.5 flex items-center justify-between hover:bg-slate-800/30 transition px-1 rounded">
-                        <div class="flex items-center space-x-2">
-                            {% if match.result.startswith('W') %}
-                            <span class="w-5 h-5 flex items-center justify-center bg-cyan-950/50 border border-cyan-800 text-cyan-400 font-bold text-[9px] rounded">W</span>
-                            {% elif match.result.startswith('D') %}
-                            <span class="w-5 h-5 flex items-center justify-center bg-amber-950/50 border border-amber-800 text-amber-400 font-bold text-[9px] rounded">D</span>
-                            {% else %}
-                            <span class="w-5 h-5 flex items-center justify-center bg-rose-950/50 border border-rose-800 text-rose-400 font-bold text-[9px] rounded">L</span>
-                            {% endif %}
-                            <span class="text-slate-300 font-sans font-bold truncate w-24">{{ match.opponent }}</span>
-                        </div>
-                        <div class="text-right">
-                            <div class="text-white font-bold">{{ match.result.split(' ')[1] }}</div>
-                            <div class="text-[9px] text-slate-500 mt-0.5">
-                                xG <span class="{% if match.result.startswith('W') %}text-cyan-400{% else %}text-rose-400{% endif %}">{{ match.xg }}</span>
-                            </div>
-                        </div>
+            <!-- Next fixture widget -->
+            {% if next_fixture %}
+            <a href="/match?match_id={{ next_fixture.match_id }}"
+               class="block bg-[#0f172a] border border-cyan-800 rounded-xl p-4 shadow-xl
+                      hover:border-cyan-600 transition">
+                <div class="text-[10px] font-mono text-cyan-400/70 uppercase tracking-widest mb-2">
+                    Next Match
+                </div>
+                <div class="text-xs font-mono text-slate-300 mb-1">
+                    {{ next_fixture.date }}
+                </div>
+                <div class="text-sm font-bold text-white">
+                    {% if next_fixture.is_home %}
+                        {{ profile.name }}
+                        <span class="text-slate-500 font-normal text-xs">vs</span>
+                        {{ next_fixture.opponent }}
+                    {% else %}
+                        {{ next_fixture.opponent }}
+                        <span class="text-slate-500 font-normal text-xs">vs</span>
+                        {{ profile.name }}
+                    {% endif %}
+                </div>
+                <div class="text-[9px] font-mono text-slate-600 mt-1 uppercase">
+                    {{ "Home" if next_fixture.is_home else "Away" }} · Click to view →
+                </div>
+            </a>
+            {% endif %}
+
+        </div>
+
+        <!-- CENTRE: Pitch + Formation -->
+        <div class="space-y-3">
+            {% if pitch_svg %}
+            <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-3 shadow-xl">
+                <div class="flex items-center justify-between mb-1">
+                    <span class="text-[10px] font-mono text-slate-400 uppercase tracking-widest">
+                        Typical Starting XI
+                    </span>
+                    <span class="text-[9px] font-mono text-slate-600">
+                        {{ formation }} · {{ coach }}
+                    </span>
+                </div>
+                {{ pitch_svg | safe }}
+                <p class="text-[9px] text-slate-600 font-mono text-center mt-1">
+                    Typical XI · confirmed lineups via FotMob when available
+                </p>
+            </div>
+            {% endif %}
+
+            <!-- Form strip -->
+            {% if last_5 %}
+            <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-3 shadow-xl">
+                <div class="text-[10px] font-mono text-slate-400 uppercase tracking-widest mb-2">
+                    Last 5 Results
+                </div>
+                <div class="space-y-1.5">
+                    {% for r in last_5 %}
+                    <div class="flex items-center gap-2 text-xs font-mono">
+                        <span class="w-5 h-5 rounded text-center text-[10px] font-bold leading-5
+                            {% if r.result == 'W' %}bg-emerald-900 text-emerald-300
+                            {% elif r.result == 'D' %}bg-slate-700 text-slate-300
+                            {% else %}bg-rose-900 text-rose-300{% endif %}">
+                            {{ r.result }}
+                        </span>
+                        <span class="text-slate-500 w-16">{{ r.date }}</span>
+                        <span class="{% if r.result == 'W' %}text-slate-200{% elif r.result == 'D' %}text-slate-400{% else %}text-slate-500{% endif %} flex-1">
+                            {% if r.is_home %}vs {% else %}@ {% endif %}{{ r.opponent }}
+                        </span>
+                        <span class="text-slate-300 font-bold">
+                            {{ r.h_score }}–{{ r.a_score }}
+                        </span>
+                        <span class="text-[9px] text-slate-600">
+                            {{ "H" if r.is_home else "A" }}
+                        </span>
                     </div>
                     {% endfor %}
                 </div>
             </div>
+            {% endif %}
         </div>
 
-        <!-- RIGHT COLUMN: ROSTER METRIC PITCH & DELTAS (2/3 Width) -->
-        <div class="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-lg p-5 shadow-xl flex flex-col justify-between overflow-hidden">
-            <div>
-                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-slate-800 pb-3 mb-4">
-                    <h3 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center">
-                        📋 Dynamic Lineup Matrix & Roster Deltas
-                    </h3>
-                    <div class="flex items-center space-x-4 mt-2 sm:mt-0 font-mono text-[10px]">
-                        <div class="bg-slate-950 border border-slate-800 px-2.5 py-1 rounded shadow-inner">
-                            <span class="text-slate-500">ATTACK &Delta;:</span>
-                            <span class="ml-1 font-bold text-cyan-400">{{ (roster_delta.att * 100)|round(1) }}%</span>
-                        </div>
-                        <div class="bg-slate-950 border border-slate-800 px-2.5 py-1 rounded shadow-inner">
-                            <span class="text-slate-500">DEFENSE &Delta;:</span>
-                            <span class="ml-1 font-bold text-amber-400">{{ (roster_delta.def * 100)|round(1) }}%</span>
+        <!-- RIGHT: Squad list -->
+        <div class="space-y-3">
+            {% if profile.squad %}
+            <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl">
+                <div class="text-[10px] font-mono text-slate-400 uppercase tracking-widest mb-3">
+                    Squad
+                </div>
+                {% for position in ["Goalkeeper", "Defender", "Midfielder", "Forward"] %}
+                {% if profile.squad[position] %}
+                <div class="mb-3">
+                    <div class="text-[9px] font-mono text-slate-600 uppercase tracking-widest mb-1">
+                        {{ position }}s
+                    </div>
+                    {% for player in profile.squad[position] %}
+                    <div class="flex items-center justify-between py-1 border-b border-slate-800/50
+                                text-[10px] font-mono hover:bg-slate-800/20 rounded px-1 transition">
+                        <span class="text-slate-300">{{ player.name }}</span>
+                        <div class="flex gap-2 text-slate-600">
+                            <span>{{ player.nationality }}</span>
+                            {% if player.age %}<span>{{ player.age }}y</span>{% endif %}
                         </div>
                     </div>
+                    {% endfor %}
                 </div>
-                <p class="text-[10px] font-mono text-slate-500 mb-6 uppercase tracking-wider">
-                    Solid nodes: active matchday starter. Dashed ghost nodes: season ideal baseline. Click node to inspect player profile.
-                </p>
+                {% endif %}
+                {% endfor %}
             </div>
-
-            <!-- Pitch Container -->
-            <div class="w-full flex justify-center items-center py-4 bg-slate-950 rounded border border-slate-800/80 shadow-inner">
-                <div class="w-full max-w-[420px]">
-                    {{ pitch_svg | safe }}
-                </div>
-            </div>
+            {% endif %}
         </div>
-        
     </div>
+
+    <!-- FULL SEASON RESULTS TABLE -->
+    {% if all_results %}
+    <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl">
+        <div class="text-[10px] font-mono text-slate-400 uppercase tracking-widest mb-3">
+            2025/26 Season Results
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-[10px] font-mono">
+                <thead>
+                    <tr class="text-slate-600 uppercase tracking-wider border-b border-slate-800">
+                        <th class="text-left py-1.5 pr-3">GW</th>
+                        <th class="text-left py-1.5 pr-3">Date</th>
+                        <th class="text-left py-1.5 pr-6">Opponent</th>
+                        <th class="text-center py-1.5 px-2">H/A</th>
+                        <th class="text-center py-1.5 px-2">Score</th>
+                        <th class="text-center py-1.5 px-2">Result</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in all_results %}
+                    {% if r.result %}
+                    <tr class="border-b border-slate-800/40 hover:bg-slate-800/20 transition">
+                        <td class="py-1.5 pr-3 text-slate-600">{{ r.matchday }}</td>
+                        <td class="py-1.5 pr-3 text-slate-500">{{ r.date }}</td>
+                        <td class="py-1.5 pr-6">
+                            <a href="/match?match_id={{ r.match_id }}"
+                               class="text-slate-300 hover:text-white transition">
+                                {{ r.opponent }}
+                            </a>
+                        </td>
+                        <td class="py-1.5 px-2 text-center text-slate-500">{{ r.home_away }}</td>
+                        <td class="py-1.5 px-2 text-center text-slate-200 font-bold">
+                            {{ r.h_score }}–{{ r.a_score }}
+                        </td>
+                        <td class="py-1.5 px-2 text-center">
+                            <span class="px-1.5 py-0.5 rounded text-[9px] font-bold
+                                {% if r.result == 'W' %}bg-emerald-900/60 text-emerald-300
+                                {% elif r.result == 'D' %}bg-slate-700/60 text-slate-300
+                                {% else %}bg-rose-900/60 text-rose-300{% endif %}">
+                                {{ r.result }}
+                            </span>
+                        </td>
+                    </tr>
+                    {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
 </div>
+
+<style>
+body { background-color: #0b0f19 !important; }
+</style>
 {% endblock %}
