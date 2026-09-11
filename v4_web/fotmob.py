@@ -209,6 +209,34 @@ def clear_cache(match_id: str | int | None = None):
         _xg_cache.pop(key, None)
 
 
+def fotmob_to_fpl_team_name(fotmob_name: str) -> str:
+    """
+    FotMob uses full official club names. Map to our internal short names
+    that match TEAM_NAME_ALIASES and DEFAULT_SQUADS.
+    """
+    _MAP = {
+        "AFC Bournemouth"          : "Bournemouth",
+        "Tottenham Hotspur"        : "Tottenham",
+        "Nottingham Forest"        : "Nottingham Forest",
+        "Brighton & Hove Albion"   : "Brighton",
+        "Wolverhampton Wanderers"  : "Wolverhampton Wanderers",
+        "West Ham United"          : "West Ham",
+        "Newcastle United"         : "Newcastle United",
+        "Manchester City"          : "Manchester City",
+        "Manchester United"        : "Manchester United",
+        "Ipswich Town"             : "Ipswich",
+        "Leicester City"           : "Leicester",
+        "Leeds United"             : "Leeds",
+        "Sheffield United"         : "Sheffield United",
+        "Aston Villa"              : "Aston Villa",
+        "Crystal Palace"           : "Crystal Palace",
+        "Hull City"                : "Hull City",
+        "Coventry City"            : "Coventry",
+        "Sunderland"               : "Sunderland",
+    }
+    return _MAP.get(fotmob_name, fotmob_name)
+
+
 def get_fotmob_match_id(home_name: str, away_name: str, date_str: str | None = None) -> str | None:
     """
     Look up the FotMob match ID for a given fixture by team names.
@@ -235,7 +263,6 @@ def get_fotmob_match_id(home_name: str, away_name: str, date_str: str | None = N
     else:
         data = _lineup_cache[cache_key]
 
-    # Normalise names for matching
     def norm(s: str) -> str:
         return s.lower().replace("fc", "").replace("afc", "").strip()
 
@@ -250,28 +277,3 @@ def get_fotmob_match_id(home_name: str, away_name: str, date_str: str | None = N
             if (home_n in mh or mh in home_n) and (away_n in ma or ma in away_n):
                 return str(match.get("id"))
     return None
-    """
-    FotMob uses full official club names. Map to our internal short names
-    that match TEAM_NAME_ALIASES and DEFAULT_SQUADS.
-    """
-    _MAP = {
-        "AFC Bournemouth"          : "Bournemouth",
-        "Tottenham Hotspur"        : "Tottenham",
-        "Nottingham Forest"        : "Nottingham Forest",
-        "Brighton & Hove Albion"   : "Brighton",
-        "Wolverhampton Wanderers"  : "Wolverhampton Wanderers",
-        "West Ham United"          : "West Ham",
-        "Newcastle United"         : "Newcastle United",
-        "Manchester City"          : "Manchester City",
-        "Manchester United"        : "Manchester United",
-        "Ipswich Town"             : "Ipswich",
-        "Leicester City"           : "Leicester",
-        "Leeds United"             : "Leeds",
-        "Sheffield United"         : "Sheffield United",
-        "Aston Villa"              : "Aston Villa",
-        "Crystal Palace"           : "Crystal Palace",
-        "Hull City"                : "Hull City",
-        "Coventry City"            : "Coventry",
-        "Sunderland"               : "Sunderland",
-    }
-    return _MAP.get(fotmob_name, fotmob_name)

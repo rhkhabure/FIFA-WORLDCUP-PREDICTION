@@ -339,9 +339,13 @@
 
                 <!-- Home team gauges -->
                 <div class="mb-3">
-                    <div class="text-[10px] font-bold uppercase tracking-widest mb-2"
+                    <div class="text-[10px] font-bold uppercase tracking-widest mb-2 flex items-center gap-2"
                          style="color:{{ home_colour }}">
                         {{ featured.home_name }}
+                        {% if home_alpha_estimated %}
+                        <span class="text-[8px] text-slate-500 font-normal normal-case
+                                     border border-slate-700 px-1 py-0.5 rounded">est.</span>
+                        {% endif %}
                     </div>
                     {% if home_alpha %}
                     <div class="grid grid-cols-2 gap-2">
@@ -413,9 +417,13 @@
 
                 <!-- Away team gauges -->
                 <div class="mb-3">
-                    <div class="text-[10px] font-bold uppercase tracking-widest mb-2"
+                    <div class="text-[10px] font-bold uppercase tracking-widest mb-2 flex items-center gap-2"
                          style="color:{{ away_colour }}">
                         {{ featured.away_name }}
+                        {% if away_alpha_estimated %}
+                        <span class="text-[8px] text-slate-500 font-normal normal-case
+                                     border border-slate-700 px-1 py-0.5 rounded">est.</span>
+                        {% endif %}
                     </div>
                     {% if away_alpha %}
                     <div class="grid grid-cols-2 gap-2">
