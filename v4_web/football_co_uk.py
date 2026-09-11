@@ -24,6 +24,7 @@ don't re-download on every page load.
 import csv
 import io
 import os
+import ssl
 import time
 import urllib.request
 from datetime import datetime, timezone, timedelta
@@ -34,6 +35,12 @@ EAT = timezone(timedelta(hours=3))
 BASE_URL  = "https://www.football-data.co.uk/mmz4281"
 CACHE_DIR = Path(__file__).parent / "data" / "fdco"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+# Unverified SSL context for football-data.co.uk
+# Safe to do: public read-only CSV, no credentials involved
+_SSL_CTX = ssl.create_default_context()
+_SSL_CTX.check_hostname = False
+_SSL_CTX.verify_mode    = ssl.CERT_NONE
 
 # football-data.co.uk team names → our internal names
 # Their names differ slightly from football-data.org
@@ -98,9 +105,8 @@ def _download_season(season_start: int) -> str | None:
         url, headers={"User-Agent": "Mozilla/5.0 (compatible; v4dashboard/1.0)"}
     )
     try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
+        with urllib.request.urlopen(req, timeout=15, context=_SSL_CTX) as resp:
             raw = resp.read().decode("utf-8", errors="replace")
-        # Write to cache
         cache = _cache_path(season_start)
         cache.write_text(raw, encoding="utf-8")
         print(f"fdco: downloaded {season_start}/{season_start+1} ({len(raw)} bytes)")

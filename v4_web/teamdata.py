@@ -23,7 +23,8 @@ EAT = timezone(timedelta(hours=3))
 
 # Simple in-memory cache to avoid rate limit (free tier: 10 req/min)
 _cache: dict = {}
-_CACHE_TTL = 300  # 5 minutes
+_CACHE_TTL         = 300   # 5 min for match/standings data
+_PROFILE_CACHE_TTL = 3600  # 1 hour for squad/profile (changes rarely)
 
 
 def _get_api_key() -> str:
@@ -44,7 +45,8 @@ API_KEY  = _get_api_key()
 BASE_URL = "https://api.football-data.org/v4"
 
 
-def _fetch(endpoint: str, params: dict | None = None) -> dict:
+def _fetch(endpoint: str, params: dict | None = None,
+           ttl: int = _CACHE_TTL) -> dict:
     url = f"{BASE_URL}/{endpoint.lstrip('/')}"
     if params:
         qs = "&".join(f"{k}={v}" for k, v in params.items())
@@ -52,7 +54,7 @@ def _fetch(endpoint: str, params: dict | None = None) -> dict:
     # Cache check
     if url in _cache:
         data, ts = _cache[url]
-        if time.time() - ts < _CACHE_TTL:
+        if time.time() - ts < ttl:
             return data
     req = urllib.request.Request(
         url, headers={"X-Auth-Token": API_KEY}
@@ -64,6 +66,10 @@ def _fetch(endpoint: str, params: dict | None = None) -> dict:
         return data
     except urllib.error.HTTPError as e:
         print(f"teamdata HTTP {e.code} on {endpoint}: {e.reason}")
+        # On 429 rate limit: return stale cache if available rather than {}
+        if e.code == 429 and url in _cache:
+            print(f"teamdata: serving stale cache for {endpoint}")
+            return _cache[url][0]
     except Exception as e:
         print(f"teamdata error on {endpoint}: {e}")
     return {}
@@ -155,7 +161,8 @@ def get_standings(season: int = 2025) -> list[dict]:
       played, won, draw, lost, gf, ga, gd, points, form
     Returns [] on failure.
     """
-    data = _fetch("competitions/PL/standings", {"season": season})
+    data = _fetch("competitions/PL/standings", {"season": season},
+                  ttl=_PROFILE_CACHE_TTL)
     if not data:
         return []
     try:
@@ -191,7 +198,7 @@ def get_team_profile(team_id: int) -> dict:
       coach, squad (list of player dicts),
       competitions (list of league names currently in)
     """
-    data = _fetch(f"teams/{team_id}")
+    data = _fetch(f"teams/{team_id}", ttl=_PROFILE_CACHE_TTL)
     if not data:
         return {}
 
@@ -309,7 +316,8 @@ def get_team_season_results(team_id: int, season: int = 2025,
       match_id, matchday, status
     """
     data = _fetch(f"teams/{team_id}/matches",
-                  {"season": season, "limit": limit})
+                  {"season": season, "limit": limit},
+                  ttl=_CACHE_TTL)
     matches_raw = data.get("matches", [])
     if not matches_raw:
         return []
