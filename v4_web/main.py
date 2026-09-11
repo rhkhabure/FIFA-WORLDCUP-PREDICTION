@@ -44,7 +44,7 @@ from fpl import get_upcoming_fixtures
 from fotmob import (get_lineup, get_live_xg, get_fotmob_match_id,
                     has_key as fotmob_available)
 from lineup_adjustment import compute_lineup_adjusted_odds, get_absent_key_players
-from teamdata import get_team_profile, get_team_season_results, get_next_fixture, get_last_n_results
+from teamdata import get_team_profile, get_team_season_results, get_next_fixture, get_last_n_results, get_standings
 from v4_backend.feature_builder import DCStrengthLookup, TEAM_NAME_ALIASES
 
 # ── Constants ─────────────────────────────────────────────────────────────────
@@ -301,6 +301,7 @@ async def team_profile(request: Request, team_id: int):
     all_results  = get_team_season_results(team_id, season=2025)
     last_5       = get_last_n_results(all_results, n=5)
     next_fixture = get_next_fixture(all_results)
+    standings    = get_standings(season=2025)
 
     ctx = {
         "request"     : request,
@@ -317,6 +318,8 @@ async def team_profile(request: Request, team_id: int):
         "all_results" : all_results,
         "last_5"      : last_5,
         "next_fixture": next_fixture,
+        "standings"   : standings,
+        "team_id"     : team_id,
     }
     return templates.TemplateResponse(
         request=request, name="team.html", context=ctx

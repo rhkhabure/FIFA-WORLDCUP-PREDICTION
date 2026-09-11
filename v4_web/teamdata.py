@@ -76,7 +76,100 @@ def _fmt_date(utc_str: str) -> str:
         return utc_str[:10]
 
 
-def get_team_profile(team_id: int) -> dict:
+# Nationality string → flag emoji
+# Regional indicator letters: A=U+1F1E6, so 'GB' → 🇬🇧
+_NAT_TO_CODE: dict[str, str] = {
+    "Afghanistan":"AF","Albania":"AL","Algeria":"DZ","Angola":"AO",
+    "Argentina":"AR","Armenia":"AM","Australia":"AU","Austria":"AT",
+    "Azerbaijan":"AZ","Bahrain":"BH","Belgium":"BE","Bolivia":"BO",
+    "Bosnia and Herzegovina":"BA","Bosnia-Herzegovina":"BA",
+    "Brazil":"BR","Bulgaria":"BG","Burkina Faso":"BF","Cameroon":"CM",
+    "Canada":"CA","Chile":"CL","China PR":"CN","China":"CN",
+    "Colombia":"CO","Congo":"CG","Congo DR":"CD","Costa Rica":"CR",
+    "Cote d'Ivoire":"CI","Croatia":"HR","Cuba":"CU","Cyprus":"CY",
+    "Czech Republic":"CZ","Czechia":"CZ","Denmark":"DK","DR Congo":"CD",
+    "Ecuador":"EC","Egypt":"EG","El Salvador":"SV","England":"GB-ENG",
+    "Estonia":"EE","Ethiopia":"ET","Finland":"FI","France":"FR",
+    "Gabon":"GA","Gambia":"GM","Georgia":"GE","Germany":"DE",
+    "Ghana":"GH","Greece":"GR","Guinea":"GN","Guinea-Bissau":"GW",
+    "Honduras":"HN","Hungary":"HU","Iceland":"IS","India":"IN",
+    "Indonesia":"ID","Iran":"IR","Iraq":"IQ","Ireland":"IE",
+    "Israel":"IL","Italy":"IT","Jamaica":"JM","Japan":"JP",
+    "Jordan":"JO","Kazakhstan":"KZ","Kenya":"KE","Kosovo":"XK",
+    "Latvia":"LV","Lebanon":"LB","Liberia":"LR","Libya":"LY",
+    "Lithuania":"LT","Luxembourg":"LU","Mali":"ML","Malta":"MT",
+    "Mauritania":"MR","Mexico":"MX","Moldova":"MD","Montenegro":"ME",
+    "Morocco":"MA","Mozambique":"MZ","Netherlands":"NL","New Zealand":"NZ",
+    "Nigeria":"NG","North Korea":"KP","North Macedonia":"MK",
+    "Northern Ireland":"GB-NIR","Norway":"NO","Panama":"PA","Paraguay":"PY",
+    "Peru":"PE","Philippines":"PH","Poland":"PL","Portugal":"PT",
+    "Qatar":"QA","Republic of Ireland":"IE","Romania":"RO","Russia":"RU",
+    "Saudi Arabia":"SA","Scotland":"GB-SCT","Senegal":"SN","Serbia":"RS",
+    "Sierra Leone":"SL","Slovakia":"SK","Slovenia":"SI","Somalia":"SO",
+    "South Africa":"ZA","South Korea":"KR","Spain":"ES","Basque Country":"ES","Catalonia":"ES","Sudan":"SD",
+    "Sweden":"SE","Switzerland":"CH","Syria":"SY","Tanzania":"TZ",
+    "Togo":"TG","Trinidad and Tobago":"TT","Tunisia":"TN","Turkey":"TR",
+    "Uganda":"UG","Ukraine":"UA","United States":"US","Uruguay":"UY",
+    "Uzbekistan":"UZ","Venezuela":"VE","Wales":"GB-WAL","Zambia":"ZM",
+    "Zimbabwe":"ZW",
+}
+
+def _flag_img(nationality: str) -> str:
+    """
+    Returns an HTML img tag for the country flag using flagcdn.com.
+    Free CDN, no key, reliable cross-platform rendering.
+    Returns '' if nationality unknown.
+    """
+    if not nationality:
+        return ""
+    nationality = nationality.strip()
+    code = _NAT_TO_CODE.get(nationality, "") or _NAT_TO_CODE.get(nationality.title(), "")
+    if not code:
+        return ""
+    # Normalise to two-letter lowercase for flagcdn.com
+    # GB subdivisions all use 'gb' on flagcdn
+    iso = code.split("-")[0].lower()
+    return (f'<img src="https://flagcdn.com/16x12/{iso}.png" '
+            f'width="16" height="12" alt="{nationality}" '
+            f'class="inline-block rounded-sm" '
+            f'style="vertical-align:middle;margin-right:3px">')
+
+
+def get_standings(season: int = 2025) -> list[dict]:
+    """
+    Returns PL standings table for the given season.
+    Each dict:
+      position, team_id, team_name, crest,
+      played, won, draw, lost, gf, ga, gd, points, form
+    Returns [] on failure.
+    """
+    data = _fetch("competitions/PL/standings", {"season": season})
+    if not data:
+        return []
+    try:
+        table = data["standings"][0]["table"]
+    except (KeyError, IndexError):
+        return []
+
+    rows = []
+    for row in table:
+        team = row.get("team", {})
+        rows.append({
+            "position": row.get("position"),
+            "team_id" : team.get("id"),
+            "team_name": _clean_name(team.get("name", "")),
+            "crest"   : team.get("crest", ""),
+            "played"  : row.get("playedGames", 0),
+            "won"     : row.get("won", 0),
+            "draw"    : row.get("draw", 0),
+            "lost"    : row.get("lost", 0),
+            "gf"      : row.get("goalsFor", 0),
+            "ga"      : row.get("goalsAgainst", 0),
+            "gd"      : row.get("goalDifference", 0),
+            "points"  : row.get("points", 0),
+            "form"    : row.get("form", ""),
+        })
+    return rows
     """
     Returns full team profile dict:
       name, short_name, crest, venue, founded, colours,
@@ -111,6 +204,7 @@ def get_team_profile(team_id: int) -> dict:
             "id"         : p.get("id"),
             "name"       : p.get("name", ""),
             "nationality": p.get("nationality", ""),
+            "flag"       : _flag_img(p.get("nationality", "")),
             "age"        : age,
         })
 
