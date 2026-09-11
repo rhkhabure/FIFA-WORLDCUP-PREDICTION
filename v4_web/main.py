@@ -239,7 +239,7 @@ async def teams_hub(request: Request):
 
 
 @app.get("/team/{team_id}", response_class=HTMLResponse)
-async def team_profile(request: Request, team_id: int):
+async def team_profile(request: Request, team_id: int, season: int = 2025):
     """Team profile page — squad, ratings, form, season results."""
     from utils import (generate_pitch_svg_vertical, get_theme_for_team,
                        get_formation_for_team, get_squad_for_team,
@@ -298,28 +298,29 @@ async def team_profile(request: Request, team_id: int):
             dc_estimated = True
 
     # Season results
-    all_results  = get_team_season_results(team_id, season=2025)
+    all_results  = get_team_season_results(team_id, season=season)
     last_5       = get_last_n_results(all_results, n=5)
     next_fixture = get_next_fixture(all_results)
-    standings    = get_standings(season=2025)
+    standings    = get_standings(season=season)
 
     ctx = {
-        "request"     : request,
-        "profile"     : profile,
-        "coach"       : coach,
-        "team_colour" : team_colour,
-        "crest_url"   : crest_url,
-        "formation"   : formation,
-        "pitch_svg"   : pitch_svg,
-        "dc_alpha"    : dc_alpha,
-        "dc_beta"     : dc_beta,
-        "xg_proj"     : xg_proj,
-        "dc_estimated": dc_estimated,
-        "all_results" : all_results,
-        "last_5"      : last_5,
-        "next_fixture": next_fixture,
-        "standings"   : standings,
-        "team_id"     : team_id,
+        "request"        : request,
+        "profile"        : profile,
+        "coach"          : coach,
+        "team_colour"    : team_colour,
+        "crest_url"      : crest_url,
+        "formation"      : formation,
+        "pitch_svg"      : pitch_svg,
+        "dc_alpha"       : dc_alpha,
+        "dc_beta"        : dc_beta,
+        "xg_proj"        : xg_proj,
+        "dc_estimated"   : dc_estimated,
+        "all_results"    : all_results,
+        "last_5"         : last_5,
+        "next_fixture"   : next_fixture,
+        "standings"      : standings,
+        "team_id"        : team_id,
+        "current_season" : season,
     }
     return templates.TemplateResponse(
         request=request, name="team.html", context=ctx
