@@ -145,6 +145,68 @@
                 </div>
             </div>
 
+            <!-- Standings table -->
+            {% if standings %}
+            <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl">
+                <div class="text-[10px] font-mono text-slate-400 uppercase tracking-widest mb-3">
+                    League Table
+                </div>
+                <div class="space-y-0">
+                    {% for row in standings %}
+                    {% set is_current = (row.team_id == team_id) %}
+                    {% if row.position <= 4 %}
+                        {% set zone = "#1d4ed8" %}
+                    {% elif row.position <= 6 %}
+                        {% set zone = "#d97706" %}
+                    {% elif row.position == 7 %}
+                        {% set zone = "#15803d" %}
+                    {% elif row.position >= 18 %}
+                        {% set zone = "#991b1b" %}
+                    {% else %}
+                        {% set zone = "transparent" %}
+                    {% endif %}
+                    <div class="flex items-center gap-1.5 px-1 py-1 rounded text-[10px] font-mono"
+                         style="{% if is_current %}background:rgba(255,255,255,0.06);outline:1px solid {{ team_colour }};{% endif %}">
+                        <div class="w-0.5 h-4 rounded-full flex-none"
+                             style="background:{{ zone }};opacity:0.85"></div>
+                        <span class="w-4 text-right flex-none
+                                     {% if is_current %}text-white font-bold{% else %}text-slate-500{% endif %}">
+                            {{ row.position }}
+                        </span>
+                        <img src="/crest/{{ row.team_name }}"
+                             class="w-4 h-4 object-contain flex-none"
+                             onerror="this.style.display='none'"/>
+                        <span class="flex-1 truncate
+                                     {% if is_current %}text-white font-bold{% else %}text-slate-400{% endif %}">
+                            {{ row.team_name }}
+                        </span>
+                        <span class="text-slate-600 w-5 text-center flex-none">{{ row.played }}</span>
+                        <span class="w-6 text-center flex-none font-bold
+                                     {% if is_current %}text-white{% else %}text-slate-400{% endif %}">
+                            {{ row.points }}
+                        </span>
+                    </div>
+                    {% if row.position in [4, 6, 7, 17] %}
+                    <div class="border-t border-slate-800/50 my-0.5"></div>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+                <div class="flex gap-3 mt-3 flex-wrap">
+                    {% for colour, label in [
+                        ("#1d4ed8","Champions League"),
+                        ("#d97706","Europa League"),
+                        ("#15803d","Conference"),
+                        ("#991b1b","Relegation"),
+                    ] %}
+                    <div class="flex items-center gap-1 text-[8px] font-mono text-slate-600">
+                        <div class="w-1.5 h-3 rounded-full" style="background:{{ colour }}"></div>
+                        {{ label }}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
             <!-- Next fixture widget -->
             {% if next_fixture %}
             <a href="/match?match_id={{ next_fixture.match_id }}"
@@ -243,9 +305,10 @@
                     <div class="flex items-center justify-between py-1 border-b border-slate-800/50
                                 text-[10px] font-mono hover:bg-slate-800/20 rounded px-1 transition">
                         <span class="text-slate-300">{{ player.name }}</span>
-                        <div class="flex gap-2 text-slate-600">
+                        <div class="flex items-center gap-2 text-slate-600">
+                            {{ player.flag | safe }}
                             <span>{{ player.nationality }}</span>
-                            {% if player.age %}<span>{{ player.age }}y</span>{% endif %}
+                            {% if player.age %}<span class="text-slate-700">{{ player.age }}y</span>{% endif %}
                         </div>
                     </div>
                     {% endfor %}
