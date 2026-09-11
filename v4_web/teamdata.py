@@ -170,6 +170,64 @@ def get_standings(season: int = 2025) -> list[dict]:
             "form"    : row.get("form", ""),
         })
     return rows
+
+
+def get_team_profile(team_id: int) -> dict:
+    """
+    Returns full team profile dict:
+      name, short_name, crest, venue, founded, colours,
+      coach, squad (list of player dicts),
+      competitions (list of league names currently in)
+    """
+    data = _fetch(f"teams/{team_id}")
+    if not data:
+        return {}
+
+    coach_raw = data.get("coach", {}) or {}
+    coach_name = coach_raw.get("name") or ""
+
+    squad_raw = data.get("squad", []) or []
+    positions = ["Goalkeeper", "Defender", "Midfielder", "Forward"]
+    squad: dict[str, list] = {pos: [] for pos in positions}
+    for p in squad_raw:
+        pos = p.get("position", "Forward")
+        if pos not in squad:
+            pos = "Forward"
+        dob = p.get("dateOfBirth", "")
+        age = ""
+        if dob:
+            try:
+                born = datetime.fromisoformat(dob)
+                age = str((datetime.now() - born).days // 365)
+            except Exception:
+                pass
+        squad[pos].append({
+            "id"         : p.get("id"),
+            "name"       : p.get("name", ""),
+            "nationality": p.get("nationality", ""),
+            "flag"       : _flag_img(p.get("nationality", "")),
+            "age"        : age,
+        })
+
+    competitions = [
+        c.get("name", "") for c in (data.get("runningCompetitions") or [])
+    ]
+
+    return {
+        "id"          : data.get("id"),
+        "name"        : _clean_name(data.get("name", "")),
+        "short_name"  : data.get("shortName", ""),
+        "tla"         : data.get("tla", ""),
+        "crest"       : data.get("crest", ""),
+        "venue"       : data.get("venue", ""),
+        "founded"     : data.get("founded"),
+        "colours"     : data.get("clubColors", ""),
+        "coach"       : coach_name,
+        "squad"       : squad,
+        "competitions": competitions,
+        "address"     : data.get("address", ""),
+        "website"     : data.get("website", ""),
+    }
     """
     Returns full team profile dict:
       name, short_name, crest, venue, founded, colours,
