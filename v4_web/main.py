@@ -300,16 +300,53 @@ async def team_profile(request: Request, team_id: int, season: int = 2025):
 
     # Season results
     # Upcoming fixtures strip — filter to this team's games
+    # FPL uses short names (e.g. "Man City", "Nott'm Forest") while
+    # profile["name"] uses full names ("Manchester City", "Nottingham Forest")
+    # Build a set of all name variants for this team to match against
     all_fixtures = get_upcoming_fixtures(max_fixtures=60)
-    team_fixtures = [
-        f for f in all_fixtures
-        if team_name in (f.get("home",""), f.get("away",""))
-        or any(
-            alias in (f.get("home",""), f.get("away",""))
-            for alias in TEAM_NAME_ALIASES
-            if TEAM_NAME_ALIASES[alias] == team_name
+    _fpl_short_map = {
+        "Man City"      : "Manchester City",
+        "Man United"    : "Manchester United",
+        "Nott'm Forest" : "Nottingham Forest",
+        "Spurs"         : "Tottenham",
+        "Wolves"        : "Wolverhampton Wanderers",
+        "Newcastle"     : "Newcastle United",
+        "Leeds"         : "Leeds",
+        "Leicester"     : "Leicester",
+        "Brighton"      : "Brighton",
+        "Brentford"     : "Brentford",
+        "Bournemouth"   : "Bournemouth",
+        "Fulham"        : "Fulham",
+        "Everton"       : "Everton",
+        "Burnley"       : "Burnley",
+        "Sunderland"    : "Sunderland",
+        "Ipswich"       : "Ipswich",
+        "Coventry"      : "Coventry",
+        "Hull"          : "Hull City",
+    }
+    # All FPL names that map to this team
+    _this_team_fpl_names = {team_name} | {
+        fpl for fpl, canonical in _fpl_short_map.items()
+        if canonical == team_name
+    }
+    # Also add aliases from feature_builder
+    _this_team_fpl_names |= {
+        alias for alias, canonical in TEAM_NAME_ALIASES.items()
+        if canonical == team_name
+    }
+
+    def _fixture_involves_team(f):
+        home = f.get("home", "")
+        away = f.get("away", "")
+        return (
+            home in _this_team_fpl_names or
+            away in _this_team_fpl_names or
+            # Fallback: partial match on first word
+            team_name.split()[0].lower() in home.lower() or
+            team_name.split()[0].lower() in away.lower()
         )
-    ][:5]  # next 5 games only
+
+    team_fixtures = [f for f in all_fixtures if _fixture_involves_team(f)][:5]
 
     # Season data — use fdco CSVs for historical, football-data.org for recent
     # football-data.org free tier: current + ~2 recent seasons
@@ -367,6 +404,13 @@ async def match(request: Request):
     match_id = request.query_params.get("match_id")
 
     if not match_id:
+        # Default: redirect to the next upcoming PL fixture
+        upcoming = get_upcoming_fixtures(max_fixtures=1)
+        if upcoming:
+            found_id = upcoming[0].get("match_id")
+            if found_id:
+                return RedirectResponse(url=f"/match?match_id={found_id}", status_code=302)
+        # Final fallback: last completed match
         found_id = get_last_completed_pl_match()
         if found_id:
             return RedirectResponse(url=f"/match?match_id={found_id}", status_code=302)
