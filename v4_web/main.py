@@ -299,6 +299,18 @@ async def team_profile(request: Request, team_id: int, season: int = 2025):
             dc_estimated = True
 
     # Season results
+    # Upcoming fixtures strip — filter to this team's games
+    all_fixtures = get_upcoming_fixtures(max_fixtures=60)
+    team_fixtures = [
+        f for f in all_fixtures
+        if team_name in (f.get("home",""), f.get("away",""))
+        or any(
+            alias in (f.get("home",""), f.get("away",""))
+            for alias in TEAM_NAME_ALIASES
+            if TEAM_NAME_ALIASES[alias] == team_name
+        )
+    ][:5]  # next 5 games only
+
     # Season data — use fdco CSVs for historical, football-data.org for recent
     # football-data.org free tier: current + ~2 recent seasons
     # fdco: free CSVs back to 1888, we offer 2014-present
@@ -336,6 +348,7 @@ async def team_profile(request: Request, team_id: int, season: int = 2025):
         "standings"      : standings,
         "team_id"        : team_id,
         "current_season" : season,
+        "team_fixtures"  : team_fixtures,
     }
     return templates.TemplateResponse(
         request=request, name="team.html", context=ctx
