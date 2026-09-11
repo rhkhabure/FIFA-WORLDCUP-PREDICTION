@@ -406,7 +406,7 @@ def get_formation_for_team(team_name: str) -> str:
 
 def generate_pitch_svg_vertical(formation="4-3-3", team_color="#14b8a6",
                                 players=None, team_name="Default"):
-    """Vertical half-pitch for the Team Profile page."""
+    """Vertical half-pitch for the Team Profile page — green turf, white markings."""
     if players is None or len(players) == 0:
         players = get_squad_for_team(team_name)
 
@@ -415,45 +415,84 @@ def generate_pitch_svg_vertical(formation="4-3-3", team_color="#14b8a6",
         return [1] + [int(x) for x in fmt_str.split("-")]
 
     lines = parse_formation(formation)
-    W, H = 160, 200
+    W, H = 200, 280
 
-    svg = (f'<svg width="100%" style="max-width:450px;display:block;margin:0 auto;"'
-           f' viewBox="0 0 {W} {H}" xmlns="http://www.w3.org/2000/svg">'
-           '<defs>'
-           '<circle id="jersey-vert" cx="0" cy="0" r="5" stroke="#1e293b" stroke-width="1.2"/>'
-           '<circle id="jersey-ghost" cx="0" cy="0" r="5" stroke="#64748b"'
-           ' stroke-dasharray="2,2" stroke-width="1" fill="none"/>'
-           '</defs>'
-           f'<rect width="{W}" height="{H}" fill="#0b0f19" rx="6" ry="6"'
-           ' stroke="#1e293b" stroke-width="1.5"/>'
-           f'<rect x="6" y="6" width="148" height="188" fill="none"'
-           ' stroke="#1e293b" stroke-width="0.75"/>'
-           '<rect x="35" y="6" width="90" height="32" fill="none"'
-           ' stroke="#1e293b" stroke-width="0.75"/>'
-           '<rect x="58" y="6" width="44" height="12" fill="none"'
-           ' stroke="#1e293b" stroke-width="0.75"/>'
-           '<circle cx="80" cy="24" r="1.5" fill="#334155"/>'
-           '<line x1="6" y1="194" x2="154" y2="194" stroke="#1e293b" stroke-width="0.75"/>'
-           '<path d="M 60 194 A 20 20 0 0 1 100 194" fill="none"'
-           ' stroke="#1e293b" stroke-width="0.75"/>'
-           '<circle cx="80" cy="194" r="1.5" fill="#334155"/>')
+    crest_url = get_crest_proxy_url(team_name)
 
+    svg = (
+        f'<svg width="100%" style="max-width:480px;display:block;margin:0 auto;"'
+        f' viewBox="0 0 {W} {H}" xmlns="http://www.w3.org/2000/svg">'
+        '<defs>'
+        '<pattern id="grass-v" x="0" y="0" width="20" height="280"'
+        ' patternUnits="userSpaceOnUse">'
+        '<rect width="10" height="280" fill="#1a6b2e"/>'
+        '<rect x="10" width="10" height="280" fill="#1d7533"/>'
+        '</pattern>'
+        '<clipPath id="pitch-clip-v">'
+        f'<rect x="8" y="8" width="{W-16}" height="{H-16}" rx="4"/>'
+        '</clipPath>'
+        '</defs>'
+
+        # Background + grass
+        f'<rect width="{W}" height="{H}" fill="#1a6b2e" rx="6" ry="6"/>'
+        f'<rect x="8" y="8" width="{W-16}" height="{H-16}"'
+        f' fill="url(#grass-v)" clip-path="url(#pitch-clip-v)"/>'
+    )
+
+    # Watermark crest
+    if crest_url:
+        svg += (
+            f'<image href="{crest_url}"'
+            f' x="{W//2 - 20}" y="{H//2 - 20}" width="40" height="40"'
+            f' opacity="0.12" clip-path="url(#pitch-clip-v)"/>'
+        )
+
+    # Pitch markings (white)
+    svg += (
+        # Outer boundary
+        f'<rect x="8" y="8" width="{W-16}" height="{H-16}"'
+        f' fill="none" stroke="white" stroke-width="1.2" rx="4"/>'
+        # Penalty area (top)
+        f'<rect x="{W//2 - 40}" y="8" width="80" height="44"'
+        f' fill="none" stroke="white" stroke-width="1"/>'
+        # Goal area (top)
+        f'<rect x="{W//2 - 18}" y="8" width="36" height="16"'
+        f' fill="none" stroke="white" stroke-width="1"/>'
+        # Penalty spot (top)
+        f'<circle cx="{W//2}" cy="34" r="2" fill="white"/>'
+        # Goal (top)
+        f'<rect x="{W//2 - 18}" y="2" width="36" height="6"'
+        f' fill="none" stroke="white" stroke-width="1"/>'
+        # Halfway line
+        f'<line x1="8" y1="{H//2}" x2="{W-8}" y2="{H//2}"'
+        f' stroke="white" stroke-width="1"/>'
+        # Centre circle
+        f'<circle cx="{W//2}" cy="{H//2}" r="28"'
+        f' fill="none" stroke="white" stroke-width="1"/>'
+        f'<circle cx="{W//2}" cy="{H//2}" r="2" fill="white"/>'
+    )
+
+    # Players
     if lines:
         y_steps = len(lines)
         p_idx = 0
         for row_idx, num_players in enumerate(lines):
-            y = 22 + (150 / max(1, y_steps - 1)) * row_idx
+            # GK at top (y small), forwards at bottom (y large)
+            y = 28 + (200 / max(1, y_steps - 1)) * row_idx
             for col_idx in range(num_players):
-                x = 12 + (136 / (num_players + 1)) * (col_idx + 1)
+                x = 14 + ((W - 28) / (num_players + 1)) * (col_idx + 1)
                 name = players[p_idx] if p_idx < len(players) else f"P{p_idx+1}"
-                svg += f'<use href="#jersey-ghost" x="{x+3}" y="{y-3}"/>'
-                svg += (f'<a href="/player?name={name}&team={team_name}"'
-                        f' style="cursor:pointer;">'
-                        f'<use href="#jersey-vert" x="{x}" y="{y}" fill="{team_color}"/>'
-                        f'<text x="{x}" y="{y+9}" fill="#94a3b8"'
-                        f' font-family="\'JetBrains Mono\',monospace"'
-                        f' font-size="4.5px" text-anchor="middle">{name}</text>'
-                        f'</a>')
+                svg += (
+                    f'<a href="/player?name={name}&team={team_name}"'
+                    f' style="cursor:pointer;">'
+                    f'<circle cx="{x:.1f}" cy="{y:.1f}" r="7"'
+                    f' fill="{team_color}" stroke="white" stroke-width="1.5"/>'
+                    f'<text x="{x:.1f}" y="{y + 13:.1f}" fill="white"'
+                    f' font-family="\'JetBrains Mono\',monospace"'
+                    f' font-size="6px" text-anchor="middle"'
+                    f' style="text-shadow:0 0 3px rgba(0,0,0,0.9)">{name}</text>'
+                    f'</a>'
+                )
                 p_idx += 1
 
     svg += "</svg>"

@@ -226,21 +226,15 @@ async def live_poll(match_id: str, request: Request):
 
 @app.get("/teams", response_class=HTMLResponse)
 async def teams_hub(request: Request):
-    """Teams hub — grid of all PL teams linking to profiles."""
+    """Teams hub — England map with all PL clubs plotted."""
     from utils import get_theme_for_team, _CREST_IDS
-    teams = []
-    for name, tid in sorted(_CREST_IDS.items()):
-        if tid > 1000:   # skip Big 5 non-PL clubs
-            continue
-        theme = get_theme_for_team(name)
-        teams.append({
-            "id"    : tid,
-            "name"  : name,
-            "colour": theme["primary"],
-        })
+    team_colours = {
+        name: get_theme_for_team(name)["primary"]
+        for name in _CREST_IDS
+    }
     return templates.TemplateResponse(
         request=request, name="teams.html",
-        context={"request": request, "teams": teams}
+        context={"request": request, "team_colours": team_colours}
     )
 
 
