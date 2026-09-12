@@ -87,22 +87,25 @@ def has_key() -> bool:
 
 def get_lineup(match_id: str | int) -> dict | None:
     """
-    Fetch confirmed lineup for a match. Cached for the match duration.
+    Fetch confirmed lineup for a match.
 
-    Returns dict with:
-      home_formation : str   e.g. "4-2-3-1"
-      away_formation : str
-      home_players   : list[str]  11 starters in position order
-      away_players   : list[str]
-      home_subs      : list[str]  unused substitutes
-      away_subs      : list[str]
-      match_status   : str
-      live_minute    : int | None
-      score          : {"home": int, "away": int}
+    Cache strategy:
+    - If cached status is "scheduled"/"timed": re-fetch after 5 minutes
+      (game may have kicked off and lineup changed)
+    - If cached status is live/finished: cache permanently (lineup is set)
     """
     key = str(match_id)
+    ts_key = f"{key}_ts"
     if key in _lineup_cache:
-        return _lineup_cache[key]
+        cached = _lineup_cache[key]
+        cached_status = (cached.get("match_status") or "").lower()
+        if cached_status in ("scheduled", "timed", ""):
+            # Re-fetch if older than 5 minutes — game may have started
+            if time.time() - _lineup_cache.get(ts_key, 0) < 300:
+                return cached
+            # else fall through to re-fetch
+        else:
+            return cached  # live/finished — lineup is fixed
 
     if not API_KEY:
         return None
@@ -141,8 +144,9 @@ def get_lineup(match_id: str | int) -> dict | None:
         "score"         : d.get("score", {"home": 0, "away": 0}),
     }
 
-    # Cache lineup -- it doesn't change during the match
+    # Cache lineup with timestamp
     _lineup_cache[key] = result
+    _lineup_cache[f"{key}_ts"] = time.time()
     return result
 
 
