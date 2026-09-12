@@ -146,20 +146,46 @@ def get_lineup(match_id: str | int) -> dict | None:
     return result
 
 
+def get_match_details(match_id: str | int) -> dict | None:
+    """
+    Fetch live match details: score, minute, status.
+    Costs 3 credits. Cached for 60 seconds.
+    Returns dict with: status, live_minute, score {home, away}
+    """
+    key = f"details_{match_id}"
+    if key in _xg_cache:
+        data, ts = _xg_cache[key]
+        if time.time() - ts < 60:
+            return data
+
+    if not API_KEY:
+        return None
+
+    data = _fetch("get_match_details", {"match_id": match_id})
+    if data.get("status") != "success":
+        return None
+
+    d = data.get("data", {})
+    result = {
+        "status"      : d.get("match_status", ""),
+        "live_minute" : d.get("live_minute"),
+        "score"       : d.get("score", {"home": 0, "away": 0}),
+    }
+    _xg_cache[key] = (result, time.time())
+    return result
+
+
 def get_live_xg(match_id: str | int, max_age_seconds: int = 300) -> dict | None:
     """
     Fetch live xG for a match. Cached for max_age_seconds.
 
     Returns dict with:
-      home_xg      : float   total xG
-      away_xg      : float
-      home_xg_h1   : float   first half only
-      away_xg_h1   : float
-      home_xg_h2   : float   second half only
-      away_xg_h2   : float
+      home_xg, away_xg,
+      home_xg_h1, away_xg_h1,
+      home_xg_h2, away_xg_h2
     Or None if unavailable / match hasn't started.
     """
-    key = str(match_id)
+    key = f"xg_{match_id}"
     if key in _xg_cache:
         cached_data, cached_time = _xg_cache[key]
         if time.time() - cached_time < max_age_seconds:

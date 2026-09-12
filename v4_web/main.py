@@ -221,27 +221,46 @@ async def crest_proxy(team_name: str):
 @app.get("/live/{match_id}")
 async def live_poll(match_id: str, request: Request):
     """
-    Live polling endpoint called by the frontend every N minutes.
-    Accepts optional ?fotmob_id= to use the resolved FotMob match ID.
-    Falls back to looking up by match_id if not provided.
+    Live polling endpoint — returns xG, score, minute from FotMob.
+    Accepts optional ?fotmob_id= for the resolved FotMob match ID.
     """
     if not fotmob_available():
         return _Response(status_code=204)
 
     fotmob_id = request.query_params.get("fotmob_id") or match_id
+
+    # Get xG
     xg = get_live_xg(fotmob_id, max_age_seconds=60)
-    if not xg:
+
+    # Get live details (score, minute, status) — cached 60s
+    from fotmob import get_match_details
+    details = get_match_details(fotmob_id)
+
+    if not xg and not details:
         return JSONResponse({"status": "no_data"})
 
-    return JSONResponse({
-        "status"     : "ok",
-        "home_xg"    : xg["home_xg"],
-        "away_xg"    : xg["away_xg"],
-        "home_xg_h1" : xg["home_xg_h1"],
-        "away_xg_h1" : xg["away_xg_h1"],
-        "home_xg_h2" : xg["home_xg_h2"],
-        "away_xg_h2" : xg["away_xg_h2"],
-    })
+    payload: dict = {"status": "ok"}
+
+    if xg:
+        payload.update({
+            "home_xg"   : xg["home_xg"],
+            "away_xg"   : xg["away_xg"],
+            "home_xg_h1": xg["home_xg_h1"],
+            "away_xg_h1": xg["away_xg_h1"],
+            "home_xg_h2": xg["home_xg_h2"],
+            "away_xg_h2": xg["away_xg_h2"],
+        })
+
+    if details:
+        score = details.get("score", {})
+        payload.update({
+            "live_minute"  : details.get("live_minute"),
+            "match_status" : details.get("status", ""),
+            "home_score"   : score.get("home", 0),
+            "away_score"   : score.get("away", 0),
+        })
+
+    return JSONResponse(payload)
 
 
 @app.get("/teams", response_class=HTMLResponse)
@@ -489,17 +508,41 @@ async def match(request: Request):
         # Try FotMob for confirmed lineup
         # FotMob IDs differ from FPL codes -- resolve via team name lookup
         fotmob_lineup = None
+        fotmob_id = None
         if fotmob_available():
             fotmob_id = get_fotmob_match_id(home_name, away_name)
             if fotmob_id:
                 fotmob_lineup = get_lineup(fotmob_id)
-                # Store fotmob_id in featured so /live polling uses it
                 featured["fotmob_id"] = fotmob_id
+
         if fotmob_lineup and fotmob_lineup.get("home_players"):
             home_formation = fotmob_lineup["home_formation"]
             away_formation = fotmob_lineup["away_formation"]
             home_players   = fotmob_lineup["home_players"]
             away_players   = fotmob_lineup["away_players"]
+
+            # Use FotMob live status when game has kicked off
+            fm_status = (fotmob_lineup.get("match_status") or "").lower()
+            fm_minute = fotmob_lineup.get("live_minute")
+            fm_score  = fotmob_lineup.get("score") or {}
+            _live_st  = {"ongoing","live","inplay","in_play","halftime",
+                         "paused","finished"}
+            if fm_status in _live_st:
+                if fm_status in ("halftime","paused"):
+                    featured["status"] = "Half Time"
+                elif fm_status == "finished":
+                    featured["status"] = "Finished"
+                else:
+                    featured["status"] = "In Play"
+                featured["minute"]  = fm_minute or 45
+                featured["h_score"] = fm_score.get("home", 0)
+                featured["a_score"] = fm_score.get("away", 0)
+                # Activate neural net with live data
+                safe_min = int(fm_minute) if fm_minute else 45
+                posterior = nn_live(
+                    home_name, away_name, LEAGUE_KEY,
+                    safe_min, featured["h_score"], featured["a_score"],
+                )
         else:
             home_formation = get_formation_for_team(home_name)
             away_formation = get_formation_for_team(away_name)
