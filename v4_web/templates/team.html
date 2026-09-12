@@ -240,7 +240,7 @@
 
         </div>
 
-        <!-- CENTRE: Pitch + Form -->
+        <!-- CENTRE: Pitch + Last 5 below it -->
         <div class="space-y-3">
             {% if pitch_svg %}
             <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-3 shadow-xl">
@@ -256,26 +256,27 @@
             </div>
             {% endif %}
 
+            <!-- Last 5 Results — same width as pitch, directly below -->
             {% if last_5 %}
-            <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-3 shadow-xl">
-                <div class="text-xs font-mono text-slate-400 uppercase tracking-widest mb-2">
+            <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl">
+                <div class="text-xs font-mono text-slate-400 uppercase tracking-widest mb-3">
                     Last 5 Results
                 </div>
-                <div class="space-y-1.5">
+                <div class="space-y-2">
                     {% for r in last_5 %}
                     <div class="flex items-center gap-2 text-xs font-mono">
-                        <span class="w-6 h-6 rounded text-center text-xs font-bold leading-6
+                        <span class="w-6 h-6 rounded text-center text-xs font-bold leading-6 flex-none
                             {% if r.result == 'W' %}bg-emerald-900 text-emerald-300
                             {% elif r.result == 'D' %}bg-slate-700 text-slate-300
                             {% else %}bg-rose-900 text-rose-300{% endif %}">
                             {{ r.result }}
                         </span>
-                        <span class="text-slate-500 w-20">{{ r.date }}</span>
-                        <span class="{% if r.result == 'W' %}text-slate-200{% elif r.result == 'D' %}text-slate-400{% else %}text-slate-500{% endif %} flex-1">
+                        <span class="text-slate-500 w-20 flex-none">{{ r.date }}</span>
+                        <span class="{% if r.result == 'W' %}text-slate-200{% elif r.result == 'D' %}text-slate-400{% else %}text-slate-500{% endif %} flex-1 truncate">
                             {% if r.is_home %}vs {% else %}@ {% endif %}{{ r.opponent }}
                         </span>
-                        <span class="text-slate-300 font-bold">{{ r.h_score }}–{{ r.a_score }}</span>
-                        <span class="text-slate-600">{{ "H" if r.is_home else "A" }}</span>
+                        <span class="text-slate-300 font-bold flex-none">{{ r.h_score }}–{{ r.a_score }}</span>
+                        <span class="text-slate-600 flex-none">{{ "H" if r.is_home else "A" }}</span>
                     </div>
                     {% endfor %}
                 </div>
@@ -367,7 +368,7 @@
         </div>
     </div>
 
-    <!-- SEASON RESULTS TABLE -->
+    <!-- BOTTOM: Full Season Results — full width -->
     {% if all_results %}
     {% set display_season = current_season|string + "/" + ((current_season + 1)|string)[-2:] %}
     <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl">

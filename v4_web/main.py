@@ -101,7 +101,26 @@ if MODEL_PATH and MODEL_PATH.exists() and SCALER_PATH and SCALER_PATH.exists():
 else:
     print("WARNING: football_v4.pth or scaler not found")
 
-app = FastAPI(title="V4 Quant Terminal")
+import asyncio
+from contextlib import asynccontextmanager
+from prediction_job import schedule_prediction_job
+from predictions import init_db
+
+@asynccontextmanager
+async def lifespan(app):
+    """FastAPI lifespan — starts background prediction job on startup."""
+    init_db()
+    if priors_db:
+        asyncio.create_task(
+            schedule_prediction_job(priors_db, LEAGUE_KEY, interval_minutes=30)
+        )
+        print("[startup] Prediction logging job scheduled (every 30 min)")
+    else:
+        print("[startup] No priors loaded — prediction job skipped")
+    yield
+    # Shutdown: nothing to clean up (SQLite handles its own flush)
+
+app = FastAPI(title="V4 Quant Terminal", lifespan=lifespan)
 templates = Jinja2Templates(directory=ROOT / "templates")
 
 
