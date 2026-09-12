@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="max-w-screen-2xl mx-auto flex items-center justify-center min-h-[70vh]">
+    <div class="text-center space-y-6 max-w-md">
+
+        <!-- Icon -->
+        <div class="text-6xl">👤</div>
+
+        <!-- Title -->
+        <div>
+            <h1 class="text-2xl font-bold text-white tracking-wide">
+                {% if player_name %}{{ player_name }}{% else %}Player Profile{% endif %}
+            </h1>
+            {% if team_name %}
+            <p class="text-sm font-mono text-slate-500 mt-1">{{ team_name }}</p>
+            {% endif %}
+        </div>
+
+        <!-- Under construction card -->
+        <div class="bg-[#0f172a] border border-amber-800/40 rounded-2xl p-8 shadow-xl">
+            <div class="text-amber-400 text-xs font-mono uppercase tracking-widest mb-3">
+                Under Construction
+            </div>
+            <p class="text-slate-400 text-sm leading-relaxed">
+                The player profile page is currently being built.
+                It will show career stats, heatmaps, xG contribution,
+                and historical performance data.
+            </p>
+            <div class="mt-6 flex gap-3 justify-center text-xs font-mono text-slate-600">
+                <span class="flex items-center gap-1.5">
+                    <span class="w-1.5 h-1.5 rounded-full bg-amber-600"></span>
+                    Season stats
+                </span>
+                <span class="flex items-center gap-1.5">
+                    <span class="w-1.5 h-1.5 rounded-full bg-amber-600"></span>
+                    xG / xA
+                </span>
+                <span class="flex items-center gap-1.5">
+                    <span class="w-1.5 h-1.5 rounded-full bg-amber-600"></span>
+                    Match history
+                </span>
+            </div>
+        </div>
+
+        <!-- Back link -->
+        {% if team_id %}
+        <a href="/team/{{ team_id }}"
+           class="inline-block text-xs font-mono text-slate-500 hover:text-slate-300
+                  border border-slate-800 px-4 py-2 rounded-lg transition">
+            ← Back to {{ team_name or "Team" }}
+        </a>
+        {% endif %}
+
+    </div>
+</div>
+<style>body { background-color: #0b0f19 !important; }</style>
+{% endblock %}
