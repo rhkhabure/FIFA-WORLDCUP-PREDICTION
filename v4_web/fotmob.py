@@ -179,7 +179,25 @@ def get_match_details(match_id: str | int) -> dict | None:
     return result
 
 
-def get_match_status_from_date_cache(match_id: str | int) -> dict | None:
+def _refresh_date_cache_if_stale(date_str: str):
+    """Re-fetch date cache if it's older than 2 minutes (during live windows)."""
+    cache_key = f"matches_{date_str}"
+    if cache_key in _lineup_cache:
+        _, ts = _lineup_cache.get(f"{cache_key}_ts", (None, 0)) if isinstance(
+            _lineup_cache.get(f"{cache_key}_ts"), tuple) else (None,
+            _lineup_cache.get(f"{cache_key}_ts", 0))
+        if isinstance(ts, (int, float)) and time.time() - ts < 120:
+            return  # fresh enough
+    # Re-fetch
+    data = _fetch("get_matches_by_date", {"date": date_str})
+    if data.get("status") == "success":
+        _lineup_cache[cache_key]      = data
+        _lineup_cache[f"{cache_key}_ts"] = time.time()
+
+
+def get_match_status_from_date_cache(match_id: str | int,
+                                      home_name: str = "",
+                                      away_name: str = "") -> dict | None:
     """
     Extract live status for a match from the already-cached get_matches_by_date
     response. Zero extra credits — uses the cached date response.
@@ -199,16 +217,39 @@ def get_match_status_from_date_cache(match_id: str | int) -> dict | None:
     date_str  = datetime.now(timezone.utc).strftime("%Y%m%d")
     cache_key = f"matches_{date_str}"
 
+    # Refresh cache if stale (live games update every ~minute)
+    _refresh_date_cache_if_stale(date_str)
+
     if cache_key not in _lineup_cache:
-        return None  # date cache not loaded yet
+        return None
 
     data    = _lineup_cache[cache_key]
     mid_str = str(match_id)
 
+    # Normalise team name for fuzzy matching
+    def _norm(s: str) -> str:
+        s = s.lower()
+        for w in ["fc", "afc", "city", "united", "hotspur", "wanderers",
+                  "& hove albion", "town", "forest"]:
+            s = s.replace(w, "").strip()
+        return s.strip()
+
+    home_n = _norm(home_name) if home_name else ""
+    away_n = _norm(away_name) if away_name else ""
+
     leagues = data.get("data", {}).get("leagues", [])
     for league in leagues:
         for match in league.get("matches", []):
-            if str(match.get("id")) != mid_str:
+            # Match by FotMob ID first
+            fm_id = str(match.get("id", ""))
+            # Match by team name as fallback (handles FPL vs FotMob ID mismatch)
+            mh = _norm(match.get("home", {}).get("name", ""))
+            ma = _norm(match.get("away", {}).get("name", ""))
+            id_match   = fm_id == mid_str
+            name_match = (home_n and away_n and
+                          (home_n in mh or mh in home_n) and
+                          (away_n in ma or ma in away_n))
+            if not id_match and not name_match:
                 continue
 
             st       = match.get("status", {}) or {}
