@@ -419,7 +419,7 @@ def generate_pitch_svg_vertical(formation="4-3-3", team_color="#14b8a6",
         return [1] + [int(x) for x in fmt_str.split("-")]
 
     lines = parse_formation(formation)
-    W, H = 200, 220   # half-pitch: tall enough to see all rows clearly
+    W, H = 200, 320   # taller: fills centre column above last 5 widget
 
     crest_url = get_crest_proxy_url(team_name)
 
@@ -429,8 +429,8 @@ def generate_pitch_svg_vertical(formation="4-3-3", team_color="#14b8a6",
         '<defs>'
         f'<pattern id="grass-v" x="0" y="0" width="20" height="{H}"'
         ' patternUnits="userSpaceOnUse">'
-        '<rect width="10" height="400" fill="#1a6b2e"/>'
-        '<rect x="10" width="10" height="400" fill="#1d7533"/>'
+        f'<rect width="10" height="{H}" fill="#1a6b2e"/>'
+        f'<rect x="10" width="10" height="{H}" fill="#1d7533"/>'
         '</pattern>'
         '<clipPath id="pitch-clip-v">'
         f'<rect x="8" y="8" width="{W-16}" height="{H-8}" rx="4"/>'
