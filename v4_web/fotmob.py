@@ -179,6 +179,98 @@ def get_match_details(match_id: str | int) -> dict | None:
     return result
 
 
+def get_match_status_from_date_cache(match_id: str | int) -> dict | None:
+    """
+    Extract live status for a match from the already-cached get_matches_by_date
+    response. Zero extra credits — uses the cached date response.
+
+    Returns dict:
+      started    : bool
+      finished   : bool
+      ongoing    : bool
+      is_halftime: bool
+      home_score : int
+      away_score : int
+      minute_str : str   e.g. "48", "HT", "FT"
+      minute_int : int   numeric minute (45 for HT, 90 for FT, actual for live)
+    Or None if match not found in cache.
+    """
+    from datetime import datetime, timezone
+    date_str  = datetime.now(timezone.utc).strftime("%Y%m%d")
+    cache_key = f"matches_{date_str}"
+
+    if cache_key not in _lineup_cache:
+        return None  # date cache not loaded yet
+
+    data    = _lineup_cache[cache_key]
+    mid_str = str(match_id)
+
+    leagues = data.get("data", {}).get("leagues", [])
+    for league in leagues:
+        for match in league.get("matches", []):
+            if str(match.get("id")) != mid_str:
+                continue
+
+            st       = match.get("status", {}) or {}
+            started  = bool(st.get("started", False))
+            finished = bool(st.get("finished", False))
+            ongoing  = bool(st.get("ongoing", False))
+
+            # Parse score from "1 - 2" string
+            score_str  = st.get("scoreStr", "0 - 0") or "0 - 0"
+            home_score = away_score = 0
+            if " - " in score_str:
+                parts = score_str.split(" - ")
+                try:
+                    home_score = int(parts[0].strip())
+                    away_score = int(parts[1].strip())
+                except (ValueError, IndexError):
+                    pass
+
+            # Parse minute
+            live_time  = st.get("liveTime", {}) or {}
+            # Finished matches use "reason" dict
+            reason     = st.get("reason", {}) or {}
+            minute_str = ""
+            minute_int = 0
+            is_halftime = False
+
+            if finished:
+                minute_str  = "FT"
+                minute_int  = 90
+            elif live_time:
+                short_key   = live_time.get("shortKey", "")
+                short       = live_time.get("short", "")
+                # Strip invisible unicode characters from minute string
+                short_clean = "".join(
+                    c for c in short if c.isprintable() and ord(c) < 0x200b
+                ).strip().rstrip("'").strip()
+
+                if short_key == "halftime_short" or short_clean == "HT":
+                    is_halftime = True
+                    minute_str  = "HT"
+                    minute_int  = 45
+                else:
+                    minute_str = short_clean
+                    try:
+                        minute_int = int(short_clean)
+                    except ValueError:
+                        minute_int = live_time.get("basePeriod", 45)
+
+            return {
+                "started"    : started,
+                "finished"   : finished,
+                "ongoing"    : ongoing,
+                "is_halftime": is_halftime,
+                "home_score" : home_score,
+                "away_score" : away_score,
+                "minute_str" : minute_str,
+                "minute_int" : minute_int,
+            }
+
+    return None  # not in cache
+
+
 def get_live_xg(match_id: str | int, max_age_seconds: int = 300) -> dict | None:
     """
     Fetch live xG for a match. Cached for max_age_seconds.

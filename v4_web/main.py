@@ -42,6 +42,7 @@ from timeline import build_match_timeline_svg
 from scoreline_matrix import build_scoreline_svg
 from fpl import get_upcoming_fixtures
 from fotmob import (get_lineup, get_live_xg, get_fotmob_match_id,
+                    get_match_status_from_date_cache, fotmob_to_fpl_team_name,
                     has_key as fotmob_available)
 from lineup_adjustment import compute_lineup_adjusted_odds, get_absent_key_players
 from teamdata import get_team_profile, get_team_season_results, get_next_fixture, get_last_n_results, get_standings
@@ -220,44 +221,49 @@ async def crest_proxy(team_name: str):
 
 @app.get("/live/{match_id}")
 async def live_poll(match_id: str, request: Request):
-    """
-    Live polling endpoint — returns xG, score, minute from FotMob.
-    Accepts optional ?fotmob_id= for the resolved FotMob match ID.
-    """
+    """Live polling — returns xG, score, minute from FotMob. Zero extra credits for status."""
     if not fotmob_available():
         return _Response(status_code=204)
 
     fotmob_id = request.query_params.get("fotmob_id") or match_id
 
-    # Get xG
-    xg = get_live_xg(fotmob_id, max_age_seconds=60)
+    # Status/score/minute from date cache (free)
+    fm = get_match_status_from_date_cache(fotmob_id)
 
-    # Get live details (score, minute, status) — cached 60s
-    from fotmob import get_match_details
-    details = get_match_details(fotmob_id)
+    # xG from separate endpoint (1 credit, cached 5 min)
+    xg = get_live_xg(fotmob_id, max_age_seconds=300)
 
-    if not xg and not details:
+    if not fm and not xg:
         return JSONResponse({"status": "no_data"})
 
     payload: dict = {"status": "ok"}
 
-    if xg:
+    if fm:
+        if fm["finished"]:
+            match_status = "Finished"
+        elif fm["is_halftime"]:
+            match_status = "Half Time"
+        elif fm["ongoing"]:
+            match_status = "In Play"
+        else:
+            match_status = "Not Started"
+
         payload.update({
-            "home_xg"   : xg["home_xg"],
-            "away_xg"   : xg["away_xg"],
-            "home_xg_h1": xg["home_xg_h1"],
-            "away_xg_h1": xg["away_xg_h1"],
-            "home_xg_h2": xg["home_xg_h2"],
-            "away_xg_h2": xg["away_xg_h2"],
+            "match_status" : match_status,
+            "live_minute"  : fm["minute_int"] if not fm["finished"] and not fm["is_halftime"] else None,
+            "minute_str"   : fm["minute_str"],
+            "home_score"   : fm["home_score"],
+            "away_score"   : fm["away_score"],
         })
 
-    if details:
-        score = details.get("score", {})
+    if xg:
         payload.update({
-            "live_minute"  : details.get("live_minute"),
-            "match_status" : details.get("status", ""),
-            "home_score"   : score.get("home", 0),
-            "away_score"   : score.get("away", 0),
+            "home_xg"    : xg["home_xg"],
+            "away_xg"    : xg["away_xg"],
+            "home_xg_h1" : xg["home_xg_h1"],
+            "away_xg_h1" : xg["away_xg_h1"],
+            "home_xg_h2" : xg["home_xg_h2"],
+            "away_xg_h2" : xg["away_xg_h2"],
         })
 
     return JSONResponse(payload)
@@ -536,49 +542,29 @@ async def match(request: Request):
             home_players   = None
             away_players   = None
 
-        # Get live status from FotMob match details (60s cache, separate from lineup)
+        # Get live status from FotMob date cache (zero extra credits)
         # This is the authoritative source for score, minute, half-time, extra time
         if fotmob_id and fotmob_available():
-            from fotmob import get_match_details
-            fm_details = get_match_details(fotmob_id)
-            if fm_details:
-                fm_status = (fm_details.get("status") or "").lower()
-                fm_minute = fm_details.get("live_minute")
-                fm_score  = fm_details.get("score") or {}
-
-                _status_map = {
-                    "ongoing"   : "In Play",
-                    "live"      : "In Play",
-                    "inplay"    : "In Play",
-                    "in_play"   : "In Play",
-                    "halftime"  : "Half Time",
-                    "paused"    : "Half Time",
-                    "extratime" : "Extra Time",
-                    "extra_time": "Extra Time",
-                    "penaltyshootout": "Penalties",
-                    "finished"  : "Finished",
-                    "full-time" : "Finished",
-                    "ft"        : "Finished",
-                }
-                if fm_status in _status_map:
-                    featured["status"]  = _status_map[fm_status]
-                    featured["h_score"] = fm_score.get("home", 0)
-                    featured["a_score"] = fm_score.get("away", 0)
-                    # Minute: use 45 for HT, 90 for FT, actual for in-play
-                    if fm_status in ("halftime", "paused"):
-                        featured["minute"] = 45
-                    elif fm_status in ("finished", "full-time", "ft"):
-                        featured["minute"] = 90
-                    elif fm_minute is not None:
-                        featured["minute"] = int(fm_minute)
-
-                    # Activate neural net for any live/finished state
-                    if featured["status"] not in ("Not Started",):
-                        safe_min = int(featured["minute"])
-                        posterior = nn_live(
-                            home_name, away_name, LEAGUE_KEY,
-                            safe_min, featured["h_score"], featured["a_score"],
-                        )
+            fm = get_match_status_from_date_cache(fotmob_id)
+            if fm and fm["started"]:
+                if fm["finished"]:
+                    featured["status"]  = "Finished"
+                    featured["minute"]  = 90
+                elif fm["is_halftime"]:
+                    featured["status"]  = "Half Time"
+                    featured["minute"]  = 45
+                elif fm["ongoing"]:
+                    featured["status"]  = "In Play"
+                    featured["minute"]  = fm["minute_int"]
+                featured["h_score"] = fm["home_score"]
+                featured["a_score"] = fm["away_score"]
+                # Activate neural net
+                if featured["status"] != "Not Started":
+                    safe_min = int(featured["minute"])
+                    posterior = nn_live(
+                        home_name, away_name, LEAGUE_KEY,
+                        safe_min, featured["h_score"], featured["a_score"],
+                    )
 
         # Lineup-adjusted odds (only when confirmed lineups available)
         lineup_prior = None
@@ -626,8 +612,103 @@ async def match(request: Request):
         )
 
     elif match_id:
-        live_data = get_live_match_data(match_id)
-        if live_data and live_data.get("home_team") not in (None, "Unknown Home"):
+        # Try FotMob date cache first — covers live games no longer in FPL upcoming
+        # This finds Chelsea/Hull, Aston/Forest etc that have already kicked off
+        fotmob_live = None
+        fotmob_id   = None
+
+        if fotmob_available():
+            # Search date cache for this FPL match_id mapped to FotMob ID
+            # The FPL match_id and FotMob match_id are different numbering systems
+            # We need to search by iterating all PL matches in today's date cache
+            from fotmob import _lineup_cache as _fm_cache
+            from datetime import datetime, timezone as _tz
+            _date_key = f"matches_{datetime.now(_tz.utc).strftime('%Y%m%d')}"
+            _fm_date_data = _fm_cache.get(_date_key, {})
+            _leagues = (_fm_date_data.get("data", {}) or {}).get("leagues", [])
+            for _lg in _leagues:
+                if "Premier" not in _lg.get("name", ""):
+                    continue
+                for _m in _lg.get("matches", []):
+                    # FPL code matches FotMob id for PL matches
+                    if str(_m.get("id")) == str(match_id):
+                        fotmob_id = str(_m["id"])
+                        fotmob_live = _m
+                        break
+                if fotmob_live:
+                    break
+
+        if fotmob_live:
+            # Build featured from FotMob data
+            home_fm   = fotmob_live.get("home", {}) or {}
+            away_fm   = fotmob_live.get("away", {}) or {}
+            home_name = fotmob_to_fpl_team_name(home_fm.get("name", ""))
+            away_name = fotmob_to_fpl_team_name(away_fm.get("name", ""))
+            fm        = get_match_status_from_date_cache(fotmob_id)
+
+            h_score = fm["home_score"] if fm else 0
+            a_score = fm["away_score"] if fm else 0
+            if fm and fm["finished"]:
+                status = "Finished"; minute = 90
+            elif fm and fm["is_halftime"]:
+                status = "Half Time"; minute = 45
+            elif fm and fm["ongoing"]:
+                status = "In Play"; minute = fm["minute_int"]
+            else:
+                status = "Not Started"; minute = 0
+
+            featured = {
+                "home_name" : home_name,
+                "away_name" : away_name,
+                "minute"    : minute,
+                "status"    : status,
+                "h_score"   : h_score,
+                "a_score"   : a_score,
+                "h_xg"      : 0.0,
+                "a_xg"      : 0.0,
+                "fixture_id": int(match_id),
+                "fotmob_id" : fotmob_id,
+            }
+
+            prior = dc_pregame(home_name, away_name, LEAGUE_KEY)
+            home_theme     = get_theme_for_team(home_name)
+            away_theme     = get_theme_for_team(away_name)
+            home_colour    = home_theme["primary"]
+            away_colour    = away_theme["primary"]
+
+            if status != "Not Started":
+                posterior = nn_live(
+                    home_name, away_name, LEAGUE_KEY,
+                    minute, h_score, a_score,
+                )
+
+            # Lineup from FotMob
+            fotmob_lineup = get_lineup(fotmob_id) if fotmob_available() else None
+            if fotmob_lineup and fotmob_lineup.get("home_players"):
+                home_formation = fotmob_lineup["home_formation"]
+                away_formation = fotmob_lineup["away_formation"]
+                home_players   = fotmob_lineup["home_players"]
+                away_players   = fotmob_lineup["away_players"]
+            else:
+                home_formation = get_formation_for_team(home_name)
+                away_formation = get_formation_for_team(away_name)
+                home_players   = None
+                away_players   = None
+
+            pitch_svg = generate_pitch_svg_horizontal(
+                home_formation=home_formation, away_formation=away_formation,
+                home_color=home_colour, away_color=away_colour,
+                home_team=home_name, away_team=away_name,
+                home_players=home_players, away_players=away_players,
+                home_crest_url=get_crest_proxy_url(home_name),
+                away_crest_url=get_crest_proxy_url(away_name),
+                h_score=h_score, a_score=a_score, status=status,
+            )
+
+        else:
+        # Fall back to football-data.org for finished historical matches
+         live_data = get_live_match_data(match_id)
+         if live_data and live_data.get("home_team") not in (None, "Unknown Home"):
             home_name = live_data["home_team"]
             away_name = live_data["away_team"]
             minute    = live_data["current_minute"]
