@@ -206,25 +206,39 @@ async def run_prediction_job(priors_db: dict, league_key: str):
                 print(f"[prediction_job] lineup error {mid}: {e}")
 
     # ── Step 3: Log results for finished matches ────────────────────────────
+    # Only check matches where kickoff has passed (avoid hammering API)
     existing = get_all_predictions(season)
     unresolved = [
         p for p in existing
         if p["pre_logged_at"] and not p["actual_result"]
+        and p["kickoff_utc"]   # must have a kickoff time
+        and p["kickoff_utc"] < now_utc.isoformat()  # kickoff must be in the past
     ]
 
-    for p in unresolved:
+    checked = 0
+    MAX_RESULTS_PER_CYCLE = 5  # stay well within 10 req/min limit
+    for p in unresolved[:MAX_RESULTS_PER_CYCLE]:
         mid = p["match_id"]
         try:
+            # Add small delay to avoid rate limiting (10 req/min = 1 per 6s)
+            if checked > 0:
+                await asyncio.sleep(7)
+
             match_data = get_live_match_data(mid)
             if not match_data:
                 continue
             status = match_data.get("status", "")
-            if status not in ("FINISHED", "FT"):
+            if status not in ("Finished", "FINISHED", "FT"):
                 continue
             score = match_data.get("score", {}) or {}
             ft    = score.get("fullTime", {}) or {}
             hg    = ft.get("home")
             ag    = ft.get("away")
+            # Also check top-level scores from _parse_match
+            if hg is None:
+                hg = match_data.get("h_score")
+            if ag is None:
+                ag = match_data.get("a_score")
             if hg is None or ag is None:
                 continue
 
@@ -236,14 +250,17 @@ async def run_prediction_job(priors_db: dict, league_key: str):
                 result = "A"
 
             log_result(mid, result, int(hg), int(ag))
-            print(f"[prediction_job] result logged: {p['home_team']} {hg}-{ag} {p['away_team']}")
+            print(f"[prediction_job] result logged: "
+                  f"{p['home_team']} {hg}-{ag} {p['away_team']}")
+            checked += 1
 
         except Exception as e:
             print(f"[prediction_job] result error {mid}: {e}")
 
     print(f"[prediction_job] cycle done — "
           f"{len(upcoming)} upcoming, "
-          f"{len(unresolved)} awaiting results")
+          f"{len(unresolved)} awaiting results, "
+          f"{checked} results logged this cycle")
 
 
 async def schedule_prediction_job(priors_db: dict, league_key: str,
