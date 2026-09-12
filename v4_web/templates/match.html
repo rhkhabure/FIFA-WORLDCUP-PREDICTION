@@ -640,13 +640,40 @@ body { background-color: #0b0f19 !important; }
                 // Live minute update
                 if (data.live_minute !== undefined && data.live_minute !== null) {
                     const minEl = document.getElementById("live-minute");
-                    if (minEl) minEl.textContent = `${data.live_minute}'`;
+                    if (minEl) minEl.textContent = `· ${data.live_minute}'`;
+                } else if (data.match_status) {
+                    const minEl = document.getElementById("live-minute");
+                    const st = (data.match_status || "").toLowerCase();
+                    if (minEl) {
+                        if (st.includes("half") || st === "paused") {
+                            minEl.textContent = "· HT";
+                        } else if (st.includes("extra")) {
+                            minEl.textContent = "· ET";
+                        } else if (st === "finished" || st === "ft") {
+                            minEl.textContent = "· FT";
+                        }
+                    }
                 }
 
                 // Status update
                 if (data.match_status) {
                     const stEl = document.getElementById("match-status-badge");
-                    if (stEl) stEl.textContent = data.match_status;
+                    if (stEl) {
+                        const st = data.match_status.toLowerCase();
+                        const isLive = ["ongoing","live","inplay","halftime",
+                                        "paused","extratime"].includes(st);
+                        const displayMap = {
+                            "ongoing":"IN PLAY","live":"IN PLAY",
+                            "inplay":"IN PLAY","halftime":"HALF TIME",
+                            "paused":"HALF TIME","extratime":"EXTRA TIME",
+                            "finished":"FINISHED","ft":"FINISHED",
+                        };
+                        const display = displayMap[st] || st.toUpperCase();
+                        // Update just the text node (first child), keep minute span
+                        stEl.childNodes[0].textContent = display + " ";
+                        stEl.style.color = isLive ? "#34d399" : "#94a3b8";
+                        stEl.style.borderColor = isLive ? "#065f46" : "#334155";
+                    }
                 }
 
                 if (statusEl) {

@@ -515,39 +515,70 @@ async def match(request: Request):
                 fotmob_lineup = get_lineup(fotmob_id)
                 featured["fotmob_id"] = fotmob_id
 
+        # Try FotMob for confirmed lineup
+        # FotMob IDs differ from FPL codes -- resolve via team name lookup
+        fotmob_lineup = None
+        fotmob_id = None
+        if fotmob_available():
+            fotmob_id = get_fotmob_match_id(home_name, away_name)
+            if fotmob_id:
+                fotmob_lineup = get_lineup(fotmob_id)
+                featured["fotmob_id"] = fotmob_id
+
         if fotmob_lineup and fotmob_lineup.get("home_players"):
             home_formation = fotmob_lineup["home_formation"]
             away_formation = fotmob_lineup["away_formation"]
             home_players   = fotmob_lineup["home_players"]
             away_players   = fotmob_lineup["away_players"]
-
-            # Use FotMob live status when game has kicked off
-            fm_status = (fotmob_lineup.get("match_status") or "").lower()
-            fm_minute = fotmob_lineup.get("live_minute")
-            fm_score  = fotmob_lineup.get("score") or {}
-            _live_st  = {"ongoing","live","inplay","in_play","halftime",
-                         "paused","finished"}
-            if fm_status in _live_st:
-                if fm_status in ("halftime","paused"):
-                    featured["status"] = "Half Time"
-                elif fm_status == "finished":
-                    featured["status"] = "Finished"
-                else:
-                    featured["status"] = "In Play"
-                featured["minute"]  = fm_minute or 45
-                featured["h_score"] = fm_score.get("home", 0)
-                featured["a_score"] = fm_score.get("away", 0)
-                # Activate neural net with live data
-                safe_min = int(fm_minute) if fm_minute else 45
-                posterior = nn_live(
-                    home_name, away_name, LEAGUE_KEY,
-                    safe_min, featured["h_score"], featured["a_score"],
-                )
         else:
             home_formation = get_formation_for_team(home_name)
             away_formation = get_formation_for_team(away_name)
-            home_players   = None   # pitch generator uses DEFAULT_SQUADS
+            home_players   = None
             away_players   = None
+
+        # Get live status from FotMob match details (60s cache, separate from lineup)
+        # This is the authoritative source for score, minute, half-time, extra time
+        if fotmob_id and fotmob_available():
+            from fotmob import get_match_details
+            fm_details = get_match_details(fotmob_id)
+            if fm_details:
+                fm_status = (fm_details.get("status") or "").lower()
+                fm_minute = fm_details.get("live_minute")
+                fm_score  = fm_details.get("score") or {}
+
+                _status_map = {
+                    "ongoing"   : "In Play",
+                    "live"      : "In Play",
+                    "inplay"    : "In Play",
+                    "in_play"   : "In Play",
+                    "halftime"  : "Half Time",
+                    "paused"    : "Half Time",
+                    "extratime" : "Extra Time",
+                    "extra_time": "Extra Time",
+                    "penaltyshootout": "Penalties",
+                    "finished"  : "Finished",
+                    "full-time" : "Finished",
+                    "ft"        : "Finished",
+                }
+                if fm_status in _status_map:
+                    featured["status"]  = _status_map[fm_status]
+                    featured["h_score"] = fm_score.get("home", 0)
+                    featured["a_score"] = fm_score.get("away", 0)
+                    # Minute: use 45 for HT, 90 for FT, actual for in-play
+                    if fm_status in ("halftime", "paused"):
+                        featured["minute"] = 45
+                    elif fm_status in ("finished", "full-time", "ft"):
+                        featured["minute"] = 90
+                    elif fm_minute is not None:
+                        featured["minute"] = int(fm_minute)
+
+                    # Activate neural net for any live/finished state
+                    if featured["status"] not in ("Not Started",):
+                        safe_min = int(featured["minute"])
+                        posterior = nn_live(
+                            home_name, away_name, LEAGUE_KEY,
+                            safe_min, featured["h_score"], featured["a_score"],
+                        )
 
         # Lineup-adjusted odds (only when confirmed lineups available)
         lineup_prior = None
