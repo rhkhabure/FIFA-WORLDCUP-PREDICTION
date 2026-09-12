@@ -436,6 +436,41 @@ async def team_profile(request: Request, team_id: int, season: int = 2025):
     )
 
 
+@app.get("/player", response_class=HTMLResponse)
+async def player_page(request: Request):
+    """Player profile placeholder — under construction."""
+    name    = request.query_params.get("name", "")
+    team    = request.query_params.get("team", "")
+    team_id = request.query_params.get("team_id", "")
+    # Try to resolve team_id from team name if not provided
+    if not team_id and team:
+        from utils import _CREST_IDS
+        team_id = str(_CREST_IDS.get(team, ""))
+    return templates.TemplateResponse(
+        request=request, name="player.html",
+        context={
+            "request"    : request,
+            "player_name": name,
+            "team_name"  : team,
+            "team_id"    : team_id,
+        }
+    )
+
+
+@app.get("/history", response_class=HTMLResponse)
+async def history_page(request: Request):
+    """Prediction history placeholder — shows current stats from DB."""
+    from predictions import get_accuracy_stats
+    try:
+        stats = get_accuracy_stats()
+    except Exception:
+        stats = None
+    return templates.TemplateResponse(
+        request=request, name="history.html",
+        context={"request": request, "stats": stats}
+    )
+
+
 @app.get("/", response_class=HTMLResponse)
 async def hub(request: Request):
     return templates.TemplateResponse(
