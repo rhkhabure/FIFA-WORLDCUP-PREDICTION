@@ -673,7 +673,7 @@ def generate_pitch_svg_horizontal(home_formation="4-3-3", away_formation="4-3-3"
                 f' x="185" y="10" width="14" height="14" opacity="0.95"/>'
             )
         svg += (
-            f'<text x="160" y="23" fill="white"'
+            f'<text id="live-score" x="160" y="23" fill="white"'
             f' font-family="\'JetBrains Mono\',monospace"'
             f' font-size="11" font-weight="bold" text-anchor="middle"'
             f' style="text-shadow:0 1px 4px rgba(0,0,0,0.9)">'
@@ -682,7 +682,7 @@ def generate_pitch_svg_horizontal(home_formation="4-3-3", away_formation="4-3-3"
         if status:
             badge = {"Finished": "FT", "Half Time": "HT"}.get(status, status)
             svg += (
-                f'<text x="160" y="31" fill="#94a3b8"'
+                f'<text id="live-status-badge" x="160" y="31" fill="#94a3b8"'
                 f' font-family="\'JetBrains Mono\',monospace"'
                 f' font-size="4.5" text-anchor="middle">{badge}</text>'
             )

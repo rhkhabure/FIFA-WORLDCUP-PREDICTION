@@ -545,7 +545,7 @@ async def match(request: Request):
         # Get live status from FotMob date cache (zero extra credits)
         # This is the authoritative source for score, minute, half-time, extra time
         if fotmob_id and fotmob_available():
-            fm = get_match_status_from_date_cache(fotmob_id)
+            fm = get_match_status_from_date_cache(fotmob_id, home_name, away_name)
             if fm and fm["started"]:
                 if fm["finished"]:
                     featured["status"]  = "Finished"
@@ -612,51 +612,58 @@ async def match(request: Request):
         )
 
     elif match_id:
-        # Try FotMob date cache first — covers live games no longer in FPL upcoming
-        # This finds Chelsea/Hull, Aston/Forest etc that have already kicked off
-        fotmob_live = None
+        # For matches not in FPL upcoming (already kicked off):
+        # 1. Get team names from football-data.org (works for any match status)
+        # 2. Use team names to find the match in FotMob date cache
+        # 3. Build featured from FotMob live data
+
+        # Get basic match info from football-data.org
+        live_data  = get_live_match_data(match_id)
+        fd_home    = live_data.get("home_team", "") if live_data else ""
+        fd_away    = live_data.get("away_team", "") if live_data else ""
+        home_name  = fd_home or "Unknown Home"
+        away_name  = fd_away or "Unknown Away"
+
+        # Try FotMob date cache with team name matching (handles ID mismatch)
         fotmob_id   = None
+        fotmob_live = None
+        fm          = None
 
-        if fotmob_available():
-            # Search date cache for this FPL match_id mapped to FotMob ID
-            # The FPL match_id and FotMob match_id are different numbering systems
-            # We need to search by iterating all PL matches in today's date cache
-            from fotmob import _lineup_cache as _fm_cache
-            from datetime import datetime, timezone as _tz
-            _date_key = f"matches_{datetime.now(_tz.utc).strftime('%Y%m%d')}"
-            _fm_date_data = _fm_cache.get(_date_key, {})
-            _leagues = (_fm_date_data.get("data", {}) or {}).get("leagues", [])
-            for _lg in _leagues:
-                if "Premier" not in _lg.get("name", ""):
-                    continue
-                for _m in _lg.get("matches", []):
-                    # FPL code matches FotMob id for PL matches
-                    if str(_m.get("id")) == str(match_id):
-                        fotmob_id = str(_m["id"])
-                        fotmob_live = _m
-                        break
-                if fotmob_live:
-                    break
+        if fotmob_available() and fd_home and fd_away:
+            # get_fotmob_match_id resolves via name matching
+            fotmob_id = get_fotmob_match_id(fd_home, fd_away)
+            if fotmob_id:
+                fm = get_match_status_from_date_cache(
+                    fotmob_id, fd_home, fd_away
+                )
 
-        if fotmob_live:
-            # Build featured from FotMob data
-            home_fm   = fotmob_live.get("home", {}) or {}
-            away_fm   = fotmob_live.get("away", {}) or {}
-            home_name = fotmob_to_fpl_team_name(home_fm.get("name", ""))
-            away_name = fotmob_to_fpl_team_name(away_fm.get("name", ""))
-            fm        = get_match_status_from_date_cache(fotmob_id)
+        # Also try by name directly in date cache even without FotMob ID
+        if not fm and fd_home and fd_away:
+            fm = get_match_status_from_date_cache("", fd_home, fd_away)
 
-            h_score = fm["home_score"] if fm else 0
-            a_score = fm["away_score"] if fm else 0
-            if fm and fm["finished"]:
+        # Build scores and status
+        if fm and fm["started"]:
+            h_score = fm["home_score"]
+            a_score = fm["away_score"]
+            if fm["finished"]:
                 status = "Finished"; minute = 90
-            elif fm and fm["is_halftime"]:
+            elif fm["is_halftime"]:
                 status = "Half Time"; minute = 45
-            elif fm and fm["ongoing"]:
+            elif fm["ongoing"]:
                 status = "In Play"; minute = fm["minute_int"]
             else:
                 status = "Not Started"; minute = 0
+        elif live_data:
+            h_score = live_data.get("h_score", 0)
+            a_score = live_data.get("a_score", 0)
+            status  = live_data.get("status", "")
+            minute  = live_data.get("current_minute", 0)
+        else:
+            h_score = a_score = 0
+            status  = "Unknown"
+            minute  = 0
 
+        if home_name not in (None, "Unknown Home", ""):
             featured = {
                 "home_name" : home_name,
                 "away_name" : away_name,
@@ -667,7 +674,9 @@ async def match(request: Request):
                 "h_xg"      : 0.0,
                 "a_xg"      : 0.0,
                 "fixture_id": int(match_id),
-                "fotmob_id" : fotmob_id,
+                "fotmob_id" : fotmob_id or "",
+                "venue"     : live_data.get("venue", "") if live_data else "",
+                "referee"   : live_data.get("referee", "") if live_data else "",
             }
 
             prior = dc_pregame(home_name, away_name, LEAGUE_KEY)
@@ -675,25 +684,24 @@ async def match(request: Request):
             away_theme     = get_theme_for_team(away_name)
             home_colour    = home_theme["primary"]
             away_colour    = away_theme["primary"]
+            home_formation = get_formation_for_team(home_name)
+            away_formation = get_formation_for_team(away_name)
 
-            if status != "Not Started":
+            if status not in ("Not Started", "Unknown", ""):
+                safe_min = int(minute) if minute else 0
                 posterior = nn_live(
                     home_name, away_name, LEAGUE_KEY,
-                    minute, h_score, a_score,
+                    safe_min, h_score, a_score,
                 )
 
-            # Lineup from FotMob
-            fotmob_lineup = get_lineup(fotmob_id) if fotmob_available() else None
-            if fotmob_lineup and fotmob_lineup.get("home_players"):
-                home_formation = fotmob_lineup["home_formation"]
-                away_formation = fotmob_lineup["away_formation"]
-                home_players   = fotmob_lineup["home_players"]
-                away_players   = fotmob_lineup["away_players"]
-            else:
-                home_formation = get_formation_for_team(home_name)
-                away_formation = get_formation_for_team(away_name)
-                home_players   = None
-                away_players   = None
+            # Try lineup from FotMob
+            if fotmob_id and fotmob_available():
+                fotmob_lineup = get_lineup(fotmob_id)
+                if fotmob_lineup and fotmob_lineup.get("home_players"):
+                    home_formation = fotmob_lineup["home_formation"]
+                    away_formation = fotmob_lineup["away_formation"]
+                    home_players   = fotmob_lineup["home_players"]
+                    away_players   = fotmob_lineup["away_players"]
 
             pitch_svg = generate_pitch_svg_horizontal(
                 home_formation=home_formation, away_formation=away_formation,
@@ -705,39 +713,11 @@ async def match(request: Request):
                 h_score=h_score, a_score=a_score, status=status,
             )
 
-        else:
-        # Fall back to football-data.org for finished historical matches
-         live_data = get_live_match_data(match_id)
-         if live_data and live_data.get("home_team") not in (None, "Unknown Home"):
-            home_name = live_data["home_team"]
-            away_name = live_data["away_team"]
-            minute    = live_data["current_minute"]
-            h_score   = live_data.get("h_score", 0)
-            a_score   = live_data.get("a_score", 0)
-            status    = live_data["status"]
-
-            featured = {
-                "home_name" : home_name,
-                "away_name" : away_name,
-                "minute"    : minute,
-                "status"    : status,
-                "h_score"   : h_score,
-                "a_score"   : a_score,
-                "h_xg"      : live_data["live_xg"]["home"],
-                "a_xg"      : live_data["live_xg"]["away"],
-                "fixture_id": int(match_id),
-                "venue"     : live_data.get("venue", ""),
-                "h_ht"      : live_data.get("h_ht"),
-                "a_ht"      : live_data.get("a_ht"),
-                "odds_home" : live_data.get("odds_home"),
-                "odds_draw" : live_data.get("odds_draw"),
-                "odds_away" : live_data.get("odds_away"),
-                "referee"   : live_data.get("referee", ""),
-            }
-
-            prior = dc_pregame(home_name, away_name, LEAGUE_KEY)
-
-            safe_minute = 0
+            safe_minute_int = 0
+            try:
+                safe_minute_int = int(str(minute).replace("'","").strip())
+            except (ValueError, TypeError):
+                pass
             try:
                 safe_minute = int(str(minute).replace("'","").strip())
             except (ValueError, TypeError):
