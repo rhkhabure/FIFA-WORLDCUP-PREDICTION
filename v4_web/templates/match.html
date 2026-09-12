@@ -15,14 +15,15 @@
             {% endif %}
         </div>
         {% if featured.status %}
-            <span class="text-[10px] font-mono px-2 py-1 rounded border
+            <span id="match-status-badge"
+                  class="text-[10px] font-mono px-2 py-1 rounded border
                 {% if featured.status in ['Finished','FT'] %}
                     text-slate-400 border-slate-700 bg-slate-900/60
                 {% else %}
                     text-emerald-400 border-emerald-800 bg-emerald-950/40
                 {% endif %}">
                 {{ featured.status|upper }}
-                {% if featured.minute and featured.status == 'In Play' %}· {{ featured.minute }}'{% endif %}
+                <span id="live-minute">{% if featured.minute and featured.status == 'In Play' %}· {{ featured.minute }}'{% endif %}</span>
             </span>
         {% endif %}
     </div>
@@ -306,6 +307,14 @@
                     <span class="text-[10px] font-mono text-slate-400 uppercase tracking-widest">
                         Starting Lineups
                     </span>
+                    <!-- Live score pill -->
+                    {% if featured.h_score is not none and featured.status != 'Not Started' %}
+                    <span id="live-score"
+                          class="text-sm font-bold font-mono text-white px-3 py-0.5
+                                 bg-slate-800 rounded-full border border-slate-700">
+                        {{ featured.h_score }} – {{ featured.a_score }}
+                    </span>
+                    {% endif %}
                     <div class="flex items-center gap-3 text-[9px] font-mono">
                         {% if featured.home_name %}
                         <a href="/team/{{ home_team_id }}"
@@ -615,14 +624,38 @@ body { background-color: #0b0f19 !important; }
             }
             const data = await resp.json();
             if (data.status === "ok") {
-                homeXgEl.textContent = fmt(data.home_xg);
-                awayXgEl.textContent = fmt(data.away_xg);
+                // xG display
+                if (homeXgEl && data.home_xg !== undefined)
+                    homeXgEl.textContent = fmt(data.home_xg);
+                if (awayXgEl && data.away_xg !== undefined)
+                    awayXgEl.textContent = fmt(data.away_xg);
+
+                // Live score update
+                if (data.home_score !== undefined && data.away_score !== undefined) {
+                    const scoreEl = document.getElementById("live-score");
+                    if (scoreEl)
+                        scoreEl.textContent = `${data.home_score} – ${data.away_score}`;
+                }
+
+                // Live minute update
+                if (data.live_minute !== undefined && data.live_minute !== null) {
+                    const minEl = document.getElementById("live-minute");
+                    if (minEl) minEl.textContent = `${data.live_minute}'`;
+                }
+
+                // Status update
+                if (data.match_status) {
+                    const stEl = document.getElementById("match-status-badge");
+                    if (stEl) stEl.textContent = data.match_status;
+                }
+
                 if (statusEl) {
-                    const now = new Date().toLocaleTimeString("en-GB", {hour: "2-digit", minute: "2-digit"});
+                    const now = new Date().toLocaleTimeString("en-GB",
+                        {hour: "2-digit", minute: "2-digit"});
                     statusEl.textContent = `Updated ${now}`;
                 }
             } else {
-                if (statusEl) statusEl.textContent = "No xG data yet";
+                if (statusEl) statusEl.textContent = "No data yet";
             }
         } catch (e) {
             if (statusEl) statusEl.textContent = "Poll error";
