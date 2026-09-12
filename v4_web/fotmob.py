@@ -180,19 +180,17 @@ def get_match_details(match_id: str | int) -> dict | None:
 
 
 def _refresh_date_cache_if_stale(date_str: str):
-    """Re-fetch date cache if it's older than 2 minutes (during live windows)."""
+    """Re-fetch date cache if older than 2 minutes."""
     cache_key = f"matches_{date_str}"
-    if cache_key in _lineup_cache:
-        _, ts = _lineup_cache.get(f"{cache_key}_ts", (None, 0)) if isinstance(
-            _lineup_cache.get(f"{cache_key}_ts"), tuple) else (None,
-            _lineup_cache.get(f"{cache_key}_ts", 0))
-        if isinstance(ts, (int, float)) and time.time() - ts < 120:
-            return  # fresh enough
+    ts_key    = f"{cache_key}_ts"
+    ts        = _lineup_cache.get(ts_key, 0)
+    if isinstance(ts, (int, float)) and time.time() - ts < 120:
+        return  # fresh enough
     # Re-fetch
     data = _fetch("get_matches_by_date", {"date": date_str})
     if data.get("status") == "success":
-        _lineup_cache[cache_key]      = data
-        _lineup_cache[f"{cache_key}_ts"] = time.time()
+        _lineup_cache[cache_key] = data
+        _lineup_cache[ts_key]    = time.time()
 
 
 def get_match_status_from_date_cache(match_id: str | int,
@@ -240,15 +238,15 @@ def get_match_status_from_date_cache(match_id: str | int,
     leagues = data.get("data", {}).get("leagues", [])
     for league in leagues:
         for match in league.get("matches", []):
-            # Match by FotMob ID first
             fm_id = str(match.get("id", ""))
-            # Match by team name as fallback (handles FPL vs FotMob ID mismatch)
-            mh = _norm(match.get("home", {}).get("name", ""))
-            ma = _norm(match.get("away", {}).get("name", ""))
-            id_match   = fm_id == mid_str
+            mh    = _norm(match.get("home", {}).get("name", ""))
+            ma    = _norm(match.get("away", {}).get("name", ""))
+
+            id_match   = fm_id == mid_str and mid_str not in ("", "0")
             name_match = (home_n and away_n and
                           (home_n in mh or mh in home_n) and
                           (away_n in ma or ma in away_n))
+
             if not id_match and not name_match:
                 continue
 
@@ -420,11 +418,11 @@ def get_fotmob_match_id(home_name: str, away_name: str, date_str: str | None = N
     if cache_key not in _lineup_cache:
         data = _fetch("get_matches_by_date", {"date": date_str})
         if data.get("status") == "success":
-            _lineup_cache[cache_key] = data
+            _lineup_cache[cache_key]              = data
+            _lineup_cache[f"{cache_key}_ts"]      = time.time()
         else:
             return None
-    else:
-        data = _lineup_cache[cache_key]
+    data = _lineup_cache[cache_key]
 
     def norm(s: str) -> str:
         return s.lower().replace("fc", "").replace("afc", "").strip()

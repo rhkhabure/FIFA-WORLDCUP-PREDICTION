@@ -612,34 +612,46 @@ async def match(request: Request):
         )
 
     elif match_id:
-        # For matches not in FPL upcoming (already kicked off):
-        # 1. Get team names from football-data.org (works for any match status)
-        # 2. Use team names to find the match in FotMob date cache
-        # 3. Build featured from FotMob live data
+        # Matches no longer in FPL upcoming (live or finished).
+        # football-data.org returns 400 for live matches on free tier,
+        # so we can't rely on it for team names.
+        # Strategy:
+        #   1. Check predictions DB for team names (logged at announcement)
+        #   2. Scan FotMob date cache for today's matches by team name
+        #   3. Fall back to football-data.org for finished matches
 
-        # Get basic match info from football-data.org
-        live_data  = get_live_match_data(match_id)
-        fd_home    = live_data.get("home_team", "") if live_data else ""
-        fd_away    = live_data.get("away_team", "") if live_data else ""
-        home_name  = fd_home or "Unknown Home"
-        away_name  = fd_away or "Unknown Away"
+        from predictions import get_all_predictions
+        fd_home = fd_away = ""
 
-        # Try FotMob date cache with team name matching (handles ID mismatch)
-        fotmob_id   = None
-        fotmob_live = None
-        fm          = None
+        # Step 1: predictions DB has team names for all announced fixtures
+        preds = get_all_predictions()
+        pred  = next((p for p in preds if str(p["match_id"]) == str(match_id)), None)
+        if pred:
+            fd_home = pred["home_team"]
+            fd_away = pred["away_team"]
+
+        # Step 2: if not in predictions yet, try football-data.org
+        # (works for finished matches, returns 400 for live)
+        live_data = None
+        if not fd_home:
+            live_data = get_live_match_data(match_id)
+            if live_data:
+                fd_home = live_data.get("home_team", "")
+                fd_away = live_data.get("away_team", "")
+
+        home_name = fd_home or "Unknown Home"
+        away_name = fd_away or "Unknown Away"
+
+        # Step 3: FotMob live status via date cache (name-based lookup)
+        fotmob_id = None
+        fm        = None
 
         if fotmob_available() and fd_home and fd_away:
-            # get_fotmob_match_id resolves via name matching
+            # This call loads the date cache if not already loaded
             fotmob_id = get_fotmob_match_id(fd_home, fd_away)
-            if fotmob_id:
-                fm = get_match_status_from_date_cache(
-                    fotmob_id, fd_home, fd_away
-                )
-
-        # Also try by name directly in date cache even without FotMob ID
-        if not fm and fd_home and fd_away:
-            fm = get_match_status_from_date_cache("", fd_home, fd_away)
+            fm = get_match_status_from_date_cache(
+                fotmob_id or "0", fd_home, fd_away
+            )
 
         # Build scores and status
         if fm and fm["started"]:
@@ -694,7 +706,7 @@ async def match(request: Request):
                     safe_min, h_score, a_score,
                 )
 
-            # Try lineup from FotMob
+            # Lineup from FotMob
             if fotmob_id and fotmob_available():
                 fotmob_lineup = get_lineup(fotmob_id)
                 if fotmob_lineup and fotmob_lineup.get("home_players"):
@@ -702,6 +714,9 @@ async def match(request: Request):
                     away_formation = fotmob_lineup["away_formation"]
                     home_players   = fotmob_lineup["home_players"]
                     away_players   = fotmob_lineup["away_players"]
+            else:
+                home_formation = get_formation_for_team(home_name)
+                away_formation = get_formation_for_team(away_name)
 
             pitch_svg = generate_pitch_svg_horizontal(
                 home_formation=home_formation, away_formation=away_formation,
