@@ -94,34 +94,58 @@ def get_live_match_data(match_id: int | str) -> dict:
 
 def get_finished_match(match_id: int | str) -> dict:
     """
-    Get data for a finished match by scanning the PL finished matches list.
-    Uses /competitions/PL/matches?status=FINISHED which works on free tier.
-    Cached for 5 minutes.
+    Get data for a finished PL match.
+    The FPL 'code' field does NOT match football-data.org's match 'id'.
+    We scan all finished PL matches and cache the full list.
+    Lookup is by match_id stored in our cache after initial scan.
     """
-    # Cache key
-    _cache_key = f"_finished_{match_id}"
     import time as _time
     if not hasattr(get_finished_match, '_cache'):
-        get_finished_match._cache = {}
-    cached = get_finished_match._cache.get(_cache_key)
-    if cached and _time.time() - cached[1] < 300:
-        return cached[0]
+        get_finished_match._cache = {}       # fpl_code -> parsed match
+        get_finished_match._cache_ts = 0
 
-    # Try direct match endpoint first (works for finished matches)
-    data = _fetch(f"matches/{match_id}")
-    if data and "id" in data:
-        parsed = _parse_match(data)
-        parsed["events"] = _parse_goals(data)
-        get_finished_match._cache[_cache_key] = (parsed, _time.time())
-        return parsed
+    # Refresh every 5 minutes
+    if _time.time() - get_finished_match._cache_ts > 300:
+        data = _fetch(f"competitions/{PL_CODE}/matches",
+                      {"status": "FINISHED", "season": 2025})
+        for m in data.get("matches", []):
+            parsed          = _parse_match(m)
+            parsed["fd_id"] = m.get("id")     # real football-data.org ID
+            # Index by fd_id so we can look up later
+            get_finished_match._cache[str(m.get("id"))] = parsed
+        get_finished_match._cache_ts = _time.time()
+        print(f"[footballdata] cached {len(get_finished_match._cache)} finished matches")
 
-    # Fallback: scan season finished matches
-    season_data = _fetch(f"competitions/{PL_CODE}/matches",
-                         {"status": "FINISHED", "season": 2025})
-    for m in season_data.get("matches", []):
-        if str(m.get("id")) == str(match_id):
-            parsed = _parse_match(m)
-            get_finished_match._cache[_cache_key] = (parsed, _time.time())
+    # Direct lookup by football-data.org ID
+    result = get_finished_match._cache.get(str(match_id))
+    if result:
+        return result
+
+    return _empty_match()
+
+
+def find_finished_match_by_teams(home_name: str, away_name: str) -> dict:
+    """
+    Find a finished PL match by team names.
+    Uses the same cache as get_finished_match.
+    Normalises names before comparing.
+    """
+    # Ensure cache is populated
+    get_finished_match(0)
+
+    def norm(s: str) -> str:
+        s = _clean_name(s).lower()
+        for w in ["hotspur", "wanderers", "& hove albion",
+                  "city", "united", "town", "forest"]:
+            s = s.replace(w, "").strip()
+        return s.strip()
+
+    h_n = norm(home_name)
+    a_n = norm(away_name)
+
+    for parsed in get_finished_match._cache.values():
+        if (norm(parsed.get("home_team", "")) == h_n and
+                norm(parsed.get("away_team", "")) == a_n):
             return parsed
 
     return _empty_match()
