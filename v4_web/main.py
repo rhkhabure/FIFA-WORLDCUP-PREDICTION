@@ -526,22 +526,55 @@ async def match(request: Request):
     )
 
     if fpl_match:
-        # Upcoming match -- FPL has team names, no score data yet
+        # Match found in FPL upcoming list
         home_name = fpl_match["home"]
         away_name = fpl_match["away"]
+        kickoff   = fpl_match.get("kickoff_utc", "")
+
+        # Check if kickoff has passed — if so, try football-data.org
+        # for the actual status (it works for finished matches)
+        from datetime import datetime, timezone as _tz
+        now_utc   = datetime.now(_tz.utc)
+        kicked_off = False
+        if kickoff:
+            try:
+                ko_dt = datetime.fromisoformat(kickoff.replace("Z", "+00:00"))
+                kicked_off = now_utc > ko_dt
+            except Exception:
+                pass
+
+        # For finished/live games: football-data.org has the result
+        fd_data = None
+        if kicked_off:
+            fd_data = get_live_match_data(match_id)
+
+        if fd_data and fd_data.get("status") in ("Finished", "In Play", "Half Time"):
+            # Game has result — use football-data.org data
+            h_score = fd_data.get("h_score", 0)
+            a_score = fd_data.get("a_score", 0)
+            status  = fd_data.get("status", "Finished")
+            minute  = fd_data.get("current_minute", 90)
+        else:
+            h_score = 0
+            a_score = 0
+            status  = "Not Started"
+            minute  = 0
+
         featured = {
             "home_name" : home_name,
             "away_name" : away_name,
-            "minute"    : 0,
-            "status"    : "Not Started",
-            "h_score"   : 0,
-            "a_score"   : 0,
+            "minute"    : minute,
+            "status"    : status,
+            "h_score"   : h_score,
+            "a_score"   : a_score,
             "h_xg"      : 0.0,
             "a_xg"      : 0.0,
             "fixture_id": fpl_match.get("match_id"),
         }
         prior = dc_pregame(home_name, away_name, LEAGUE_KEY)
-        # No posterior -- match hasn't started
+        if status not in ("Not Started",):
+            posterior = nn_live(home_name, away_name, LEAGUE_KEY,
+                               int(minute), h_score, a_score)
         home_theme     = get_theme_for_team(home_name)
         away_theme     = get_theme_for_team(away_name)
         home_colour    = home_theme["primary"]

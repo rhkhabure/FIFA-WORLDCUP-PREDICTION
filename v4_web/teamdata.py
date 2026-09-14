@@ -368,15 +368,19 @@ def get_team_season_results(team_id: int, season: int = 2025,
 
 def get_next_fixture(results: list[dict]) -> dict | None:
     """Extract the next unplayed fixture from the results list."""
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).isoformat()
     for r in reversed(results):   # results are newest-first, so reverse
         if r["status"] in ("SCHEDULED", "TIMED"):
-            return r
+            if not r.get("utc_date") or r["utc_date"] >= now:
+                return r
     return None
 
 
 def get_last_n_results(results: list[dict], n: int = 5) -> list[dict]:
-    """Return the last N finished results."""
-    finished = [r for r in results if r["result"] in ("W", "D", "L")]
+    """Return the last N finished results from the current season."""
+    finished = [r for r in results if r.get("result") in ("W", "D", "L")
+                and r.get("status") == "FINISHED"]
     return finished[:n]
 
 
