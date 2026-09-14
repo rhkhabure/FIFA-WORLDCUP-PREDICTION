@@ -34,7 +34,7 @@ import uvicorn
 ROOT = Path(__file__).resolve().parent
 sys.path.append(str(ROOT.parent))
 
-from footballdata import get_live_match_data, get_last_completed_pl_match
+from footballdata import get_live_match_data, get_last_completed_pl_match, get_finished_match
 from utils import (generate_pitch_svg_horizontal, get_theme_for_team,
                    get_formation_for_team, get_squad_for_team,
                    get_crest_url, get_crest_proxy_url, _CREST_IDS)
@@ -747,17 +747,21 @@ async def match(request: Request):
             fd_home = pred["home_team"]
             fd_away = pred["away_team"]
 
-        # Step 2: if not in predictions yet, try football-data.org
-        # (works for finished matches, returns 400 for live)
+        # Step 2: if not in predictions DB, use get_finished_match
+        # which scans /competitions/PL/matches?status=FINISHED — works on free tier
         live_data = None
         if not fd_home:
-            live_data = get_live_match_data(match_id)
-            if live_data:
-                fd_home = live_data.get("home_team", "")
-                fd_away = live_data.get("away_team", "")
+            live_data = get_finished_match(match_id)
+            if live_data and live_data.get("home_team") not in (None, "Unknown Home", ""):
+                fd_home   = live_data.get("home_team", "")
+                fd_away   = live_data.get("away_team", "")
 
-        home_name = fd_home or "Unknown Home"
-        away_name = fd_away or "Unknown Away"
+        # Also fetch live_data for all elif matches to get score/status
+        if not live_data:
+            live_data = get_finished_match(match_id)
+
+        home_name = fd_home or (live_data.get("home_team", "") if live_data else "") or "Unknown Home"
+        away_name = fd_away or (live_data.get("away_team", "") if live_data else "") or "Unknown Away"
 
         # Step 3: FotMob live status via date cache (name-based lookup)
         fotmob_id = None
@@ -770,8 +774,13 @@ async def match(request: Request):
                 fotmob_id or "0", fd_home, fd_away
             )
 
-        # Build scores and status
-        if fm and fm["started"]:
+        # Build scores and status — football-data.org is authoritative for finished
+        if live_data and live_data.get("status") == "Finished":
+            h_score = live_data.get("h_score", 0) or 0
+            a_score = live_data.get("a_score", 0) or 0
+            status  = "Finished"
+            minute  = 90
+        elif fm and fm["started"]:
             h_score = fm["home_score"]
             a_score = fm["away_score"]
             if fm["finished"]:
