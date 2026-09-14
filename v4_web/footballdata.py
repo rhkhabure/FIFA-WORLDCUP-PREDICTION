@@ -79,12 +79,6 @@ def get_last_completed_pl_match() -> int | None:
     return None
 
 
-def get_today_pl_fixtures() -> list[dict]:
-    """All live PL matches right now."""
-    data = _fetch(f"competitions/{PL_CODE}/matches", {"status": "LIVE"})
-    return [_parse_match(m) for m in data.get("matches", [])]
-
-
 def get_live_match_data(match_id: int | str) -> dict:
     """Full match detail for one match ID."""
     data = _fetch(f"matches/{match_id}")
@@ -93,6 +87,44 @@ def get_live_match_data(match_id: int | str) -> dict:
     parsed = _parse_match(data)
     parsed["events"] = _parse_goals(data)
     return parsed
+    """All live PL matches right now."""
+    data = _fetch(f"competitions/{PL_CODE}/matches", {"status": "LIVE"})
+    return [_parse_match(m) for m in data.get("matches", [])]
+
+
+def get_finished_match(match_id: int | str) -> dict:
+    """
+    Get data for a finished match by scanning the PL finished matches list.
+    Uses /competitions/PL/matches?status=FINISHED which works on free tier.
+    Cached for 5 minutes.
+    """
+    # Cache key
+    _cache_key = f"_finished_{match_id}"
+    import time as _time
+    if not hasattr(get_finished_match, '_cache'):
+        get_finished_match._cache = {}
+    cached = get_finished_match._cache.get(_cache_key)
+    if cached and _time.time() - cached[1] < 300:
+        return cached[0]
+
+    # Try direct match endpoint first (works for finished matches)
+    data = _fetch(f"matches/{match_id}")
+    if data and "id" in data:
+        parsed = _parse_match(data)
+        parsed["events"] = _parse_goals(data)
+        get_finished_match._cache[_cache_key] = (parsed, _time.time())
+        return parsed
+
+    # Fallback: scan season finished matches
+    season_data = _fetch(f"competitions/{PL_CODE}/matches",
+                         {"status": "FINISHED", "season": 2025})
+    for m in season_data.get("matches", []):
+        if str(m.get("id")) == str(match_id):
+            parsed = _parse_match(m)
+            get_finished_match._cache[_cache_key] = (parsed, _time.time())
+            return parsed
+
+    return _empty_match()
 
 
 # ── Internal parsers ───────────────────────────────────────────────────────────
