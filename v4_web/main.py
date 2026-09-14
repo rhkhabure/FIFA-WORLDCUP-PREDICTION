@@ -34,7 +34,8 @@ import uvicorn
 ROOT = Path(__file__).resolve().parent
 sys.path.append(str(ROOT.parent))
 
-from footballdata import get_live_match_data, get_last_completed_pl_match, get_finished_match
+from footballdata import (get_live_match_data, get_last_completed_pl_match,
+                          get_finished_match, find_finished_match_by_teams)
 from utils import (generate_pitch_svg_horizontal, get_theme_for_team,
                    get_formation_for_team, get_squad_for_team,
                    get_crest_url, get_crest_proxy_url, _CREST_IDS)
@@ -729,52 +730,64 @@ async def match(request: Request):
         )
 
     elif match_id:
-        # Matches no longer in FPL upcoming (live or finished).
-        # football-data.org returns 400 for live matches on free tier,
-        # so we can't rely on it for team names.
-        # Strategy:
-        #   1. Check predictions DB for team names (logged at announcement)
-        #   2. Scan FotMob date cache for today's matches by team name
-        #   3. Fall back to football-data.org for finished matches
+        # Match not in FPL upcoming. Strategy:
+        # 1. Get team names from predictions DB (logged at announcement)
+        # 2. Use team names to find finished match in football-data.org
+        #    (direct ID lookup FAILS — FPL codes ≠ fd.org IDs)
+        # 3. Fall back to FotMob date cache for live matches
 
         from predictions import get_all_predictions
         fd_home = fd_away = ""
+        live_data = None
 
-        # Step 1: predictions DB has team names for all announced fixtures
+        # Step 1: predictions DB
         preds = get_all_predictions()
-        pred  = next((p for p in preds if str(p["match_id"]) == str(match_id)), None)
+        pred  = next((p for p in preds
+                      if str(p["match_id"]) == str(match_id)), None)
         if pred:
             fd_home = pred["home_team"]
             fd_away = pred["away_team"]
 
-        # Step 2: if not in predictions DB, use get_finished_match
-        # which scans /competitions/PL/matches?status=FINISHED — works on free tier
-        live_data = None
+        # Step 2: if still no team names, scan FPL all fixtures for this code
         if not fd_home:
-            live_data = get_finished_match(match_id)
-            if live_data and live_data.get("home_team") not in (None, "Unknown Home", ""):
-                fd_home   = live_data.get("home_team", "")
-                fd_away   = live_data.get("away_team", "")
+            # FPL stores 'code' = FPL match code in bootstrap
+            from fpl import get_team_map
+            import urllib.request as _ur, json as _json
+            try:
+                req = _ur.Request(
+                    "https://fantasy.premierleague.com/api/fixtures/",
+                    headers={"User-Agent": "Mozilla/5.0"}
+                )
+                with _ur.urlopen(req, timeout=8) as resp:
+                    all_fx = _json.loads(resp.read())
+                team_map = get_team_map()
+                for fx in all_fx:
+                    if str(fx.get("code")) == str(match_id):
+                        fd_home = team_map.get(fx.get("team_h"), "")
+                        fd_away = team_map.get(fx.get("team_a"), "")
+                        break
+            except Exception:
+                pass
 
-        # Also fetch live_data for all elif matches to get score/status
-        if not live_data:
-            live_data = get_finished_match(match_id)
+        home_name = fd_home or "Unknown Home"
+        away_name = fd_away or "Unknown Away"
 
-        home_name = fd_home or (live_data.get("home_team", "") if live_data else "") or "Unknown Home"
-        away_name = fd_away or (live_data.get("away_team", "") if live_data else "") or "Unknown Away"
+        # Step 3: find finished match data by team name
+        if fd_home and fd_away:
+            live_data = find_finished_match_by_teams(fd_home, fd_away)
+            if not live_data or live_data.get("home_team") == "Unknown Home":
+                live_data = None
 
-        # Step 3: FotMob live status via date cache (name-based lookup)
+        # Step 4: FotMob date cache for today's live matches
         fotmob_id = None
         fm        = None
-
         if fotmob_available() and fd_home and fd_away:
-            # This call loads the date cache if not already loaded
             fotmob_id = get_fotmob_match_id(fd_home, fd_away)
             fm = get_match_status_from_date_cache(
                 fotmob_id or "0", fd_home, fd_away
             )
 
-        # Build scores and status — football-data.org is authoritative for finished
+        # Build status/score — football-data.org authoritative for finished
         if live_data and live_data.get("status") == "Finished":
             h_score = live_data.get("h_score", 0) or 0
             a_score = live_data.get("a_score", 0) or 0
@@ -794,7 +807,7 @@ async def match(request: Request):
         elif live_data:
             h_score = live_data.get("h_score", 0)
             a_score = live_data.get("a_score", 0)
-            status  = live_data.get("status", "")
+            status  = live_data.get("status", "Unknown")
             minute  = live_data.get("current_minute", 0)
         else:
             h_score = a_score = 0
