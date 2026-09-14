@@ -509,6 +509,7 @@ async def match(request: Request):
     adj_mu       = None
     absent_home  = []
     absent_away  = []
+    lineup_prior_post = None
     home_colour  = "#14b8a6"
     away_colour  = "#f43f5e"
     home_formation = "4-3-3"
@@ -631,6 +632,10 @@ async def match(request: Request):
             home_colour=home_colour, away_colour=away_colour,
             max_goals=4, cell_size=38,
         )
+        # Render pitch AFTER FotMob status check so score/status are correct
+        _h_score = featured.get("h_score", 0) if featured else 0
+        _a_score = featured.get("a_score", 0) if featured else 0
+        _status  = featured.get("status", "Not Started") if featured else "Not Started"
         pitch_svg = generate_pitch_svg_horizontal(
             home_formation=home_formation,
             away_formation=away_formation,
@@ -642,8 +647,8 @@ async def match(request: Request):
             away_players=away_players,
             home_crest_url=get_crest_proxy_url(home_name),
             away_crest_url=get_crest_proxy_url(away_name),
-            h_score=0, a_score=0,
-            status="Not Started",
+            h_score=_h_score, a_score=_a_score,
+            status=_status,
         )
 
     elif match_id:
@@ -741,17 +746,63 @@ async def match(request: Request):
                     safe_min, h_score, a_score,
                 )
 
-            # Lineup from FotMob
-            if fotmob_id and fotmob_available():
-                fotmob_lineup = get_lineup(fotmob_id)
-                if fotmob_lineup and fotmob_lineup.get("home_players"):
-                    home_formation = fotmob_lineup["home_formation"]
-                    away_formation = fotmob_lineup["away_formation"]
-                    home_players   = fotmob_lineup["home_players"]
-                    away_players   = fotmob_lineup["away_players"]
-            else:
-                home_formation = get_formation_for_team(home_name)
-                away_formation = get_formation_for_team(away_name)
+        # Always try football-data.org — works for FINISHED matches
+        # Returns 400 for live/upcoming, so errors are expected during games
+        if not live_data:
+            live_data = get_live_match_data(match_id)
+            if live_data and not fd_home:
+                fd_home   = live_data.get("home_team", "")
+                fd_away   = live_data.get("away_team", "")
+                home_name = fd_home or home_name
+                away_name = fd_away or away_name
+
+        # For finished games: football-data.org is authoritative
+        if live_data and live_data.get("status") == "Finished":
+            h_score = live_data.get("h_score", 0) or 0
+            a_score = live_data.get("a_score", 0) or 0
+            status  = "Finished"
+            minute  = 90
+            # Override fm result with definitive football-data.org data
+            featured["h_score"] = h_score
+            featured["a_score"] = a_score
+            featured["status"]  = status
+            featured["minute"]  = minute
+
+        # Lineup from predictions DB (has cached lineup from match day)
+        # Fall back to FotMob if available, then DEFAULT_SQUADS
+        if not home_players and fotmob_id and fotmob_available():
+            fotmob_lineup_post = get_lineup(fotmob_id)
+            if fotmob_lineup_post and fotmob_lineup_post.get("home_players"):
+                home_formation = fotmob_lineup_post["home_formation"]
+                away_formation = fotmob_lineup_post["away_formation"]
+                home_players   = fotmob_lineup_post["home_players"]
+                away_players   = fotmob_lineup_post["away_players"]
+                featured["home_name"] = home_name
+                featured["away_name"] = away_name
+
+        # Also compute lineup-adjusted odds if we have lineups
+        lineup_prior_post = None
+        if home_players and away_players and priors_db:
+            league_data_p = priors_db.get(LEAGUE_KEY, {})
+            teams_p = league_data_p.get("teams", {})
+            meta_p  = league_data_p.get("meta", {})
+            hk_p = TEAM_NAME_ALIASES.get(home_name, home_name)
+            ak_p = TEAM_NAME_ALIASES.get(away_name, away_name)
+            h_p_p = teams_p.get(hk_p, {})
+            a_p_p = teams_p.get(ak_p, {})
+            if h_p_p and a_p_p:
+                gamma_p = meta_p.get("gamma_home_advantage", 1.25)
+                rho_p   = meta_p.get("rho_draw_correction", 0.0)
+                bl_p    = float(np.clip(h_p_p["alpha"]*a_p_p["beta"]*gamma_p,1e-5,15.0))
+                bm_p    = float(np.clip(a_p_p["alpha"]*h_p_p["beta"],1e-5,15.0))
+                try:
+                    lineup_prior_post, _, _ = compute_lineup_adjusted_odds(
+                        home_name=home_name, away_name=away_name,
+                        home_lineup=home_players, away_lineup=away_players,
+                        base_lam=bl_p, base_mu=bm_p, rho=rho_p,
+                    )
+                except Exception:
+                    lineup_prior_post = None
 
             pitch_svg = generate_pitch_svg_horizontal(
                 home_formation=home_formation, away_formation=away_formation,
@@ -905,7 +956,7 @@ async def match(request: Request):
         "home_alpha_estimated"    : home_alpha_estimated,
         "away_alpha_estimated"    : away_alpha_estimated,
         "fotmob_available"        : fotmob_available(),
-        "lineup_prior"            : lineup_prior,
+        "lineup_prior"            : lineup_prior or lineup_prior_post,
         "adj_lam"                 : adj_lam,
         "adj_mu"                  : adj_mu,
         "absent_home"             : absent_home,
