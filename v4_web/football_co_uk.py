@@ -33,7 +33,7 @@ from pathlib import Path
 EAT = timezone(timedelta(hours=3))
 
 BASE_URL  = "https://www.football-data.co.uk/mmz4281"
-CACHE_DIR = Path(__file__).parent / "data" / "fdco"
+CACHE_DIR = Path(__file__).resolve().parent / "data" / "fdco"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 # Unverified SSL context for football-data.co.uk

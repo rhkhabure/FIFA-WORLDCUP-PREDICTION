@@ -57,7 +57,7 @@ import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
-DB_DIR  = Path(__file__).parent / "data"
+DB_DIR  = Path(__file__).resolve().parent / "data"
 DB_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH = DB_DIR / "predictions.db"
 

@@ -436,6 +436,50 @@ async def team_profile(request: Request, team_id: int, season: int = 2025):
     )
 
 
+@app.get("/admin/run-predictions")
+async def admin_run_predictions():
+    """Manually trigger the prediction job — useful for initial setup."""
+    from prediction_job import run_prediction_job
+    from predictions import get_accuracy_stats
+    try:
+        await run_prediction_job(priors_db, LEAGUE_KEY)
+        stats = get_accuracy_stats()
+        return JSONResponse({
+            "status": "ok",
+            "message": "Prediction job completed",
+            "stats": stats,
+        })
+    except Exception as e:
+        return JSONResponse({"status": "error", "message": str(e)}, status_code=500)
+
+
+@app.get("/admin/predictions-status")
+async def admin_predictions_status():
+    """Check what's in the predictions DB."""
+    from predictions import get_all_predictions, get_accuracy_stats
+    try:
+        preds = get_all_predictions()
+        stats = get_accuracy_stats()
+        return JSONResponse({
+            "total": len(preds),
+            "stats": stats,
+            "recent": [
+                {
+                    "match_id"   : p["match_id"],
+                    "home"       : p["home_team"],
+                    "away"       : p["away_team"],
+                    "kickoff"    : p["kickoff_utc"],
+                    "pre_logged" : bool(p["pre_logged_at"]),
+                    "adj_logged" : bool(p["adj_logged_at"]),
+                    "result"     : p["actual_result"],
+                }
+                for p in preds[:20]
+            ]
+        })
+    except Exception as e:
+        return JSONResponse({"status": "error", "message": str(e)}, status_code=500)
+
+
 @app.get("/player", response_class=HTMLResponse)
 async def player_page(request: Request):
     """Player profile placeholder — under construction."""
