@@ -106,7 +106,9 @@ else:
 import asyncio
 from contextlib import asynccontextmanager
 from prediction_job import schedule_prediction_job
-from predictions import init_db
+from predictions import (init_db, log_pre_lineup, log_post_lineup,
+                         log_result, get_all_predictions,
+                         save_match_snapshot, get_match_snapshot)
 
 @asynccontextmanager
 async def lifespan(app):
@@ -564,11 +566,73 @@ async def match(request: Request):
     # football-data.org free tier returns 400 for upcoming matches --
     # it only serves individual match detail for finished games.
     # For upcoming matches, we use FPL team names directly.
+    # ── Snapshot read ─────────────────────────────────────────────────────────
+    # Check local DB first — persists finished game state across restarts
+    # Only skip if match is in FPL upcoming (pre-game, snapshot may be stale)
     all_upcoming = get_upcoming_fixtures(max_fixtures=50)
     fpl_match = next(
         (f for f in all_upcoming if str(f.get("match_id")) == str(match_id)),
         None
     )
+
+    # For matches not in upcoming list, try snapshot first
+    # This makes finished games display correctly without any API calls
+    if not fpl_match and match_id:
+        snap = get_match_snapshot(match_id)
+        if snap and snap.get("status") in ("Finished", "In Play", "Half Time"):
+            home_name   = snap["home_team"]
+            away_name   = snap["away_team"]
+            h_score     = snap["h_score"]
+            a_score     = snap["a_score"]
+            status      = snap["status"]
+            minute      = snap["minute"]
+            home_colour = snap["home_colour"] or get_theme_for_team(home_name)["primary"]
+            away_colour = snap["away_colour"] or get_theme_for_team(away_name)["primary"]
+            home_players = snap["home_players"] or None
+            away_players = snap["away_players"] or None
+            home_formation = snap["home_formation"] or get_formation_for_team(home_name)
+            away_formation = snap["away_formation"] or get_formation_for_team(away_name)
+            fotmob_id   = snap.get("fotmob_id", "")
+
+            featured = {
+                "home_name" : home_name, "away_name": away_name,
+                "minute"    : minute,    "status"   : status,
+                "h_score"   : h_score,   "a_score"  : a_score,
+                "h_xg"      : 0.0,       "a_xg"     : 0.0,
+                "fixture_id": int(match_id),
+                "fotmob_id" : fotmob_id,
+            }
+            prior = dc_pregame(home_name, away_name, LEAGUE_KEY)
+            posterior = nn_live(home_name, away_name, LEAGUE_KEY,
+                               int(minute), h_score, a_score)
+            absent_home = snap["absent_home"]
+            absent_away = snap["absent_away"]
+
+            pitch_svg = generate_pitch_svg_horizontal(
+                home_formation=home_formation, away_formation=away_formation,
+                home_color=home_colour, away_color=away_colour,
+                home_team=home_name, away_team=away_name,
+                home_players=home_players, away_players=away_players,
+                home_crest_url=get_crest_proxy_url(home_name),
+                away_crest_url=get_crest_proxy_url(away_name),
+                h_score=h_score, a_score=a_score, status=status,
+            )
+            matrix_svg = build_scoreline_svg(
+                home_name=home_name, away_name=away_name,
+                league=LEAGUE_KEY, priors_db=priors_db,
+                home_colour=home_colour, away_colour=away_colour,
+                max_goals=4, cell_size=38,
+            )
+            if status == "Finished":
+                timeline_svg = build_match_timeline_svg(
+                    home_name=home_name, away_name=away_name,
+                    league=LEAGUE_KEY, h_score=h_score, a_score=a_score,
+                    home_colour=home_colour, away_colour=away_colour,
+                    dc_lookup=dc_lookup, nn_model=nn_model,
+                    nn_scaler=nn_scaler, nn_T=nn_T,
+                )
+            # Skip all further API calls — snapshot has everything
+            snap = None  # clear so we don't enter elif block below
 
     if fpl_match:
         # Match found in FPL upcoming list
@@ -728,6 +792,29 @@ async def match(request: Request):
             h_score=_h_score, a_score=_a_score,
             status=_status,
         )
+
+        # Save snapshot whenever we have live/finished state
+        if _status not in ("Not Started", "") and match_id:
+            try:
+                save_match_snapshot(
+                    match_id=str(match_id),
+                    home_team=home_name, away_team=away_name,
+                    kickoff_utc=fpl_match.get("kickoff_utc", ""),
+                    h_score=_h_score, a_score=_a_score,
+                    status=_status,
+                    minute=int(featured.get("minute", 0) or 0),
+                    home_formation=home_formation,
+                    away_formation=away_formation,
+                    home_players=home_players or [],
+                    away_players=away_players or [],
+                    absent_home=absent_home or [],
+                    absent_away=absent_away or [],
+                    home_colour=home_colour,
+                    away_colour=away_colour,
+                    fotmob_id=str(featured.get("fotmob_id", "") or ""),
+                )
+            except Exception as _e:
+                print(f"[snapshot] save failed: {_e}")
 
     elif match_id:
         # Match not in FPL upcoming. Strategy:

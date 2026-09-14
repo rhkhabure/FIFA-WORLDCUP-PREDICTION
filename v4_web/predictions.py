@@ -106,6 +106,30 @@ def init_db():
                 adj_correct      INTEGER
             )
         """)
+        # Match snapshot table — stores everything needed to render match page
+        # Persists across restarts so finished games always display correctly
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS match_snapshots (
+                match_id        TEXT PRIMARY KEY,
+                home_team       TEXT,
+                away_team       TEXT,
+                kickoff_utc     TEXT,
+                h_score         INTEGER DEFAULT 0,
+                a_score         INTEGER DEFAULT 0,
+                status          TEXT DEFAULT 'Not Started',
+                minute          INTEGER DEFAULT 0,
+                home_formation  TEXT,
+                away_formation  TEXT,
+                home_players    TEXT,
+                away_players    TEXT,
+                absent_home     TEXT,
+                absent_away     TEXT,
+                home_colour     TEXT,
+                away_colour     TEXT,
+                fotmob_id       TEXT,
+                snapped_at      TEXT
+            )
+        """)
         conn.commit()
 
 
@@ -250,6 +274,84 @@ def get_all_predictions(season: int | None = None) -> list[dict]:
                 "SELECT * FROM predictions ORDER BY kickoff_utc DESC"
             ).fetchall()
     return [dict(r) for r in rows]
+
+
+def save_match_snapshot(
+    match_id: str,
+    home_team: str, away_team: str,
+    kickoff_utc: str,
+    h_score: int, a_score: int,
+    status: str, minute: int,
+    home_formation: str = "", away_formation: str = "",
+    home_players: list = None, away_players: list = None,
+    absent_home: list = None, absent_away: list = None,
+    home_colour: str = "", away_colour: str = "",
+    fotmob_id: str = "",
+):
+    """
+    Upsert a match snapshot. Called whenever we have live/finished data.
+    Overwrites previous snapshot so the latest state is always stored.
+    """
+    now = datetime.now(timezone.utc).isoformat()
+    with _conn() as conn:
+        conn.execute("""
+            INSERT INTO match_snapshots
+                (match_id, home_team, away_team, kickoff_utc,
+                 h_score, a_score, status, minute,
+                 home_formation, away_formation,
+                 home_players, away_players,
+                 absent_home, absent_away,
+                 home_colour, away_colour,
+                 fotmob_id, snapped_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            ON CONFLICT(match_id) DO UPDATE SET
+                h_score=excluded.h_score,
+                a_score=excluded.a_score,
+                status=excluded.status,
+                minute=excluded.minute,
+                home_formation=excluded.home_formation,
+                away_formation=excluded.away_formation,
+                home_players=excluded.home_players,
+                away_players=excluded.away_players,
+                absent_home=excluded.absent_home,
+                absent_away=excluded.absent_away,
+                home_colour=excluded.home_colour,
+                away_colour=excluded.away_colour,
+                fotmob_id=excluded.fotmob_id,
+                snapped_at=excluded.snapped_at
+        """, (
+            str(match_id), home_team, away_team, kickoff_utc,
+            h_score, a_score, status, minute,
+            home_formation, away_formation,
+            json.dumps(home_players or []),
+            json.dumps(away_players or []),
+            json.dumps(absent_home or []),
+            json.dumps(absent_away or []),
+            home_colour, away_colour,
+            fotmob_id, now,
+        ))
+        conn.commit()
+
+
+def get_match_snapshot(match_id: str) -> dict | None:
+    """
+    Retrieve a stored match snapshot. Returns None if not found.
+    """
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM match_snapshots WHERE match_id=?",
+            (str(match_id),)
+        ).fetchone()
+    if not row:
+        return None
+    d = dict(row)
+    # Deserialise JSON fields
+    for field in ("home_players", "away_players", "absent_home", "absent_away"):
+        try:
+            d[field] = json.loads(d[field]) if d[field] else []
+        except Exception:
+            d[field] = []
+    return d
 
 
 def get_accuracy_stats(season: int | None = None) -> dict:
