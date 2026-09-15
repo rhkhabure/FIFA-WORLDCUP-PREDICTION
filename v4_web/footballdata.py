@@ -3,24 +3,32 @@ footballdata.py  —  V4.2
 =========================
 Live match data from football-data.org v4 API.
 
-Free tier: 10 req/min, covers Premier League (PL) current season,
-           live scores, match events, team names.
+Free tier: 10 req/min, covers Premier League (PL) and La Liga (PD)
+           current season, live scores, match events, team names.
 Auth header: X-Auth-Token
 
 Environment variable: FOOTBALLDATA_ORG_KEY in project root .env
 (despite the name, this is a football-data.org key -- format: 32-char hex)
 
 Base URL: https://api.football-data.org/v4
-Premier League competition code: PL
+Competition codes: PL = Premier League, PD = La Liga
 """
 
 import json
 import os
+import time as _time
 import urllib.request
 import urllib.error
 
 BASE_URL  = "https://api.football-data.org/v4"
 PL_CODE   = "PL"
+PD_CODE   = "PD"   # La Liga
+
+# Map competition code → priors key
+COMP_TO_PRIORS = {
+    "PL": "ENG-Premier League",
+    "PD": "ESP-La Liga",
+}
 
 
 def _get_api_key() -> str:
@@ -62,22 +70,31 @@ def _fetch(endpoint: str, params: dict | None = None) -> dict:
     return {}
 
 
-# ── Public helpers ─────────────────────────────────────────────────────────────
+# ── Per-competition finished-match cache ──────────────────────────
+# _finished_cache[comp_code] = (dict of parsed matches, timestamp)
+_finished_cache: dict[str, tuple[dict, float]] = {}
+_FINISHED_TTL = 300   # 5 minutes
 
-def get_last_completed_pl_match() -> int | None:
-    """
-    Returns the match ID of the most recently completed Premier League
-    2025/26 match. Must pass season=2025 explicitly -- without it,
-    football-data.org returns FA Cup matches labelled as PL.
-    """
-    data = _fetch(f"competitions/{PL_CODE}/matches",
+
+def _populate_finished_cache(comp_code: str) -> dict:
+    """Fill or refresh the finished-match cache for a competition."""
+    cached = _finished_cache.get(comp_code)
+    if cached and _time.time() - cached[1] < _FINISHED_TTL:
+        return cached[0]
+
+    data = _fetch(f"competitions/{comp_code}/matches",
                   {"status": "FINISHED", "season": 2025})
-    matches = data.get("matches", [])
-    if matches:
-        # Matches come back in chronological order -- last is most recent
-        return matches[-1]["id"]
-    return None
+    matches_by_id = {}
+    for m in data.get("matches", []):
+        parsed          = _parse_match(m)
+        parsed["fd_id"] = m.get("id")
+        matches_by_id[str(m.get("id"))] = parsed
+    _finished_cache[comp_code] = (matches_by_id, _time.time())
+    print(f"[footballdata] {comp_code}: cached {len(matches_by_id)} finished matches")
+    return matches_by_id
 
+
+# ── Public helpers ─────────────────────────────────────────────────
 
 def get_live_match_data(match_id: int | str) -> dict:
     """Full match detail for one match ID."""
@@ -87,91 +104,130 @@ def get_live_match_data(match_id: int | str) -> dict:
     parsed = _parse_match(data)
     parsed["events"] = _parse_goals(data)
     return parsed
-    """All live PL matches right now."""
-    data = _fetch(f"competitions/{PL_CODE}/matches", {"status": "LIVE"})
-    return [_parse_match(m) for m in data.get("matches", [])]
 
 
-def get_finished_match(match_id: int | str) -> dict:
+def get_finished_match(match_id: int | str,
+                       comp_code: str = PL_CODE) -> dict:
     """
-    Get data for a finished PL match.
-    The FPL 'code' field does NOT match football-data.org's match 'id'.
-    We scan all finished PL matches and cache the full list.
-    Lookup is by match_id stored in our cache after initial scan.
+    Get a finished match by football-data.org match ID.
+    Scans the competition's finished matches (cached 5min).
     """
-    import time as _time
-    if not hasattr(get_finished_match, '_cache'):
-        get_finished_match._cache = {}       # fpl_code -> parsed match
-        get_finished_match._cache_ts = 0
-
-    # Refresh every 5 minutes
-    if _time.time() - get_finished_match._cache_ts > 300:
-        data = _fetch(f"competitions/{PL_CODE}/matches",
-                      {"status": "FINISHED", "season": 2025})
-        for m in data.get("matches", []):
-            parsed          = _parse_match(m)
-            parsed["fd_id"] = m.get("id")     # real football-data.org ID
-            # Index by fd_id so we can look up later
-            get_finished_match._cache[str(m.get("id"))] = parsed
-        get_finished_match._cache_ts = _time.time()
-        print(f"[footballdata] cached {len(get_finished_match._cache)} finished matches")
-
-    # Direct lookup by football-data.org ID
-    result = get_finished_match._cache.get(str(match_id))
-    if result:
-        return result
-
-    return _empty_match()
+    cache = _populate_finished_cache(comp_code)
+    return cache.get(str(match_id), _empty_match())
 
 
-def find_finished_match_by_teams(home_name: str, away_name: str) -> dict:
+def get_last_completed_pl_match() -> int | None:
+    """Most recently completed PL match ID."""
+    cache = _populate_finished_cache(PL_CODE)
+    if cache:
+        return int(list(cache.keys())[-1])
+    return None
+
+
+def find_finished_match_by_teams(home_name: str, away_name: str,
+                                 comp_code: str = PL_CODE) -> dict:
     """
-    Find a finished PL match by team names.
-    Uses the same cache as get_finished_match.
-    Normalises names before comparing.
+    Find a finished match by team names for any supported league.
+    Name comparison is fuzzy — strips common words before comparing.
     """
-    # Ensure cache is populated
-    get_finished_match(0)
+    cache = _populate_finished_cache(comp_code)
 
     def norm(s: str) -> str:
         s = _clean_name(s).lower()
         for w in ["hotspur", "wanderers", "& hove albion",
-                  "city", "united", "town", "forest"]:
+                  "city", "united", "town", "forest",
+                  "club", "sporting", "deportivo", "real"]:
             s = s.replace(w, "").strip()
         return s.strip()
 
-    h_n = norm(home_name)
-    a_n = norm(away_name)
+    h_n, a_n = norm(home_name), norm(away_name)
 
-    for parsed in get_finished_match._cache.values():
+    for parsed in cache.values():
         if (norm(parsed.get("home_team", "")) == h_n and
                 norm(parsed.get("away_team", "")) == a_n):
             return parsed
-
     return _empty_match()
 
 
-# ── Internal parsers ───────────────────────────────────────────────────────────
+def get_upcoming_fixtures_fd(comp_code: str = PD_CODE,
+                              season: int = 2025,
+                              max_fixtures: int = 20) -> list[dict]:
+    """
+    Upcoming (scheduled) fixtures for a competition from football-data.org.
+    Used for La Liga (and any non-FPL league) fixture strips.
+    Returns list of dicts with: match_id, home, away,
+    kickoff_utc, kickoff_eat, gameweek.
+    """
+    from datetime import datetime, timezone, timedelta
+    EAT = timezone(timedelta(hours=3))
+
+    data = _fetch(f"competitions/{comp_code}/matches",
+                  {"status": "SCHEDULED", "season": season})
+    matches = data.get("matches", [])
+    matches.sort(key=lambda m: m.get("utcDate", ""))
+
+    result = []
+    for m in matches[:max_fixtures]:
+        home = _clean_name(m.get("homeTeam", {}).get("name", "Unknown"))
+        away = _clean_name(m.get("awayTeam", {}).get("name", "Unknown"))
+        ko_raw = m.get("utcDate", "")
+        ko_eat = ""
+        if ko_raw:
+            try:
+                ko_utc = datetime.fromisoformat(ko_raw.replace("Z", "+00:00"))
+                ko_eat = ko_utc.astimezone(EAT).strftime("%a %d %b · %H:%M")
+            except Exception:
+                ko_eat = ko_raw[:10]
+        result.append({
+            "match_id"   : str(m.get("id", "")),
+            "home"       : home,
+            "away"       : away,
+            "kickoff_utc": ko_raw,
+            "kickoff_eat": ko_eat,
+            "gameweek"   : m.get("matchday"),
+        })
+    return result
+
+
+# ── Internal parsers ───────────────────────────────────────────────
+
+# La Liga team name aliases: football-data.org name → our priors key
+_LL_ALIASES: dict[str, str] = {
+    "Athletic Club"          : "Athletic Club",
+    "Club Atletico de Madrid": "Atletico Madrid",
+    "Atletico de Madrid"     : "Atletico Madrid",
+    "Real Betis Balompie"    : "Real Betis",
+    "Deportivo Alaves"       : "Alaves",
+    "Rayo Vallecano de Madrid": "Rayo Vallecano",
+    "Girona FC"              : "Girona",
+    "RCD Espanyol de Barcelona": "Espanyol",
+    "RCD Mallorca"           : "Mallorca",
+    "Real Valladolid CF"     : "Real Valladolid",
+    "UD Las Palmas"          : "Las Palmas",
+    "Real Oviedo"            : "Oviedo",
+    "Elche CF"               : "Elche",
+    "UD Levante"             : "Levante",
+    "Getafe CF"              : "Getafe",
+}
+
 
 def _clean_name(name: str) -> str:
     """
-    Normalise football-data.org team names to match what the DC priors
-    store (Understat spelling). Two transformations needed:
-
-    1. Strip common suffixes: 'Arsenal FC' -> 'Arsenal'
-    2. Strip AFC prefix:      'AFC Bournemouth' -> 'Bournemouth'
-
-    Remaining mismatches (Tottenham Hotspur -> Tottenham, Brighton &
-    Hove Albion -> Brighton) are handled by TEAM_NAME_ALIASES in
-    feature_builder.py.
+    Normalise football-data.org team names.
+    Works for both PL and La Liga.
     """
-    # Handle 'AFC Bournemouth' style (prefix, not suffix)
+    # La Liga alias lookup first
+    if name in _LL_ALIASES:
+        return _LL_ALIASES[name]
+
+    # Strip AFC prefix
     if name.startswith("AFC "):
         name = name[4:]
 
     # Strip common suffixes
-    for suffix in [" FC", " AFC", " City FC", " United FC", " Town FC",
-                   " Wanderers FC", " Rovers FC", " Athletic FC",
+    for suffix in [" FC", " AFC", " CF", " SAD",
+                   " City FC", " United FC", " Town FC",
+                   " Wanderers FC", " Rovers FC",
                    " & Hove Albion FC", " & Hove Albion"]:
         if name.endswith(suffix):
             name = name[:-len(suffix)]
@@ -193,38 +249,25 @@ def _normalise_status(raw: str) -> str:
 
 
 def _derive_minute(status_raw: str) -> int:
-    """
-    football-data.org free tier doesn't expose current elapsed minute.
-    Approximate so the neural net gets a sensible time feature.
-    """
     return {"IN_PLAY": 70, "PAUSED": 45, "FINISHED": 90}.get(status_raw, 0)
 
 
 def _parse_match(m: dict) -> dict:
-    home_name = _clean_name(m.get("homeTeam", {}).get("name", "Unknown Home"))
-    away_name = _clean_name(m.get("awayTeam", {}).get("name", "Unknown Away"))
-    score     = m.get("score", {})
-    ft        = score.get("fullTime", {})
-    ht        = score.get("halfTime", {})
-    h_score   = ft.get("home") or 0
-    a_score   = ft.get("away") or 0
-    h_ht      = ht.get("home")
-    a_ht      = ht.get("away")
+    home_name  = _clean_name(m.get("homeTeam", {}).get("name", "Unknown Home"))
+    away_name  = _clean_name(m.get("awayTeam", {}).get("name", "Unknown Away"))
+    score      = m.get("score", {})
+    ft         = score.get("fullTime", {})
+    ht         = score.get("halfTime", {})
+    h_score    = ft.get("home") or 0
+    a_score    = ft.get("away") or 0
+    h_ht       = ht.get("home")
+    a_ht       = ht.get("away")
     status_raw = m.get("status", "")
     minute     = _derive_minute(status_raw)
-
-    # Odds (bookmaker market prices -- interesting context for the model)
-    odds      = m.get("odds", {}) or {}
-    odds_home = odds.get("homeWin")
-    odds_draw = odds.get("draw")
-    odds_away = odds.get("awayWin")
-
-    # Venue and crests
+    odds       = m.get("odds", {}) or {}
     venue      = m.get("venue", "") or ""
     home_crest = m.get("homeTeam", {}).get("crest", "") or ""
     away_crest = m.get("awayTeam", {}).get("crest", "") or ""
-
-    # Referee
     referees   = m.get("referees", []) or []
     referee    = referees[0].get("name", "") if referees else ""
 
@@ -247,9 +290,9 @@ def _parse_match(m: dict) -> dict:
         "venue"         : venue,
         "home_crest"    : home_crest,
         "away_crest"    : away_crest,
-        "odds_home"     : float(odds_home) if odds_home else None,
-        "odds_draw"     : float(odds_draw) if odds_draw else None,
-        "odds_away"     : float(odds_away) if odds_away else None,
+        "odds_home"     : float(odds["homeWin"]) if odds.get("homeWin") else None,
+        "odds_draw"     : float(odds["draw"])    if odds.get("draw")    else None,
+        "odds_away"     : float(odds["awayWin"]) if odds.get("awayWin") else None,
         "referee"       : referee,
     }
 
@@ -261,8 +304,8 @@ def _parse_goals(m: dict) -> list[dict]:
         scorer = g.get("scorer", {}).get("name", "Unknown")
         team   = _clean_name(g.get("team", {}).get("name", ""))
         gtype  = g.get("type", "REGULAR")
-        events.append({"time": f"{minute}'",
-                        "detail": f"{scorer} ({team}) - {gtype}"})
+        events.append({"time"  : f"{minute}'",
+                        "detail": f"{scorer} ({team}) — {gtype}"})
     return events
 
 

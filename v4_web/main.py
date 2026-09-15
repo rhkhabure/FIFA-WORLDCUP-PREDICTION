@@ -745,30 +745,23 @@ async def hub(request: Request):
 async def league_page(request: Request, league_key: str):
     """
     League dashboard router.
-    PL → redirects to /match (already fully built).
-    Others → under-construction page with league colour theme.
+    PL      → redirects to /match (fully built).
+    La Liga → live dashboard with DC odds and upcoming fixtures.
+    Others  → under-construction page.
     """
     from fastapi.responses import RedirectResponse
 
-    # Validate league key
     if league_key not in LEAGUE_CONTEXTS:
-        from fastapi.responses import RedirectResponse
         return RedirectResponse(url="/")
 
-    # PL is fully built — send straight to match dashboard
     if league_key == "pl":
         return RedirectResponse(url="/match")
 
-    # All other leagues — under construction with per-league features list
+    if league_key == "laliga":
+        return await laliga_dashboard(request)
+
+    # All other leagues — under construction
     LEAGUE_FEATURES = {
-        "laliga": [
-            ("DC prior odds (20 teams)",         90),
-            ("Live match scores via FotMob",      75),
-            ("Spain team map — zoom tiers",       40),
-            ("Lineup-adjusted predictions",       30),
-            ("Prediction history logging",        20),
-            ("Neural net live model",             10),
-        ],
         "bundesliga": [
             ("DC prior odds (18 teams)",          90),
             ("Live match scores via FotMob",      60),
@@ -794,7 +787,6 @@ async def league_page(request: Request, league_key: str):
             ("Neural net live model",             10),
         ],
     }
-
     ctx = LEAGUE_CONTEXTS[league_key]
     return templates.TemplateResponse(
         request=request, name="under_construction.html",
@@ -805,6 +797,65 @@ async def league_page(request: Request, league_key: str):
             "league_code": ctx["league_code"],
             "league_name": ctx["league_name"],
             "features"   : LEAGUE_FEATURES.get(league_key, []),
+        }
+    )
+
+
+async def laliga_dashboard(request: Request):
+    """
+    La Liga dashboard — upcoming fixtures with DC odds,
+    today's matches, accuracy stats, team map link.
+    Fixture source: football-data.org /competitions/PD/matches
+    DC odds: ESP-La Liga priors from v4_priors.json
+    """
+    from footballdata import get_upcoming_fixtures_fd, PD_CODE
+    from datetime import datetime, timezone, timedelta
+
+    LL_KEY = "ESP-La Liga"
+    EAT    = timezone(timedelta(hours=3))
+    today  = datetime.now(EAT).date().isoformat()
+
+    # Upcoming La Liga fixtures
+    upcoming_raw = []
+    try:
+        upcoming_raw = get_upcoming_fixtures_fd(PD_CODE, season=2025, max_fixtures=20)
+    except Exception as e:
+        print(f"[laliga] fixture fetch error: {e}")
+
+    # Enrich with DC odds
+    upcoming = []
+    for f in upcoming_raw:
+        dc = dc_pregame(f["home"], f["away"], LL_KEY)
+        upcoming.append({
+            **f,
+            "dc_home": dc[0] if dc else None,
+            "dc_draw": dc[1] if dc else None,
+            "dc_away": dc[2] if dc else None,
+            "pred"   : ("H" if dc and dc[0]>dc[1] and dc[0]>dc[2]
+                        else "D" if dc and dc[1]>dc[2] else "A") if dc else None,
+        })
+
+    # Split today vs future
+    today_matches = [f for f in upcoming if f.get("kickoff_utc","")[:10] == today]
+    future        = [f for f in upcoming if f.get("kickoff_utc","")[:10] > today]
+
+    # La Liga accuracy from predictions DB (season=2025, league tagged laliga)
+    ll_stats = None
+    try:
+        from predictions import get_accuracy_stats
+        ll_stats = get_accuracy_stats(season=2025)
+    except Exception:
+        pass
+
+    return templates.TemplateResponse(
+        request=request, name="laliga_dashboard.html",
+        context={
+            "request"      : request,
+            **league_ctx("laliga"),
+            "today_matches": today_matches,
+            "upcoming"     : future[:15],
+            "ll_stats"     : ll_stats,
+            "today"        : today,
         }
     )
 
