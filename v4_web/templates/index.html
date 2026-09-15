@@ -1,47 +1,556 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="max-w-screen-2xl mx-auto space-y-6">
+<style>
+/* ── Hub page ─────────────────────────────────────────────────── */
+.section-head {
+    font-size: 10px;
+    font-weight: 800;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-bottom: 14px;
+}
 
-    <div class="flex items-center gap-3">
-        <span class="text-2xl">⚽</span>
-        <div>
-            <h1 class="text-xl font-bold text-white tracking-wide">V4.2 Quant Terminal</h1>
-            <p class="text-[10px] font-mono text-slate-500 uppercase tracking-widest">
-                Premier League · Dixon-Coles + Neural Net
-            </p>
+/* ── League grid ──────────────────────────────────────────────── */
+.hub-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr;
+    grid-template-rows: auto auto;
+    gap: 14px;
+    margin-bottom: 28px;
+}
+/* PL spans 2 rows on left */
+.hub-grid .lc-pl { grid-row: span 2; }
+
+/* ── League card ──────────────────────────────────────────────── */
+.league-card {
+    border-radius: 20px;
+    overflow: hidden;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: transform 0.18s cubic-bezier(.4,0,.2,1),
+                border-color 0.18s,
+                box-shadow 0.18s;
+    display: flex;
+    flex-direction: column;
+    text-decoration: none;
+    position: relative;
+}
+.league-card:hover {
+    transform: translateY(-3px) scale(1.015);
+    border-color: rgba(255,255,255,0.25);
+    box-shadow: 0 12px 40px rgba(0,0,0,0.25);
+}
+/* Hover overlay shimmer */
+.league-card::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg,
+        rgba(255,255,255,0.08) 0%,
+        transparent 60%);
+    opacity: 0;
+    transition: opacity 0.18s;
+    pointer-events: none;
+    border-radius: inherit;
+}
+.league-card:hover::after { opacity: 1; }
+
+/* Logo emblem flip on hover */
+.lc-logo {
+    width: 60px;
+    height: 60px;
+    border-radius: 14px;
+    background: rgba(255,255,255,0.12);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: transform 0.4s cubic-bezier(.4,0,.2,1);
+    transform-style: preserve-3d;
+}
+.league-card:hover .lc-logo {
+    transform: rotateY(15deg) scale(1.05);
+}
+.lc-logo img {
+    width: 42px;
+    height: 42px;
+    object-fit: contain;
+    filter: brightness(0) invert(1);
+    transition: filter 0.2s;
+}
+/* PL logo — show gold tint on hover */
+.lc-pl:hover .lc-logo img { filter: brightness(0.9) sepia(1) saturate(4) hue-rotate(5deg); }
+
+/* Status badge */
+.lc-status {
+    font-size: 9px;
+    font-weight: 800;
+    padding: 4px 10px;
+    border-radius: 20px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    background: rgba(255,255,255,0.15);
+    color: #fff;
+    align-self: flex-start;
+}
+.lc-status.live {
+    background: #FF3B30;
+    animation: pulse-badge 1.5s infinite;
+}
+.lc-status.today {
+    background: rgba(255,215,0,0.25);
+    color: #FFD700;
+}
+@keyframes pulse-badge {
+    0%,100%{opacity:1} 50%{opacity:0.6}
+}
+
+/* Card text */
+.lc-header {
+    padding: 20px 20px 14px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    flex: 0 0 auto;
+}
+.lc-name {
+    font-size: 24px;
+    font-weight: 900;
+    color: #fff;
+    padding: 0 20px 4px;
+    letter-spacing: -0.5px;
+    line-height: 1.1;
+}
+.lc-country {
+    font-size: 11px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.6);
+    padding: 0 20px 16px;
+}
+
+/* Stats strip */
+.lc-stats {
+    display: flex;
+    background: rgba(0,0,0,0.18);
+    padding: 12px 20px;
+    gap: 24px;
+    flex: 1;
+    align-items: center;
+}
+.lc-stat { flex: 1; }
+.lc-stat-val {
+    font-size: 18px;
+    font-weight: 900;
+    color: #fff;
+    line-height: 1;
+    font-family: var(--font-mono);
+}
+.lc-stat-lbl {
+    font-size: 9px;
+    color: rgba(255,255,255,0.5);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 3px;
+}
+
+/* CTA */
+.lc-btn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 13px 20px;
+    background: rgba(255,255,255,0.1);
+    border: none;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 800;
+    cursor: pointer;
+    letter-spacing: 0.3px;
+    transition: background 0.15s;
+    flex-shrink: 0;
+}
+.lc-btn:hover { background: rgba(255,255,255,0.2); }
+.lc-arrow { font-size: 14px; transition: transform 0.15s; }
+.league-card:hover .lc-arrow { transform: translateX(4px); }
+
+/* ── Today's matches strip ────────────────────────────────────── */
+.matches-section {
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    gap: 16px;
+    margin-bottom: 28px;
+}
+.matches-list {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+}
+.match-row {
+    display: flex;
+    align-items: center;
+    padding: 11px 16px;
+    gap: 12px;
+    border-bottom: 1px solid var(--border);
+    text-decoration: none;
+    transition: background 0.1s;
+}
+.match-row:last-child { border-bottom: none; }
+.match-row:hover { background: var(--league-tint); }
+.match-pip {
+    width: 4px;
+    border-radius: 2px;
+    align-self: stretch;
+    min-height: 36px;
+    flex-shrink: 0;
+}
+.match-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-primary);
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.match-sub {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-top: 1px;
+    font-weight: 500;
+}
+.match-odds { display: flex; gap: 5px; flex-shrink: 0; }
+.odd-pill {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-family: var(--font-mono);
+}
+.match-time {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-muted);
+    min-width: 52px;
+    text-align: right;
+    font-family: var(--font-mono);
+    flex-shrink: 0;
+}
+.match-time.live { color: #FF3B30; }
+
+/* ── Accuracy panel ───────────────────────────────────────────── */
+.accuracy-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px;
+}
+.acc-row {
+    display: flex;
+    align-items: center;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--border);
+    gap: 8px;
+}
+.acc-row:last-child { border-bottom: none; }
+.acc-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.acc-name { font-size: 12px; font-weight: 600; color: var(--text-primary); flex: 1; }
+.acc-val { font-size: 13px; font-weight: 900; font-family: var(--font-mono); }
+.acc-sub { font-size: 10px; color: var(--text-muted); }
+
+/* ── Responsive ───────────────────────────────────────────────── */
+@media (max-width: 1100px) {
+    .hub-grid {
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: auto;
+    }
+    .hub-grid .lc-pl { grid-row: span 1; grid-column: span 2; }
+    .matches-section { grid-template-columns: 1fr; }
+}
+@media (max-width: 720px) {
+    .hub-grid { grid-template-columns: 1fr; }
+    .hub-grid .lc-pl { grid-column: span 1; }
+}
+</style>
+
+<!-- ── LEAGUE CARDS ──────────────────────────────────────────── -->
+<div class="section-head">Choose your league</div>
+<div class="hub-grid">
+
+  <!-- PREMIER LEAGUE — featured, left column, full height -->
+  <a href="/league/pl" class="league-card lc-pl"
+     style="background:#3D185A">
+    <div class="lc-header">
+      <div class="lc-logo">
+        <img src="/static/logos/pl.svg" alt="Premier League"
+             onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'PL',style:'color:#F9D000;font-weight:900;font-size:14px'}))"/>
+      </div>
+      <div class="lc-status {% if live_count_pl and live_count_pl > 0 %}live{% endif %}">
+        {% if live_count_pl and live_count_pl > 0 %}
+          {{ live_count_pl }} Live
+        {% else %}
+          Active
+        {% endif %}
+      </div>
+    </div>
+    <div class="lc-name">Premier League</div>
+    <div class="lc-country">England · Season 2025/26</div>
+    <div class="lc-stats">
+      <div class="lc-stat">
+        <div class="lc-stat-val">{{ pl_stats.total_logged if pl_stats else '50' }}</div>
+        <div class="lc-stat-lbl">Predictions</div>
+      </div>
+      <div class="lc-stat">
+        <div class="lc-stat-val" style="color:#F9D000">
+          {{ pl_stats.pre_accuracy if pl_stats else '—' }}%
         </div>
+        <div class="lc-stat-lbl">DC Accuracy</div>
+      </div>
+      <div class="lc-stat">
+        <div class="lc-stat-val">{{ pl_stats.total_finished if pl_stats else '0' }}</div>
+        <div class="lc-stat-lbl">Resolved</div>
+      </div>
+      <div class="lc-stat">
+        <div class="lc-stat-val">4</div>
+        <div class="lc-stat-lbl">GWs logged</div>
+      </div>
     </div>
-
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-
-        <!-- Match dashboard -->
-        <a href="/match" class="block bg-[#0f172a] border border-slate-800 hover:border-slate-600
-                                rounded-xl p-6 shadow-xl transition group">
-            <div class="text-2xl mb-2">📊</div>
-            <h2 class="text-base font-bold text-white mb-1">Live Match Dashboard</h2>
-            <p class="text-[11px] font-mono text-slate-500">
-                Pre-game DC priors · Lineup adjustment · Neural net live odds ·
-                Win probability timeline · Scoreline matrix
-            </p>
-            <div class="text-[10px] font-mono text-cyan-500 mt-3 group-hover:text-cyan-300 transition">
-                Open dashboard →
-            </div>
-        </a>
-
-        <!-- Teams hub -->
-        <a href="/teams" class="block bg-[#0f172a] border border-slate-800 hover:border-slate-600
-                                rounded-xl p-6 shadow-xl transition group">
-            <div class="text-2xl mb-2">🏟️</div>
-            <h2 class="text-base font-bold text-white mb-1">Team Profiles</h2>
-            <p class="text-[11px] font-mono text-slate-500">
-                Squad · Formation · DC ratings · Season results · Next fixture
-            </p>
-            <div class="text-[10px] font-mono text-cyan-500 mt-3 group-hover:text-cyan-300 transition">
-                Browse teams →
-            </div>
-        </a>
-
+    <div class="lc-btn">
+      <span>Open Premier League dashboard</span>
+      <span class="lc-arrow">→</span>
     </div>
+  </a>
+
+  <!-- LA LIGA — top right -->
+  <a href="/league/laliga" class="league-card"
+     style="background:linear-gradient(135deg,#8B0000 0%,#C0392B 70%,#FF8C00 100%)">
+    <div class="lc-header">
+      <div class="lc-logo">
+        <img src="/static/logos/laliga.svg" alt="La Liga"
+             onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'LL',style:'color:#FFD700;font-weight:900;font-size:14px'}))"/>
+      </div>
+      <div class="lc-status today">3 Today</div>
+    </div>
+    <div class="lc-name">La Liga</div>
+    <div class="lc-country">Spain · Season 2025/26</div>
+    <div class="lc-stats">
+      <div class="lc-stat">
+        <div class="lc-stat-val">—</div>
+        <div class="lc-stat-lbl">Accuracy</div>
+      </div>
+      <div class="lc-stat">
+        <div class="lc-stat-val" style="color:#FFD700">New</div>
+        <div class="lc-stat-lbl">Season</div>
+      </div>
+    </div>
+    <div class="lc-btn">
+      <span>Open La Liga dashboard</span>
+      <span class="lc-arrow">→</span>
+    </div>
+  </a>
+
+  <!-- BUNDESLIGA — middle right -->
+  <a href="/league/bundesliga" class="league-card"
+     style="background:#1A1A1A">
+    <div class="lc-header">
+      <div class="lc-logo">
+        <img src="/static/logos/bundesliga.svg" alt="Bundesliga"
+             onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'BL',style:'color:#E74C3C;font-weight:900;font-size:14px'}))"/>
+      </div>
+      <div class="lc-status">Upcoming</div>
+    </div>
+    <div class="lc-name">Bundesliga</div>
+    <div class="lc-country">Germany · Season 2025/26</div>
+    <div class="lc-stats">
+      <div class="lc-stat">
+        <div class="lc-stat-val">—</div>
+        <div class="lc-stat-lbl">Accuracy</div>
+      </div>
+      <div class="lc-stat">
+        <div class="lc-stat-val" style="color:#FFD700">New</div>
+        <div class="lc-stat-lbl">Season</div>
+      </div>
+    </div>
+    <div class="lc-btn">
+      <span>Open Bundesliga dashboard</span>
+      <span class="lc-arrow">→</span>
+    </div>
+  </a>
+
+  <!-- SERIE A — bottom right -->
+  <a href="/league/seriea" class="league-card"
+     style="background:linear-gradient(135deg,#1A3A6B 0%,#2563EB 100%)">
+    <div class="lc-header">
+      <div class="lc-logo">
+        <img src="/static/logos/seriea.svg" alt="Serie A"
+             onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'SA',style:'color:#60A5FA;font-weight:900;font-size:14px'}))"/>
+      </div>
+      <div class="lc-status">Upcoming</div>
+    </div>
+    <div class="lc-name">Serie A</div>
+    <div class="lc-country">Italy · Season 2025/26</div>
+    <div class="lc-stats">
+      <div class="lc-stat">
+        <div class="lc-stat-val">—</div>
+        <div class="lc-stat-lbl">Accuracy</div>
+      </div>
+      <div class="lc-stat">
+        <div class="lc-stat-val" style="color:#60A5FA">New</div>
+        <div class="lc-stat-lbl">Season</div>
+      </div>
+    </div>
+    <div class="lc-btn">
+      <span>Open Serie A dashboard</span>
+      <span class="lc-arrow">→</span>
+    </div>
+  </a>
+
+  <!-- LIGUE 1 — bottom far right -->
+  <a href="/league/ligue1" class="league-card"
+     style="background:#003087">
+    <div class="lc-header">
+      <div class="lc-logo">
+        <img src="/static/logos/ligue1.svg" alt="Ligue 1"
+             onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'L1',style:'color:#00A3E0;font-weight:900;font-size:14px'}))"/>
+      </div>
+      <div class="lc-status">Upcoming</div>
+    </div>
+    <div class="lc-name">Ligue 1</div>
+    <div class="lc-country">France · Season 2025/26</div>
+    <div class="lc-stats">
+      <div class="lc-stat">
+        <div class="lc-stat-val">—</div>
+        <div class="lc-stat-lbl">Accuracy</div>
+      </div>
+      <div class="lc-stat">
+        <div class="lc-stat-val" style="color:#00A3E0">New</div>
+        <div class="lc-stat-lbl">Season</div>
+      </div>
+    </div>
+    <div class="lc-btn">
+      <span>Open Ligue 1 dashboard</span>
+      <span class="lc-arrow">→</span>
+    </div>
+  </a>
+
+</div>
+
+<!-- ── TODAY'S MATCHES + ACCURACY ─────────────────────────────── -->
+<div class="matches-section">
+
+  <!-- Fixtures -->
+  <div>
+    <div class="section-head">Today across all leagues</div>
+    <div class="matches-list">
+      {% if today_matches %}
+        {% for m in today_matches %}
+        <a href="/match?match_id={{ m.match_id }}" class="match-row">
+          <div class="match-pip" style="background:{{ m.league_colour }}"></div>
+          <div style="flex:1;min-width:0">
+            <div class="match-name">{{ m.home }} vs {{ m.away }}</div>
+            <div class="match-sub">{{ m.league_name }}</div>
+          </div>
+          {% if m.dc_home %}
+          <div class="match-odds">
+            <span class="odd-pill"
+                  style="background:var(--league-tint);color:var(--league-primary)">
+              H {{ m.dc_home }}%
+            </span>
+            <span class="odd-pill" style="background:#F3F4F6;color:#555">
+              D {{ m.dc_draw }}%
+            </span>
+            <span class="odd-pill" style="background:#FFF7ED;color:#9A3412">
+              A {{ m.dc_away }}%
+            </span>
+          </div>
+          {% endif %}
+          <div class="match-time {% if m.is_live %}live{% endif %}">
+            {% if m.is_live %}LIVE {{ m.minute }}'
+            {% else %}{{ m.kickoff_eat }}{% endif %}
+          </div>
+        </a>
+        {% endfor %}
+      {% elif upcoming_fixtures %}
+        {% for f in upcoming_fixtures[:8] %}
+        <a href="/match?match_id={{ f.match_id }}" class="match-row">
+          <div class="match-pip" style="background:#9B59B6"></div>
+          <div style="flex:1;min-width:0">
+            <div class="match-name">{{ f.home }} vs {{ f.away }}</div>
+            <div class="match-sub">Premier League</div>
+          </div>
+          <div class="match-time">{{ f.kickoff_eat }}</div>
+        </a>
+        {% endfor %}
+      {% else %}
+        <div class="match-row" style="justify-content:center;padding:20px">
+          <span style="font-size:12px;color:var(--text-muted);font-weight:500">
+            No fixtures today — check back on matchday
+          </span>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Accuracy panel -->
+  <div>
+    <div class="section-head">Model performance</div>
+    <div class="accuracy-panel">
+      <div style="font-size:10px;font-weight:700;color:var(--text-muted);
+                  text-transform:uppercase;letter-spacing:1px;margin-bottom:12px">
+        Season 2025/26
+      </div>
+
+      {% set league_rows = [
+        ("Premier League", "#9B59B6", "#3D185A",
+         pl_stats.pre_accuracy if pl_stats and pl_stats.pre_total > 0 else None,
+         pl_stats.pre_total if pl_stats else 0),
+        ("La Liga",     "#E74C3C", "#8B0000",  None, 0),
+        ("Bundesliga",  "#C0392B", "#1A1A1A",  None, 0),
+        ("Serie A",     "#2563EB", "#1A3A6B",  None, 0),
+        ("Ligue 1",     "#00A3E0", "#003087",  None, 0),
+      ] %}
+
+      {% for lname, dot, val_col, acc, n in league_rows %}
+      <div class="acc-row">
+        <div class="acc-dot" style="background:{{ dot }}"></div>
+        <div class="acc-name">{{ lname }}</div>
+        {% if acc is not none %}
+          <div class="acc-val" style="color:{{ val_col }}">{{ acc }}%</div>
+          <div class="acc-sub">{{ n }}G</div>
+        {% else %}
+          <div class="acc-val" style="color:var(--text-muted)">—</div>
+          <div class="acc-sub" style="color:var(--text-muted)">new</div>
+        {% endif %}
+      </div>
+      {% endfor %}
+
+      <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
+        <div style="display:flex;justify-content:space-between;
+                    align-items:center;margin-bottom:7px">
+          <span style="font-size:11px;color:var(--text-secondary);font-weight:600">
+            Always-home baseline
+          </span>
+          <span style="font-size:13px;font-weight:900;font-family:var(--font-mono);
+                       color:var(--text-secondary)">43%</span>
+        </div>
+        {% if pl_stats and pl_stats.pre_total > 0 %}
+        {% set delta = pl_stats.pre_accuracy - 43 %}
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:11px;color:var(--text-secondary);font-weight:600">
+            DC model vs baseline
+          </span>
+          <span style="font-size:13px;font-weight:900;font-family:var(--font-mono);
+                       color:{% if delta > 0 %}#1A7A3C{% else %}#C0392B{% endif %}">
+            {% if delta > 0 %}+{% endif %}{{ delta | round(1) }}pp
+          </span>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
 
 </div>
 {% endblock %}

@@ -634,8 +634,61 @@ async def history_page(request: Request):
 
 @app.get("/", response_class=HTMLResponse)
 async def hub(request: Request):
+    from predictions import get_accuracy_stats, get_all_predictions
+    from datetime import datetime, timezone, timedelta
+    from fpl import get_upcoming_fixtures as fpl_upcoming
+
+    now_eat = datetime.now(timezone(timedelta(hours=3)))
+    today   = now_eat.date().isoformat()
+
+    # PL stats from predictions DB
+    try:
+        pl_stats = get_accuracy_stats(season=2025)
+    except Exception:
+        pl_stats = None
+
+    # Upcoming PL fixtures for today strip fallback
+    try:
+        upcoming = fpl_upcoming(max_fixtures=10)
+    except Exception:
+        upcoming = []
+
+    # Today's matches across all leagues (PL only for now — expand as leagues added)
+    today_matches = []
+    try:
+        for f in upcoming:
+            ko = f.get("kickoff_utc", "")
+            if ko and ko[:10] == today:
+                # Compute DC odds
+                dc = dc_pregame(f["home"], f["away"], "ENG-Premier League")
+                today_matches.append({
+                    "match_id"     : f["match_id"],
+                    "home"         : f["home"],
+                    "away"         : f["away"],
+                    "kickoff_eat"  : f.get("kickoff_eat", ""),
+                    "league_name"  : "Premier League",
+                    "league_colour": "#9B59B6",
+                    "is_live"      : False,
+                    "minute"       : None,
+                    "dc_home"      : dc[0] if dc else None,
+                    "dc_draw"      : dc[1] if dc else None,
+                    "dc_away"      : dc[2] if dc else None,
+                })
+    except Exception:
+        pass
+
     return templates.TemplateResponse(
-        request=request, name="index.html", context={"request": request}
+        request=request, name="index.html",
+        context={
+            "request"         : request,
+            "league"          : "pl",
+            "league_code"     : "PL",
+            "pl_stats"        : pl_stats,
+            "today_matches"   : today_matches,
+            "upcoming_fixtures": upcoming,
+            "live_count"      : 0,
+            "live_count_pl"   : 0,
+        }
     )
 
 
