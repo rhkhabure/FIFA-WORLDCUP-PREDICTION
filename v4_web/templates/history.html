@@ -1,79 +1,302 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="max-w-screen-2xl mx-auto flex items-center justify-center min-h-[70vh]">
-    <div class="text-center space-y-6 max-w-md">
+<div class="max-w-screen-2xl mx-auto space-y-4">
 
-        <!-- Icon -->
-        <div class="text-6xl">📋</div>
-
-        <!-- Title -->
+    <!-- HEADER -->
+    <div class="flex items-center justify-between">
         <div>
-            <h1 class="text-2xl font-bold text-white tracking-wide">
+            <h1 class="text-lg font-bold font-mono text-white tracking-wide">
                 Prediction History
             </h1>
-            <p class="text-sm font-mono text-slate-500 mt-1">
-                Season accuracy tracker
+            <p class="text-xs font-mono text-slate-500 mt-0.5">
+                Dixon-Coles model · 2025/26 PL season
             </p>
         </div>
-
-        <!-- Under construction card -->
-        <div class="bg-[#0f172a] border border-cyan-800/40 rounded-2xl p-8 shadow-xl">
-            <div class="text-cyan-400 text-xs font-mono uppercase tracking-widest mb-3">
-                Coming Soon
-            </div>
-            <p class="text-slate-400 text-sm leading-relaxed">
-                Prediction history and model evaluation are being built.
-                All predictions are being logged in the background — this page
-                will show accuracy stats, model comparisons, and per-match review.
-            </p>
-            <div class="mt-6 grid grid-cols-2 gap-3 text-xs font-mono text-slate-600">
-                <span class="flex items-center gap-1.5">
-                    <span class="w-1.5 h-1.5 rounded-full bg-cyan-700"></span>
-                    DC prior accuracy
-                </span>
-                <span class="flex items-center gap-1.5">
-                    <span class="w-1.5 h-1.5 rounded-full bg-cyan-700"></span>
-                    Lineup-adj accuracy
-                </span>
-                <span class="flex items-center gap-1.5">
-                    <span class="w-1.5 h-1.5 rounded-full bg-cyan-700"></span>
-                    Neural net accuracy
-                </span>
-                <span class="flex items-center gap-1.5">
-                    <span class="w-1.5 h-1.5 rounded-full bg-cyan-700"></span>
-                    Per-match review
-                </span>
-            </div>
+        <div class="text-xs font-mono text-slate-600">
+            {% if stats %}{{ stats.total_logged }} fixtures logged{% endif %}
         </div>
+    </div>
 
-        <!-- Stats preview (from predictions DB if available) -->
-        {% if stats %}
+    {% if not stats or stats.total_finished == 0 %}
+    <!-- NO DATA YET -->
+    <div class="bg-[#0f172a] border border-slate-800 rounded-2xl p-10 text-center">
+        <div class="text-5xl mb-4">📋</div>
+        <div class="text-slate-300 font-mono text-sm mb-2">No results logged yet</div>
+        <div class="text-slate-500 text-xs max-w-sm mx-auto">
+            Results are logged automatically after each match.
+            {{ stats.total_logged if stats else 0 }} upcoming fixtures are being tracked.
+        </div>
+    </div>
+
+    {% else %}
+
+    <!-- TOP STATS ROW -->
+    <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+
+        <!-- Overall accuracy -->
         <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl">
-            <div class="text-xs font-mono text-slate-400 uppercase tracking-widest mb-3">
-                Current Season Snapshot
+            <div class="text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-1">
+                DC Accuracy
             </div>
-            <div class="grid grid-cols-3 gap-4 text-center font-mono">
-                <div>
-                    <div class="text-xl font-bold text-white">{{ stats.total_logged }}</div>
-                    <div class="text-[10px] text-slate-500">Logged</div>
-                </div>
-                <div>
-                    <div class="text-xl font-bold text-emerald-400">
-                        {{ stats.pre_accuracy }}%
-                    </div>
-                    <div class="text-[10px] text-slate-500">DC Accuracy</div>
-                </div>
-                <div>
-                    <div class="text-xl font-bold text-cyan-400">
-                        {{ stats.total_finished }}
-                    </div>
-                    <div class="text-[10px] text-slate-500">Resolved</div>
-                </div>
+            <div class="text-3xl font-bold font-mono
+                {% if stats.pre_accuracy >= 55 %}text-emerald-400
+                {% elif stats.pre_accuracy >= 40 %}text-amber-400
+                {% else %}text-rose-400{% endif %}">
+                {{ stats.pre_accuracy }}%
+            </div>
+            <div class="text-xs font-mono text-slate-500 mt-1">
+                {{ stats.pre_correct }}/{{ stats.pre_total }} correct
+            </div>
+            <div class="text-[10px] font-mono text-slate-700 mt-0.5">
+                baseline ~43%
             </div>
         </div>
-        {% endif %}
+
+        <!-- Lineup-adjusted accuracy -->
+        <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl">
+            <div class="text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-1">
+                Adj Accuracy
+            </div>
+            {% if stats.adj_total > 0 %}
+            <div class="text-3xl font-bold font-mono
+                {% if stats.adj_accuracy >= 55 %}text-emerald-400
+                {% elif stats.adj_accuracy >= 40 %}text-amber-400
+                {% else %}text-rose-400{% endif %}">
+                {{ stats.adj_accuracy }}%
+            </div>
+            <div class="text-xs font-mono text-slate-500 mt-1">
+                {{ stats.adj_correct }}/{{ stats.adj_total }} with lineup data
+            </div>
+            {% else %}
+            <div class="text-2xl font-bold font-mono text-slate-600">—</div>
+            <div class="text-xs font-mono text-slate-600 mt-1">No lineup data yet</div>
+            {% endif %}
+        </div>
+
+        <!-- Draw recall -->
+        <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl">
+            <div class="text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-1">
+                Draw Recall
+            </div>
+            <div class="text-3xl font-bold font-mono text-slate-300">
+                {{ draws_predicted }}/{{ draws_actual }}
+            </div>
+            <div class="text-xs font-mono text-slate-500 mt-1">
+                predicted / actual draws
+            </div>
+            <div class="text-[10px] font-mono text-slate-700 mt-0.5">
+                league avg ~28%
+            </div>
+        </div>
+
+        <!-- Games tracked -->
+        <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl">
+            <div class="text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-1">
+                Season Progress
+            </div>
+            <div class="text-3xl font-bold font-mono text-slate-300">
+                {{ stats.total_finished }}
+            </div>
+            <div class="text-xs font-mono text-slate-500 mt-1">
+                of {{ stats.total_logged }} logged resolved
+            </div>
+            <div class="text-[10px] font-mono text-slate-700 mt-0.5">
+                38 GWs total
+            </div>
+        </div>
 
     </div>
+
+    <!-- CONFIDENCE BAND BREAKDOWN -->
+    <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl">
+        <div class="text-xs font-mono text-slate-400 uppercase tracking-widest mb-4">
+            Accuracy by Confidence Band
+        </div>
+        <div class="grid grid-cols-3 gap-4">
+            {% for label, bs in band_stats.items() %}
+            <div class="text-center">
+                <div class="text-[10px] font-mono text-slate-500 mb-2">{{ label }}</div>
+                {% if bs.n > 0 %}
+                <!-- Mini bar -->
+                <div class="relative h-1.5 bg-slate-800 rounded-full mb-2 mx-4">
+                    <div class="absolute left-0 top-0 h-1.5 rounded-full
+                        {% if bs.pct >= 55 %}bg-emerald-500
+                        {% elif bs.pct >= 40 %}bg-amber-500
+                        {% else %}bg-rose-500{% endif %}"
+                        style="width: {{ bs.pct }}%">
+                    </div>
+                </div>
+                <div class="text-xl font-bold font-mono
+                    {% if bs.pct >= 55 %}text-emerald-400
+                    {% elif bs.pct >= 40 %}text-amber-400
+                    {% else %}text-rose-400{% endif %}">
+                    {{ bs.pct }}%
+                </div>
+                <div class="text-[10px] font-mono text-slate-600 mt-0.5">
+                    {{ bs.correct }}/{{ bs.n }} games
+                </div>
+                {% else %}
+                <div class="text-xl font-bold font-mono text-slate-700">—</div>
+                <div class="text-[10px] font-mono text-slate-700 mt-0.5">no data</div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- RESULTS TABLE -->
+    <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl">
+        <div class="text-xs font-mono text-slate-400 uppercase tracking-widest mb-3">
+            Finished Matches
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-xs font-mono">
+                <thead>
+                    <tr class="text-slate-600 uppercase tracking-wider border-b border-slate-800">
+                        <th class="text-left py-2 pr-4">Match</th>
+                        <th class="text-center py-2 px-3">Kickoff</th>
+                        <th class="text-center py-2 px-3">DC Prior H/D/A</th>
+                        <th class="text-center py-2 px-3">Adj H/D/A</th>
+                        <th class="text-center py-2 px-3">Predicted</th>
+                        <th class="text-center py-2 px-3">Score</th>
+                        <th class="text-center py-2 px-3">Result</th>
+                        <th class="text-center py-2 px-3">DC ✓?</th>
+                        <th class="text-center py-2 px-3">Adj ✓?</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in finished %}
+                    {% set dc_pred = "H" if p.pre_dc_home > p.pre_dc_draw and p.pre_dc_home > p.pre_dc_away
+                                     else ("D" if p.pre_dc_draw > p.pre_dc_away else "A") %}
+                    {% set adj_pred = "H" if p.adj_home and p.adj_home > p.adj_draw and p.adj_home > p.adj_away
+                                      else ("D" if p.adj_home and p.adj_draw > p.adj_away else "") %}
+                    <tr class="border-b border-slate-800/40 hover:bg-slate-800/20 transition">
+                        <td class="py-2 pr-4">
+                            {% if p.match_id %}
+                            <a href="/match?match_id={{ p.match_id }}"
+                               class="text-slate-300 hover:text-white transition">
+                                {{ p.home_team }} vs {{ p.away_team }}
+                            </a>
+                            {% else %}
+                            {{ p.home_team }} vs {{ p.away_team }}
+                            {% endif %}
+                        </td>
+                        <td class="py-2 px-3 text-center text-slate-500">
+                            {{ p.kickoff_utc[:10] if p.kickoff_utc else "—" }}
+                        </td>
+                        <td class="py-2 px-3 text-center text-slate-300">
+                            {% if p.pre_dc_home %}
+                            {{ p.pre_dc_home|round(1) }}/{{ p.pre_dc_draw|round(1) }}/{{ p.pre_dc_away|round(1) }}
+                            {% else %}—{% endif %}
+                        </td>
+                        <td class="py-2 px-3 text-center text-slate-400">
+                            {% if p.adj_home %}
+                            {{ p.adj_home|round(1) }}/{{ p.adj_draw|round(1) }}/{{ p.adj_away|round(1) }}
+                            {% else %}—{% endif %}
+                        </td>
+                        <td class="py-2 px-3 text-center">
+                            <span class="px-2 py-0.5 rounded font-bold
+                                {% if dc_pred == 'H' %}text-cyan-400 bg-cyan-950/40
+                                {% elif dc_pred == 'D' %}text-slate-300 bg-slate-800/60
+                                {% else %}text-amber-400 bg-amber-950/40{% endif %}">
+                                {{ dc_pred }}
+                            </span>
+                        </td>
+                        <td class="py-2 px-3 text-center text-slate-200 font-bold">
+                            {{ p.actual_hg }}–{{ p.actual_ag }}
+                        </td>
+                        <td class="py-2 px-3 text-center">
+                            <span class="px-2 py-0.5 rounded font-bold
+                                {% if p.actual_result == 'H' %}text-cyan-400
+                                {% elif p.actual_result == 'D' %}text-slate-300
+                                {% else %}text-amber-400{% endif %}">
+                                {{ p.actual_result }}
+                            </span>
+                        </td>
+                        <td class="py-2 px-3 text-center text-lg">
+                            {% if p.pre_correct == 1 %}
+                            <span class="text-emerald-400">✓</span>
+                            {% elif p.pre_correct == 0 %}
+                            <span class="text-rose-400">✗</span>
+                            {% else %}—{% endif %}
+                        </td>
+                        <td class="py-2 px-3 text-center text-lg">
+                            {% if p.adj_correct == 1 %}
+                            <span class="text-emerald-400">✓</span>
+                            {% elif p.adj_correct == 0 %}
+                            <span class="text-rose-400">✗</span>
+                            {% else %}<span class="text-slate-700">—</span>{% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {% endif %}
+
+    <!-- UPCOMING PREDICTIONS -->
+    {% if upcoming %}
+    <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl">
+        <div class="text-xs font-mono text-slate-400 uppercase tracking-widest mb-3">
+            Next 10 Upcoming Predictions
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-xs font-mono">
+                <thead>
+                    <tr class="text-slate-600 uppercase tracking-wider border-b border-slate-800">
+                        <th class="text-left py-2 pr-4">Match</th>
+                        <th class="text-center py-2 px-3">Kickoff</th>
+                        <th class="text-center py-2 px-3">DC H/D/A</th>
+                        <th class="text-center py-2 px-3">Prediction</th>
+                        <th class="text-center py-2 px-3">Lineup Logged</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in upcoming %}
+                    {% set dc_pred = "H" if p.pre_dc_home and p.pre_dc_home > p.pre_dc_draw and p.pre_dc_home > p.pre_dc_away
+                                     else ("D" if p.pre_dc_home and p.pre_dc_draw > p.pre_dc_away else "A") %}
+                    {% set conf = [p.pre_dc_home or 0, p.pre_dc_draw or 0, p.pre_dc_away or 0]|max %}
+                    <tr class="border-b border-slate-800/40 hover:bg-slate-800/20 transition">
+                        <td class="py-1.5 pr-4">
+                            <a href="/match?match_id={{ p.match_id }}"
+                               class="text-slate-300 hover:text-white transition">
+                                {{ p.home_team }} vs {{ p.away_team }}
+                            </a>
+                        </td>
+                        <td class="py-1.5 px-3 text-center text-slate-500">
+                            {{ p.kickoff_utc[:10] if p.kickoff_utc else "—" }}
+                        </td>
+                        <td class="py-1.5 px-3 text-center text-slate-300">
+                            {% if p.pre_dc_home %}
+                            {{ p.pre_dc_home|round(1) }}/{{ p.pre_dc_draw|round(1) }}/{{ p.pre_dc_away|round(1) }}
+                            {% else %}—{% endif %}
+                        </td>
+                        <td class="py-1.5 px-3 text-center">
+                            {% if p.pre_dc_home %}
+                            <span class="px-2 py-0.5 rounded font-bold
+                                {% if dc_pred == 'H' %}text-cyan-400 bg-cyan-950/40
+                                {% elif dc_pred == 'D' %}text-slate-300 bg-slate-800/60
+                                {% else %}text-amber-400 bg-amber-950/40{% endif %}">
+                                {{ dc_pred }} ({{ conf|round(1) }}%)
+                            </span>
+                            {% else %}—{% endif %}
+                        </td>
+                        <td class="py-1.5 px-3 text-center">
+                            {% if p.adj_logged_at %}
+                            <span class="text-emerald-400 text-[10px]">✓ Logged</span>
+                            {% else %}
+                            <span class="text-slate-700 text-[10px]">Awaiting</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
 </div>
-<style>body { background-color: #0b0f19 !important; }</style>
 {% endblock %}
