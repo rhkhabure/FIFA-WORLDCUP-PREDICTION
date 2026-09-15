@@ -124,8 +124,24 @@ async def lifespan(app):
     yield
     # Shutdown: nothing to clean up (SQLite handles its own flush)
 
-app = FastAPI(title="V4 Quant Terminal", lifespan=lifespan)
+from fastapi.staticfiles import StaticFiles
+
+app = FastAPI(title="Melios Dira Odds", lifespan=lifespan)
+app.mount("/static", StaticFiles(directory=ROOT / "static"), name="static")
 templates = Jinja2Templates(directory=ROOT / "templates")
+
+# ── League context helper ──────────────────────────────────────────
+LEAGUE_CONTEXTS = {
+    "pl":         {"league": "pl",         "league_code": "PL",  "league_name": "Premier League"},
+    "laliga":     {"league": "laliga",     "league_code": "LL",  "league_name": "La Liga"},
+    "bundesliga": {"league": "bundesliga", "league_code": "BL",  "league_name": "Bundesliga"},
+    "seriea":     {"league": "seriea",     "league_code": "SA",  "league_name": "Serie A"},
+    "ligue1":     {"league": "ligue1",     "league_code": "L1",  "league_name": "Ligue 1"},
+}
+
+def league_ctx(league_key: str = "pl") -> dict:
+    """Returns template context dict for the given league."""
+    return LEAGUE_CONTEXTS.get(league_key, LEAGUE_CONTEXTS["pl"])
 
 
 # ── DC pre-game ───────────────────────────────────────────────────────────────

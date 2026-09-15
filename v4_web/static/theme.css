@@ -1,0 +1,266 @@
+/*
+ * theme.css  —  Melios Dira Odds · v4.2
+ * ======================================
+ * League colour system — vivid light mode.
+ * All league themes defined as CSS custom properties.
+ * Active league set via data-league="pl|laliga|bundesliga|seriea|ligue1"
+ * on <html> or <body>. Defaults to Premier League.
+ *
+ * Usage in templates:
+ *   background: var(--league-primary)
+ *   color:      var(--league-gold)
+ *   border:     1px solid var(--league-light)
+ */
+
+/* ── Base page (light mode) ─────────────────────────────────────── */
+:root {
+    /* Page */
+    --page-bg:        #F5F5F0;
+    --surface:        #FFFFFF;
+    --surface-2:      #F8F8F4;
+    --border:         #E8E8E0;
+    --border-strong:  #D0D0C0;
+
+    /* Text */
+    --text-primary:   #1A1A1A;
+    --text-secondary: #555550;
+    --text-muted:     #999990;
+
+    /* Status */
+    --live-red:       #FF3B30;
+    --win-green:      #1A7A3C;
+    --draw-amber:     #D4851A;
+    --loss-red:       #C0392B;
+
+    /* Fonts */
+    --font-sans:      'Inter', system-ui, sans-serif;
+    --font-mono:      'JetBrains Mono', 'Fira Code', monospace;
+}
+
+/* ── Premier League ─────────────────────────────────────────────── */
+[data-league="pl"], :root {
+    --league-primary:    #3D185A;   /* Deep royal purple */
+    --league-vivid:      #6B2D96;   /* Mid purple */
+    --league-mid:        #9B59B6;   /* Soft purple */
+    --league-light:      #C39DE6;   /* Lavender */
+    --league-tint:       #F0EBF8;   /* Page tint */
+    --league-gold:       #F9D000;   /* PL lion gold */
+    --league-sidebar-bg: #3D185A;
+    --league-badge:      #F9D000;
+    --league-badge-text: #3D185A;
+    --league-active-bar: #F9D000;
+    --league-name:       "Premier League";
+    --league-code:       "PL";
+}
+
+/* ── La Liga ────────────────────────────────────────────────────── */
+[data-league="laliga"] {
+    --league-primary:    #8B0000;   /* Deep crimson */
+    --league-vivid:      #C0392B;   /* Rich red */
+    --league-mid:        #E74C3C;   /* Vivid red */
+    --league-light:      #FFAAAA;   /* Light rose */
+    --league-tint:       #FFF5F0;   /* Page tint */
+    --league-gold:       #FFD700;   /* Spanish gold */
+    --league-sidebar-bg: #8B0000;
+    --league-badge:      #FFD700;
+    --league-badge-text: #8B0000;
+    --league-active-bar: #FFD700;
+    --league-name:       "La Liga";
+    --league-code:       "LL";
+}
+
+/* ── Bundesliga ─────────────────────────────────────────────────── */
+[data-league="bundesliga"] {
+    --league-primary:    #1A1A1A;   /* Near black */
+    --league-vivid:      #C0392B;   /* Red */
+    --league-mid:        #E74C3C;   /* Vivid red */
+    --league-light:      #FFAAAA;   /* Light red */
+    --league-tint:       #FFF8F8;   /* Page tint */
+    --league-gold:       #FFD700;   /* German gold */
+    --league-sidebar-bg: #1A1A1A;
+    --league-badge:      #FFD700;
+    --league-badge-text: #1A1A1A;
+    --league-active-bar: #E74C3C;
+    --league-name:       "Bundesliga";
+    --league-code:       "BL";
+}
+
+/* ── Serie A ────────────────────────────────────────────────────── */
+[data-league="seriea"] {
+    --league-primary:    #1A3A6B;   /* Deep Azzurri navy */
+    --league-vivid:      #2563EB;   /* Azzurri blue */
+    --league-mid:        #60A5FA;   /* Sky blue */
+    --league-light:      #BFDBFE;   /* Light blue */
+    --league-tint:       #F0F5FF;   /* Page tint */
+    --league-gold:       #FFFFFF;   /* White accent */
+    --league-sidebar-bg: #1A3A6B;
+    --league-badge:      #60A5FA;
+    --league-badge-text: #1A3A6B;
+    --league-active-bar: #60A5FA;
+    --league-name:       "Serie A";
+    --league-code:       "SA";
+}
+
+/* ── Ligue 1 ────────────────────────────────────────────────────── */
+[data-league="ligue1"] {
+    --league-primary:    #003087;   /* Deep French navy */
+    --league-vivid:      #0057B8;   /* Royal blue */
+    --league-mid:        #00A3E0;   /* Electric cyan */
+    --league-light:      #7EC8E3;   /* Light cyan */
+    --league-tint:       #F0F8FF;   /* Page tint */
+    --league-gold:       #ED2939;   /* Rouge accent */
+    --league-sidebar-bg: #003087;
+    --league-badge:      #00A3E0;
+    --league-badge-text: #003087;
+    --league-active-bar: #00A3E0;
+    --league-name:       "Ligue 1";
+    --league-code:       "L1";
+}
+
+/* ── Utility classes (league-aware) ─────────────────────────────── */
+
+/* Sidebar */
+.sidebar-bg        { background: var(--league-sidebar-bg); }
+.league-badge-pill {
+    background: var(--league-badge);
+    color:      var(--league-badge-text);
+    font-size:  9px;
+    font-weight: 800;
+    padding:    2px 8px;
+    border-radius: 20px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+/* Nav active state */
+.nav-item.active {
+    background: rgba(255,255,255,0.12);
+    border-left: 3px solid var(--league-active-bar);
+}
+
+/* Cards */
+.card {
+    background:    var(--surface);
+    border:        1px solid var(--border);
+    border-radius: 14px;
+    padding:       16px;
+}
+.card-tint {
+    background:    var(--league-tint);
+    border:        1px solid var(--league-light);
+    border-radius: 14px;
+    padding:       16px;
+}
+
+/* Match header banner */
+.match-banner {
+    background:    var(--league-primary);
+    border-radius: 16px;
+    padding:       20px;
+}
+
+/* Score display */
+.score-display {
+    color:       var(--league-gold);
+    font-size:   36px;
+    font-weight: 900;
+    letter-spacing: -1px;
+    font-family: var(--font-mono);
+}
+
+/* Probability bars */
+.prob-bar-home { background: var(--league-primary); }
+.prob-bar-draw { background: var(--league-mid); }
+.prob-bar-away { background: var(--league-light); }
+
+/* Live badge */
+.live-badge {
+    background:  var(--live-red);
+    color:       #fff;
+    font-size:   9px;
+    font-weight: 800;
+    padding:     3px 8px;
+    border-radius: 20px;
+    letter-spacing: 0.5px;
+    animation:   live-pulse 1.5s infinite;
+}
+@keyframes live-pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.5; }
+}
+
+/* Topbar */
+.topbar {
+    background:    var(--surface);
+    border-bottom: 1px solid var(--border);
+    height:        52px;
+    display:       flex;
+    align-items:   center;
+    padding:       0 24px;
+    gap:           12px;
+    position:      sticky;
+    top:           0;
+    z-index:       10;
+}
+
+/* Page background */
+body {
+    background: var(--league-tint);
+    color:      var(--text-primary);
+    font-family: var(--font-sans);
+    margin: 0;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: var(--league-tint); }
+::-webkit-scrollbar-thumb {
+    background:    var(--league-mid);
+    border-radius: 3px;
+    opacity: 0.5;
+}
+
+/* Fixture strip cards */
+.fix-card {
+    background:    var(--surface);
+    border:        1.5px solid var(--border);
+    border-radius: 10px;
+    padding:       8px 10px;
+    cursor:        pointer;
+    transition:    border-color 0.15s;
+}
+.fix-card:hover,
+.fix-card.active {
+    border-color: var(--league-vivid);
+    background:   var(--league-tint);
+}
+
+/* Stat cards */
+.stat-card {
+    background:    var(--surface);
+    border:        1px solid var(--border);
+    border-radius: 12px;
+    padding:       14px 16px;
+}
+.stat-val {
+    font-size:   24px;
+    font-weight: 900;
+    color:       var(--league-primary);
+    letter-spacing: -0.5px;
+}
+.stat-lbl {
+    font-size:   11px;
+    color:       var(--text-secondary);
+    font-weight: 600;
+    margin-top:  4px;
+}
+
+/* Result badges */
+.result-w { background: #DCFCE7; color: #166534; border-radius: 6px; padding: 2px 8px; font-weight: 700; font-size: 11px; }
+.result-d { background: #F3F4F6; color: #374151; border-radius: 6px; padding: 2px 8px; font-weight: 700; font-size: 11px; }
+.result-l { background: #FEE2E2; color: #991B1B; border-radius: 6px; padding: 2px 8px; font-weight: 700; font-size: 11px; }
+
+/* Prediction outcome badges */
+.pred-h { background: var(--league-tint);  color: var(--league-primary); border-radius: 6px; padding: 3px 10px; font-weight: 700; font-size: 11px; }
+.pred-d { background: #F3F4F6; color: #374151; border-radius: 6px; padding: 3px 10px; font-weight: 700; font-size: 11px; }
+.pred-a { background: #FFF7ED; color: #9A3412; border-radius: 6px; padding: 3px 10px; font-weight: 700; font-size: 11px; }
