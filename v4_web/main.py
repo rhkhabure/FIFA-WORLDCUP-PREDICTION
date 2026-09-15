@@ -343,7 +343,23 @@ async def teams_hub(request: Request):
     }
     return templates.TemplateResponse(
         request=request, name="teams.html",
-        context={"request": request, "team_colours": team_colours}
+        context={
+            "request"      : request,
+            "team_colours" : team_colours,
+            **league_ctx("pl"),
+        }
+    )
+
+
+@app.get("/teams/laliga", response_class=HTMLResponse)
+async def teams_laliga(request: Request):
+    """Spain map — all La Liga clubs with zoom tiers."""
+    return templates.TemplateResponse(
+        request=request, name="teams_laliga.html",
+        context={
+            "request": request,
+            **league_ctx("laliga"),
+        }
     )
 
 
