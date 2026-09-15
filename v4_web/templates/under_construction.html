@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+.uc-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 72vh;
+}
+.uc-card {
+    text-align: center;
+    max-width: 460px;
+    width: 100%;
+}
+.uc-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--league-tint);
+    border: 1.5px solid var(--league-light);
+    color: var(--league-primary);
+    font-size: 10px;
+    font-weight: 800;
+    padding: 5px 14px;
+    border-radius: 20px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-bottom: 20px;
+}
+.uc-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--league-vivid);
+    animation: uc-pulse 1.8s infinite;
+}
+@keyframes uc-pulse {
+    0%,100%{opacity:1;transform:scale(1)}
+    50%{opacity:0.4;transform:scale(0.8)}
+}
+.uc-logo {
+    width: 88px;
+    height: 88px;
+    border-radius: 22px;
+    background: var(--league-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 22px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+}
+.uc-logo img {
+    width: 60px;
+    height: 60px;
+    object-fit: contain;
+    filter: brightness(0) invert(1);
+}
+.uc-title {
+    font-size: 26px;
+    font-weight: 900;
+    color: var(--league-primary);
+    letter-spacing: -0.5px;
+    margin-bottom: 6px;
+    line-height: 1.1;
+}
+.uc-sub {
+    font-size: 13px;
+    color: var(--text-secondary);
+    font-weight: 500;
+    margin-bottom: 28px;
+    line-height: 1.5;
+}
+.uc-features {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 24px;
+    text-align: left;
+}
+.uc-features-title {
+    font-size: 10px;
+    font-weight: 800;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-bottom: 14px;
+}
+.uc-feature {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+.uc-feature:last-child { border-bottom: none; }
+.uc-feature-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--league-light);
+    flex-shrink: 0;
+}
+.uc-progress {
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    margin-top: 4px;
+    overflow: hidden;
+}
+.uc-progress-bar {
+    height: 100%;
+    border-radius: 2px;
+    background: var(--league-vivid);
+    transition: width 1s ease;
+}
+.uc-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--league-vivid);
+    text-decoration: none;
+    border: 1.5px solid var(--league-light);
+    padding: 8px 18px;
+    border-radius: 20px;
+    transition: background 0.15s, border-color 0.15s;
+    margin-right: 8px;
+}
+.uc-back:hover {
+    background: var(--league-tint);
+    border-color: var(--league-vivid);
+}
+</style>
+
+<div class="uc-wrap">
+  <div class="uc-card">
+
+    <div class="uc-badge">
+      <div class="uc-dot"></div>
+      Under Construction
+    </div>
+
+    <div class="uc-logo">
+      <img src="/static/logos/{{ league_key }}.svg"
+           alt="{{ league_name }}"
+           onerror="this.replaceWith(Object.assign(
+               document.createElement('span'),
+               {textContent:'{{ league_code }}',
+                style:'color:#fff;font-weight:900;font-size:18px'}))"/>
+    </div>
+
+    <div class="uc-title">{{ league_name }}</div>
+    <div class="uc-sub">
+      The {{ league_name }} dashboard is being built right now.<br>
+      Predictions, live scores, team maps and match analysis are coming.
+    </div>
+
+    <div class="uc-features">
+      <div class="uc-features-title">What's coming</div>
+
+      {% for label, pct in features %}
+      <div class="uc-feature">
+        <div class="uc-feature-dot"></div>
+        <div style="flex:1">
+          <div>{{ label }}</div>
+          <div class="uc-progress">
+            <div class="uc-progress-bar" style="width:{{ pct }}%"></div>
+          </div>
+        </div>
+        <div style="font-size:10px;font-family:var(--font-mono);
+                    color:var(--league-vivid);font-weight:700">
+          {{ pct }}%
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <a href="/" class="uc-back">← Back to hub</a>
+    <a href="/match" class="uc-back" style="border-color:var(--border);color:var(--text-secondary)">
+      View PL dashboard
+    </a>
+
+  </div>
+</div>
+{% endblock %}

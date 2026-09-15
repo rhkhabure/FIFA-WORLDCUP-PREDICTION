@@ -692,6 +692,74 @@ async def hub(request: Request):
     )
 
 
+@app.get("/league/{league_key}", response_class=HTMLResponse)
+async def league_page(request: Request, league_key: str):
+    """
+    League dashboard router.
+    PL → redirects to /match (already fully built).
+    Others → under-construction page with league colour theme.
+    """
+    from fastapi.responses import RedirectResponse
+
+    # Validate league key
+    if league_key not in LEAGUE_CONTEXTS:
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url="/")
+
+    # PL is fully built — send straight to match dashboard
+    if league_key == "pl":
+        return RedirectResponse(url="/match")
+
+    # All other leagues — under construction with per-league features list
+    LEAGUE_FEATURES = {
+        "laliga": [
+            ("DC prior odds (20 teams)",         90),
+            ("Live match scores via FotMob",      75),
+            ("Spain team map — zoom tiers",       40),
+            ("Lineup-adjusted predictions",       30),
+            ("Prediction history logging",        20),
+            ("Neural net live model",             10),
+        ],
+        "bundesliga": [
+            ("DC prior odds (18 teams)",          90),
+            ("Live match scores via FotMob",      60),
+            ("Germany team map",                  15),
+            ("Lineup-adjusted predictions",       10),
+            ("Prediction history logging",        10),
+            ("Neural net live model",             10),
+        ],
+        "seriea": [
+            ("DC prior odds (20 teams)",          90),
+            ("Live match scores via FotMob",      60),
+            ("Italy team map",                    10),
+            ("Lineup-adjusted predictions",       10),
+            ("Prediction history logging",        10),
+            ("Neural net live model",             10),
+        ],
+        "ligue1": [
+            ("DC prior odds (18 teams)",          90),
+            ("Live match scores via FotMob",      60),
+            ("France team map",                   10),
+            ("Lineup-adjusted predictions",       10),
+            ("Prediction history logging",        10),
+            ("Neural net live model",             10),
+        ],
+    }
+
+    ctx = LEAGUE_CONTEXTS[league_key]
+    return templates.TemplateResponse(
+        request=request, name="under_construction.html",
+        context={
+            "request"    : request,
+            "league"     : league_key,
+            "league_key" : league_key,
+            "league_code": ctx["league_code"],
+            "league_name": ctx["league_name"],
+            "features"   : LEAGUE_FEATURES.get(league_key, []),
+        }
+    )
+
+
 @app.get("/match", response_class=HTMLResponse)
 async def match(request: Request):
     match_id = request.query_params.get("match_id")
