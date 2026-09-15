@@ -206,52 +206,62 @@ async def run_prediction_job(priors_db: dict, league_key: str):
                 print(f"[prediction_job] lineup error {mid}: {e}")
 
     # ── Step 3: Log results for finished matches ────────────────────────────
-    # Only check matches where kickoff has passed (avoid hammering API)
-    existing = get_all_predictions(season)
+    # football-data.org direct match endpoint returns 400 for all matches
+    # on the free tier. Use find_finished_match_by_teams() instead which
+    # scans /competitions/PL/matches?status=FINISHED — works on free tier.
+    from footballdata import find_finished_match_by_teams
+
+    existing   = get_all_predictions(season)
     unresolved = [
         p for p in existing
         if p["pre_logged_at"] and not p["actual_result"]
-        and p["kickoff_utc"]   # must have a kickoff time
-        and p["kickoff_utc"] < now_utc.isoformat()  # kickoff must be in the past
+        and p["kickoff_utc"]
+        and p["kickoff_utc"] < now_utc.isoformat()
     ]
 
     checked = 0
-    MAX_RESULTS_PER_CYCLE = 5  # stay well within 10 req/min limit
+    MAX_RESULTS_PER_CYCLE = 5
     for p in unresolved[:MAX_RESULTS_PER_CYCLE]:
-        mid = p["match_id"]
+        mid  = p["match_id"]
+        home = p["home_team"]
+        away = p["away_team"]
         try:
-            # Add small delay to avoid rate limiting (10 req/min = 1 per 6s)
             if checked > 0:
-                await asyncio.sleep(7)
+                await asyncio.sleep(3)  # gentler delay — season endpoint is 1 call
 
-            match_data = get_live_match_data(mid)
-            if not match_data:
+            match_data = find_finished_match_by_teams(home, away)
+            if not match_data or match_data.get("status") != "Finished":
                 continue
-            status = match_data.get("status", "")
-            if status not in ("Finished", "FINISHED", "FT"):
-                continue
-            score = match_data.get("score", {}) or {}
-            ft    = score.get("fullTime", {}) or {}
-            hg    = ft.get("home")
-            ag    = ft.get("away")
-            # Also check top-level scores from _parse_match
-            if hg is None:
-                hg = match_data.get("h_score")
-            if ag is None:
-                ag = match_data.get("a_score")
+
+            hg = match_data.get("h_score")
+            ag = match_data.get("a_score")
             if hg is None or ag is None:
                 continue
 
-            if hg > ag:
-                result = "H"
-            elif hg == ag:
-                result = "D"
-            else:
-                result = "A"
-
+            result = "H" if hg > ag else ("D" if hg == ag else "A")
             log_result(mid, result, int(hg), int(ag))
-            print(f"[prediction_job] result logged: "
-                  f"{p['home_team']} {hg}-{ag} {p['away_team']}")
+            print(f"[prediction_job] result: {home} {hg}-{ag} {away} → {result}")
+
+            # Save match snapshot so the match page shows post-game state
+            # without requiring the user to have been on the site during the game
+            try:
+                from predictions import save_match_snapshot
+                from utils import get_theme_for_team
+                home_colour = get_theme_for_team(home).get("primary", "#14b8a6")
+                away_colour = get_theme_for_team(away).get("primary", "#f43f5e")
+                save_match_snapshot(
+                    match_id=mid,
+                    home_team=home, away_team=away,
+                    kickoff_utc=p["kickoff_utc"],
+                    h_score=int(hg), a_score=int(ag),
+                    status="Finished", minute=90,
+                    home_colour=home_colour,
+                    away_colour=away_colour,
+                )
+                print(f"[prediction_job] snapshot saved: {home} vs {away}")
+            except Exception as snap_e:
+                print(f"[prediction_job] snapshot error: {snap_e}")
+
             checked += 1
 
         except Exception as e:

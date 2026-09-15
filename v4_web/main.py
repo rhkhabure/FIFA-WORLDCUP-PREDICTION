@@ -542,15 +542,77 @@ async def player_page(request: Request):
 
 @app.get("/history", response_class=HTMLResponse)
 async def history_page(request: Request):
-    """Prediction history placeholder — shows current stats from DB."""
-    from predictions import get_accuracy_stats
+    """Prediction history — model accuracy tracker."""
+    from predictions import get_accuracy_stats, get_all_predictions
+    from datetime import datetime, timezone
     try:
-        stats = get_accuracy_stats()
-    except Exception:
+        season = datetime.now(timezone.utc).year
+        if datetime.now(timezone.utc).month < 8:
+            season -= 1
+        stats   = get_accuracy_stats(season)
+        all_pred = get_all_predictions(season)
+
+        # Split into finished and upcoming
+        finished = [p for p in all_pred if p["actual_result"]]
+        upcoming = [p for p in all_pred if not p["actual_result"]]
+
+        # Compute per-confidence-band stats for finished games
+        bands = {
+            "High (>60%)"  : [],
+            "Mid (40-60%)" : [],
+            "Low (<40%)"   : [],
+        }
+        for p in finished:
+            if p["pre_dc_home"] is None:
+                continue
+            conf = max(p["pre_dc_home"], p["pre_dc_draw"], p["pre_dc_away"])
+            if conf > 60:
+                bands["High (>60%)"].append(p)
+            elif conf >= 40:
+                bands["Mid (40-60%)"].append(p)
+            else:
+                bands["Low (<40%)"].append(p)
+
+        band_stats = {}
+        for label, games in bands.items():
+            if not games:
+                band_stats[label] = {"n": 0, "correct": 0, "pct": 0}
+                continue
+            correct = sum(1 for g in games if g["pre_correct"])
+            band_stats[label] = {
+                "n"      : len(games),
+                "correct": correct,
+                "pct"    : round(correct / len(games) * 100, 1),
+            }
+
+        # Compute draw stats
+        draws_actual    = sum(1 for p in finished if p["actual_result"] == "D")
+        draws_predicted = sum(
+            1 for p in finished
+            if p["pre_dc_draw"] and
+            p["pre_dc_draw"] > (p["pre_dc_home"] or 0) and
+            p["pre_dc_draw"] > (p["pre_dc_away"] or 0)
+        )
+
+    except Exception as e:
+        print(f"[history] error: {e}")
         stats = None
+        finished = upcoming = []
+        band_stats = {}
+        draws_actual = draws_predicted = 0
+
     return templates.TemplateResponse(
         request=request, name="history.html",
-        context={"request": request, "stats": stats}
+        context={
+            "request"         : request,
+            "stats"           : stats,
+            "finished"        : finished,
+            "upcoming"        : upcoming[:10],   # next 10
+            "band_stats"      : band_stats,
+            "draws_actual"    : draws_actual,
+            "draws_predicted" : draws_predicted,
+            "season"          : season,
+        }
     )
 
 
