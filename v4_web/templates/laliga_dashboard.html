@@ -1,0 +1,251 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+.section-head{font-size:10px;font-weight:800;color:var(--text-muted);
+  text-transform:uppercase;letter-spacing:1.5px;margin-bottom:12px}
+.fix-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));
+  gap:12px;margin-bottom:24px}
+
+/* Fixture card */
+.fix-card{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:14px;
+  overflow:hidden;
+  transition:border-color .15s,transform .15s;
+  text-decoration:none;
+  display:block;
+}
+.fix-card:hover{
+  border-color:var(--league-vivid);
+  transform:translateY(-1px);
+}
+.fix-header{
+  background:var(--league-primary);
+  padding:12px 14px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+}
+.fix-teams{
+  font-size:13px;font-weight:800;color:#fff;
+  letter-spacing:-0.2px;
+}
+.fix-vs{
+  font-size:10px;color:rgba(255,255,255,.5);
+  font-weight:600;margin:0 6px;
+}
+.fix-time{
+  font-size:11px;font-weight:700;
+  color:var(--league-gold);
+  font-family:var(--font-mono);
+}
+.fix-body{
+  padding:10px 14px;
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.odd-pill{
+  padding:4px 10px;border-radius:6px;
+  font-size:11px;font-weight:700;
+  font-family:var(--font-mono);
+}
+.odd-h{background:var(--league-tint);color:var(--league-primary)}
+.odd-d{background:#F3F4F6;color:#555}
+.odd-a{background:#FFF7ED;color:#9A3412}
+.pred-badge{
+  margin-left:auto;
+  font-size:10px;font-weight:800;
+  padding:3px 8px;border-radius:20px;
+  background:var(--league-primary);
+  color:var(--league-gold);
+  letter-spacing:.5px;
+}
+.fix-gw{
+  font-size:9px;color:var(--text-muted);
+  font-weight:600;padding:0 14px 8px;
+}
+
+/* Today live strip */
+.today-card{
+  background:var(--surface);
+  border:1.5px solid var(--league-vivid);
+  border-radius:14px;overflow:hidden;
+  margin-bottom:24px;
+}
+.today-header{
+  background:var(--league-primary);
+  padding:10px 16px;
+  font-size:10px;font-weight:800;
+  color:var(--league-gold);
+  letter-spacing:1.5px;text-transform:uppercase;
+  display:flex;align-items:center;gap:8px;
+}
+.live-dot{width:7px;height:7px;border-radius:50%;background:#FF3B30;
+  animation:ld-pulse 1.5s infinite}
+@keyframes ld-pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* Stats row */
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px}
+.stat-card{background:var(--surface);border:1px solid var(--border);
+  border-radius:12px;padding:14px 16px}
+.stat-val{font-size:22px;font-weight:900;color:var(--league-primary);
+  letter-spacing:-.5px;font-family:var(--font-mono)}
+.stat-lbl{font-size:11px;color:var(--text-secondary);font-weight:600;margin-top:4px}
+.stat-sub{font-size:10px;color:var(--text-muted);margin-top:2px}
+
+/* Map link card */
+.map-link{
+  display:flex;align-items:center;gap:12px;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:14px;padding:16px;
+  text-decoration:none;
+  transition:border-color .15s;
+  margin-bottom:24px;
+}
+.map-link:hover{border-color:var(--league-vivid)}
+.map-icon{width:44px;height:44px;border-radius:12px;
+  background:var(--league-primary);display:flex;
+  align-items:center;justify-content:center;
+  font-size:22px;flex-shrink:0}
+.map-txt{flex:1}
+.map-title{font-size:13px;font-weight:800;color:var(--league-primary)}
+.map-sub{font-size:11px;color:var(--text-secondary);margin-top:2px}
+.map-arrow{font-size:18px;color:var(--league-vivid)}
+</style>
+
+<!-- Header -->
+<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px">
+  <div>
+    <h1 style="font-size:22px;font-weight:900;color:var(--league-primary);
+               letter-spacing:-0.5px;margin-bottom:4px">La Liga 2025/26</h1>
+    <p style="font-size:12px;color:var(--text-muted);font-weight:500">
+      Dixon-Coles predictions · Spain · {{ upcoming|length + today_matches|length }} fixtures loaded
+    </p>
+  </div>
+  <a href="/teams/laliga"
+     style="font-size:11px;font-weight:700;color:var(--league-vivid);
+            text-decoration:none;border:1.5px solid var(--league-light);
+            padding:7px 14px;border-radius:20px;transition:all .15s"
+     onmouseover="this.style.background='var(--league-tint)'"
+     onmouseout="this.style.background='transparent'">
+    View Spain map →
+  </a>
+</div>
+
+<!-- Stats row -->
+<div class="stats-row">
+  <div class="stat-card">
+    <div class="stat-val">25</div>
+    <div class="stat-lbl">Teams in priors</div>
+    <div class="stat-sub">2024/25 season data</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-val" style="color:#9B59B6">1.341</div>
+    <div class="stat-lbl">Home advantage (γ)</div>
+    <div class="stat-sub">Higher than PL (1.236)</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-val">{{ upcoming|length }}</div>
+    <div class="stat-lbl">Upcoming fixtures</div>
+    <div class="stat-sub">Next 15 loaded</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-val" style="color:var(--league-vivid)">
+      {% if today_matches %}{{ today_matches|length }}{% else %}0{% endif %}
+    </div>
+    <div class="stat-lbl">Today's matches</div>
+    <div class="stat-sub">{{ today }}</div>
+  </div>
+</div>
+
+<!-- Today's matches -->
+{% if today_matches %}
+<div class="section-head">Today</div>
+<div class="today-card">
+  <div class="today-header">
+    <div class="live-dot"></div>
+    Matchday · {{ today_matches|length }} fixture{{ 's' if today_matches|length > 1 else '' }}
+  </div>
+  {% for f in today_matches %}
+  <div style="display:flex;align-items:center;padding:12px 16px;
+              border-bottom:1px solid var(--border);gap:12px">
+    <div style="flex:1">
+      <div style="font-size:13px;font-weight:800;color:var(--league-primary)">
+        {{ f.home }} <span style="color:var(--text-muted);font-weight:400;font-size:11px">vs</span> {{ f.away }}
+      </div>
+      <div style="font-size:10px;color:var(--text-muted);margin-top:2px;font-family:var(--font-mono)">
+        {{ f.kickoff_eat }} · GW{{ f.gameweek }}
+      </div>
+    </div>
+    {% if f.dc_home %}
+    <div style="display:flex;gap:5px">
+      <span class="odd-pill odd-h">H {{ f.dc_home }}%</span>
+      <span class="odd-pill odd-d">D {{ f.dc_draw }}%</span>
+      <span class="odd-pill odd-a">A {{ f.dc_away }}%</span>
+    </div>
+    {% endif %}
+    {% if f.pred %}
+    <span class="pred-badge">{{ f.pred }}</span>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- Upcoming fixtures -->
+<div class="section-head">Upcoming fixtures</div>
+{% if upcoming %}
+<div class="fix-grid">
+  {% for f in upcoming %}
+  <div class="fix-card">
+    <div class="fix-header">
+      <div>
+        <span class="fix-teams">{{ f.home }}</span>
+        <span class="fix-vs">vs</span>
+        <span class="fix-teams">{{ f.away }}</span>
+      </div>
+      <div class="fix-time">{{ f.kickoff_eat }}</div>
+    </div>
+    <div class="fix-gw">GW{{ f.gameweek }}</div>
+    {% if f.dc_home %}
+    <div class="fix-body">
+      <span class="odd-pill odd-h">H {{ f.dc_home }}%</span>
+      <span class="odd-pill odd-d">D {{ f.dc_draw }}%</span>
+      <span class="odd-pill odd-a">A {{ f.dc_away }}%</span>
+      {% if f.pred %}
+      <span class="pred-badge">{{ f.pred }}</span>
+      {% endif %}
+    </div>
+    {% else %}
+    <div style="padding:10px 14px;font-size:11px;color:var(--text-muted)">
+      Odds computing...
+    </div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;
+            padding:32px;text-align:center;margin-bottom:24px">
+  <div style="font-size:13px;color:var(--text-muted);font-weight:500">
+    No upcoming fixtures found — check back on matchday
+  </div>
+  <div style="font-size:11px;color:var(--text-muted);margin-top:6px">
+    football-data.org may not have loaded 2025/26 La Liga fixtures yet
+  </div>
+</div>
+{% endif %}
+
+<!-- Spain map link -->
+<a href="/teams/laliga" class="map-link">
+  <div class="map-icon">🗺️</div>
+  <div class="map-txt">
+    <div class="map-title">Spain team map</div>
+    <div class="map-sub">20 clubs · three zoom tiers · cluster view for Madrid, Barcelona, Seville, Valencia</div>
+  </div>
+  <div class="map-arrow">→</div>
+</a>
+
+{% endblock %}
