@@ -29,7 +29,8 @@ import torch
 # ── Goal approximation ────────────────────────────────────────────────────────
 
 def _approximate_goals(h_score: int, a_score: int,
-                       home_name: str) -> list[dict]:
+                       home_name: str,
+                       away_name: str = "Away") -> list[dict]:
     """
     Build an approximate goal sequence from the final scoreline.
 
@@ -40,22 +41,24 @@ def _approximate_goals(h_score: int, a_score: int,
     so the model sees input values consistent with what it trained on.
     """
     goals = []
+    h_label = home_name.split()[0] if home_name else "Home"
+    a_label = away_name.split()[0] if away_name else "Away"
 
     # Home goals
     h_first  = math.ceil(h_score / 2)
     h_second = h_score - h_first
     for _ in range(h_first):
-        goals.append({"minute": 44, "is_home": True,  "scorer": " ".join(home_name.split()[:2])})
+        goals.append({"minute": 44, "is_home": True,  "scorer": h_label})
     for _ in range(h_second):
-        goals.append({"minute": 75, "is_home": True,  "scorer": " ".join(home_name.split()[:2])})
+        goals.append({"minute": 75, "is_home": True,  "scorer": h_label})
 
     # Away goals
     a_first  = math.ceil(a_score / 2)
     a_second = a_score - a_first
     for _ in range(a_first):
-        goals.append({"minute": 44, "is_home": False, "scorer": " ".join(away_name.split()[:2])})
+        goals.append({"minute": 44, "is_home": False, "scorer": a_label})
     for _ in range(a_second):
-        goals.append({"minute": 75, "is_home": False, "scorer": " ".join(away_name.split()[:2])})
+        goals.append({"minute": 75, "is_home": False, "scorer": a_label})
 
     return sorted(goals, key=lambda g: g["minute"])
 
@@ -100,7 +103,7 @@ def build_match_timeline_svg(
     if total_goals == 0:
         return ""
 
-    goals = _approximate_goals(h_score, a_score, home_name)
+    goals = _approximate_goals(h_score, a_score, home_name, away_name)
 
     # Checkpoints: 0, every 5 min, the two approximated goal minutes, 90
     goal_minutes = sorted(set(g["minute"] for g in goals))

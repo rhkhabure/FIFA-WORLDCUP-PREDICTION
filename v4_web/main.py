@@ -864,42 +864,70 @@ async def laliga_dashboard(request: Request):
 async def match(request: Request):
     match_id = request.query_params.get("match_id")
 
+    # ── League selection ────────────────────────────────────────────
+    # URL: /match?match_id=X&league=laliga
+    # Defaults to Premier League for all existing links.
+    _league_param = request.query_params.get("league", "pl").lower()
+
+    # Map URL param → priors key + competition code
+    _LEAGUE_MAP = {
+        "pl":         {"priors": "ENG-Premier League", "comp": "PL",
+                       "name": "Premier League",   "ctx_key": "pl"},
+        "laliga":     {"priors": "ESP-La Liga",        "comp": "PD",
+                       "name": "La Liga",           "ctx_key": "laliga"},
+        "bundesliga": {"priors": "GER-Bundesliga",     "comp": "BL1",
+                       "name": "Bundesliga",        "ctx_key": "bundesliga"},
+        "seriea":     {"priors": "ITA-Serie A",        "comp": "SA",
+                       "name": "Serie A",           "ctx_key": "seriea"},
+        "ligue1":     {"priors": "FRA-Ligue 1",        "comp": "FL1",
+                       "name": "Ligue 1",           "ctx_key": "ligue1"},
+    }
+    _lm = _LEAGUE_MAP.get(_league_param, _LEAGUE_MAP["pl"])
+    active_league  = _lm["priors"]   # e.g. "ESP-La Liga"
+    active_comp    = _lm["comp"]     # e.g. "PD"
+    active_name    = _lm["name"]     # e.g. "La Liga"
+    active_ctx_key = _lm["ctx_key"]  # e.g. "laliga"
+
     if not match_id:
-        # Default: redirect to the next upcoming PL fixture
-        # Try FPL first, fall back to most recent finished match from fd.org
-        upcoming = []
+        # Default: redirect to the most recent finished match for this league
+        from footballdata import _populate_finished_cache
         try:
-            upcoming = get_upcoming_fixtures(max_fixtures=1)
-        except Exception:
-            pass
-
-        if upcoming:
-            found_id = upcoming[0].get("match_id")
-            if found_id:
-                return RedirectResponse(url=f"/match?match_id={found_id}", status_code=302)
-
-        # FPL failed or no upcoming — use most recent finished match from fd.org
-        # This gives us a real match page rather than an empty state
-        from footballdata import _populate_finished_cache, PL_CODE
-        try:
-            cache = _populate_finished_cache(PL_CODE)
+            cache = _populate_finished_cache(active_comp)
             if cache:
-                # Most recently finished match (last in sorted cache)
                 last = list(cache.values())[-1]
                 found_id = last.get("fd_id")
                 if found_id:
                     return RedirectResponse(
-                        url=f"/match?match_id={found_id}", status_code=302
+                        url=f"/match?match_id={found_id}&league={active_ctx_key}",
+                        status_code=302
                     )
         except Exception:
             pass
 
+        # PL fallback: try FPL upcoming
+        if active_ctx_key == "pl":
+            try:
+                upcoming = get_upcoming_fixtures(max_fixtures=1)
+                if upcoming:
+                    found_id = upcoming[0].get("match_id")
+                    if found_id:
+                        return RedirectResponse(
+                            url=f"/match?match_id={found_id}",
+                            status_code=302
+                        )
+            except Exception:
+                pass
+
         # Absolute fallback — empty match page
-        ctx = {"request": request, "current_league": "Premier League",
-               "featured": {}, "prior": None, "posterior": None,
-               "pitch_svg": "", "fixtures": [],
-               "home_colour": "#14b8a6", "away_colour": "#f43f5e",
-               "home_formation": "", "away_formation": ""}
+        ctx = {
+            "request"        : request,
+            "current_league" : active_name,
+            "featured"       : {}, "prior": None, "posterior": None,
+            "pitch_svg"      : "", "fixtures": [],
+            "home_colour"    : "#14b8a6", "away_colour": "#f43f5e",
+            "home_formation" : "", "away_formation": "",
+            **league_ctx(active_ctx_key),
+        }
         return templates.TemplateResponse(
             request=request, name="match.html", context=ctx
         )
@@ -959,8 +987,8 @@ async def match(request: Request):
                 "fixture_id": int(match_id),
                 "fotmob_id" : fotmob_id,
             }
-            prior = dc_pregame(home_name, away_name, LEAGUE_KEY)
-            posterior = nn_live(home_name, away_name, LEAGUE_KEY,
+            prior = dc_pregame(home_name, away_name, active_league)
+            posterior = nn_live(home_name, away_name, active_league,
                                int(minute), h_score, a_score)
             absent_home = snap["absent_home"]
             absent_away = snap["absent_away"]
@@ -976,14 +1004,14 @@ async def match(request: Request):
             )
             matrix_svg = build_scoreline_svg(
                 home_name=home_name, away_name=away_name,
-                league=LEAGUE_KEY, priors_db=priors_db,
+                league=active_league, priors_db=priors_db,
                 home_colour=home_colour, away_colour=away_colour,
                 max_goals=4, cell_size=38,
             )
             if status == "Finished":
                 timeline_svg = build_match_timeline_svg(
                     home_name=home_name, away_name=away_name,
-                    league=LEAGUE_KEY, h_score=h_score, a_score=a_score,
+                    league=active_league, h_score=h_score, a_score=a_score,
                     home_colour=home_colour, away_colour=away_colour,
                     dc_lookup=dc_lookup, nn_model=nn_model,
                     nn_scaler=nn_scaler, nn_T=nn_T,
@@ -1037,9 +1065,9 @@ async def match(request: Request):
             "a_xg"      : 0.0,
             "fixture_id": fpl_match.get("match_id"),
         }
-        prior = dc_pregame(home_name, away_name, LEAGUE_KEY)
+        prior = dc_pregame(home_name, away_name, active_league)
         if status not in ("Not Started",):
-            posterior = nn_live(home_name, away_name, LEAGUE_KEY,
+            posterior = nn_live(home_name, away_name, active_league,
                                int(minute), h_score, a_score)
         home_theme     = get_theme_for_team(home_name)
         away_theme     = get_theme_for_team(away_name)
@@ -1097,7 +1125,7 @@ async def match(request: Request):
                 if featured["status"] != "Not Started":
                     safe_min = int(featured["minute"])
                     posterior = nn_live(
-                        home_name, away_name, LEAGUE_KEY,
+                        home_name, away_name, active_league,
                         safe_min, featured["h_score"], featured["a_score"],
                     )
 
@@ -1106,7 +1134,7 @@ async def match(request: Request):
         adj_lam = adj_mu = None
         absent_home = absent_away = []
         if fotmob_lineup and home_players and priors_db:
-            league_data = priors_db.get(LEAGUE_KEY, {})
+            league_data = priors_db.get(active_league, {})
             teams = league_data.get("teams", {})
             meta  = league_data.get("meta", {})
             hk = TEAM_NAME_ALIASES.get(home_name, home_name)
@@ -1127,7 +1155,7 @@ async def match(request: Request):
                 absent_away = get_absent_key_players(away_name, away_players)
         matrix_svg = build_scoreline_svg(
             home_name=home_name, away_name=away_name,
-            league=LEAGUE_KEY, priors_db=priors_db,
+            league=active_league, priors_db=priors_db,
             home_colour=home_colour, away_colour=away_colour,
             max_goals=4, cell_size=38,
         )
@@ -1291,7 +1319,7 @@ async def match(request: Request):
                 "referee"   : live_data.get("referee", "") if live_data else "",
             }
 
-            prior = dc_pregame(home_name, away_name, LEAGUE_KEY)
+            prior = dc_pregame(home_name, away_name, active_league)
             home_theme     = get_theme_for_team(home_name)
             away_theme     = get_theme_for_team(away_name)
             home_colour    = home_theme["primary"]
@@ -1302,7 +1330,7 @@ async def match(request: Request):
             if status not in ("Not Started", "Unknown", ""):
                 safe_min = int(minute) if minute else 0
                 posterior = nn_live(
-                    home_name, away_name, LEAGUE_KEY,
+                    home_name, away_name, active_league,
                     safe_min, h_score, a_score,
                 )
 
@@ -1343,7 +1371,7 @@ async def match(request: Request):
         # Also compute lineup-adjusted odds if we have lineups
         lineup_prior_post = None
         if home_players and away_players and priors_db:
-            league_data_p = priors_db.get(LEAGUE_KEY, {})
+            league_data_p = priors_db.get(active_league, {})
             teams_p = league_data_p.get("teams", {})
             meta_p  = league_data_p.get("meta", {})
             hk_p = TEAM_NAME_ALIASES.get(home_name, home_name)
@@ -1364,11 +1392,25 @@ async def match(request: Request):
                 except Exception:
                     lineup_prior_post = None
 
+        # Pitch SVG — always generate when we have team names
+        # home_players/away_players may be None for historical matches
+        # (pitch shows formation dots without player names)
+        if featured and home_name not in ("Unknown Home", "", None):
+            # Colours must be set before pitch generation
+            home_colour    = home_colour or get_theme_for_team(home_name)["primary"]
+            away_colour    = away_colour or get_theme_for_team(away_name)["primary"]
+            home_formation = home_formation or get_formation_for_team(home_name)
+            away_formation = away_formation or get_formation_for_team(away_name)
+
             pitch_svg = generate_pitch_svg_horizontal(
-                home_formation=home_formation, away_formation=away_formation,
-                home_color=home_colour, away_color=away_colour,
-                home_team=home_name, away_team=away_name,
-                home_players=home_players, away_players=away_players,
+                home_formation=home_formation,
+                away_formation=away_formation,
+                home_color=home_colour,
+                away_color=away_colour,
+                home_team=home_name,
+                away_team=away_name,
+                home_players=home_players,
+                away_players=away_players,
                 home_crest_url=get_crest_proxy_url(home_name),
                 away_crest_url=get_crest_proxy_url(away_name),
                 h_score=h_score, a_score=a_score, status=status,
@@ -1385,21 +1427,13 @@ async def match(request: Request):
                 pass
 
             if status not in ("Not Started","","") and safe_minute > 0:
-                posterior = nn_live(home_name, away_name, LEAGUE_KEY,
+                posterior = nn_live(home_name, away_name, active_league,
                                     safe_minute, h_score, a_score)
-
-            # Colours and formation -- must come BEFORE timeline and pitch
-            home_theme     = get_theme_for_team(home_name)
-            away_theme     = get_theme_for_team(away_name)
-            home_colour    = home_theme["primary"]
-            away_colour    = away_theme["primary"]
-            home_formation = get_formation_for_team(home_name)
-            away_formation = get_formation_for_team(away_name)
 
             # Scoreline probability matrix (always shown -- pre-game prediction)
             matrix_svg = build_scoreline_svg(
                 home_name=home_name, away_name=away_name,
-                league=LEAGUE_KEY, priors_db=priors_db,
+                league=active_league, priors_db=priors_db,
                 home_colour=home_colour, away_colour=away_colour,
                 max_goals=4, cell_size=38,
             )
@@ -1407,38 +1441,23 @@ async def match(request: Request):
             # Win probability timeline
             timeline_svg = ""
             if status in ("Finished", "FT") and (h_score + a_score) > 0:
-                timeline_svg = build_match_timeline_svg(
-                    home_name=home_name,
-                    away_name=away_name,
-                    league=LEAGUE_KEY,
-                    h_score=h_score,
-                    a_score=a_score,
-                    home_colour=home_colour,
-                    away_colour=away_colour,
-                    dc_lookup=dc_lookup,
-                    nn_model=nn_model,
-                    nn_scaler=nn_scaler,
-                    nn_T=nn_T,
-                )
-
-            # Pitch
-            pitch_svg = generate_pitch_svg_horizontal(
-                home_formation=home_formation,
-                away_formation=away_formation,
-                home_color=home_colour,
-                away_color=away_colour,
-                home_team=home_name,
-                away_team=away_name,
-                home_crest_url=get_crest_proxy_url(home_name) or get_crest_url(
-                    home_name, live_data.get("home_crest", "")
-                ),
-                away_crest_url=get_crest_proxy_url(away_name) or get_crest_url(
-                    away_name, live_data.get("away_crest", "")
-                ),
-                h_score=h_score,
-                a_score=a_score,
-                status=status,
-            )
+                try:
+                    timeline_svg = build_match_timeline_svg(
+                        home_name=home_name,
+                        away_name=away_name,
+                        league=active_league,
+                        h_score=h_score,
+                        a_score=a_score,
+                        home_colour=home_colour,
+                        away_colour=away_colour,
+                        dc_lookup=dc_lookup,
+                        nn_model=nn_model,
+                        nn_scaler=nn_scaler,
+                        nn_T=nn_T,
+                    )
+                except Exception as e:
+                    print(f"[match] timeline_svg error: {e}")
+                    timeline_svg = ""
 
     # Team ratings for the right panel
     home_alpha = home_beta = away_alpha = away_beta = None
@@ -1447,7 +1466,7 @@ async def match(request: Request):
     home_alpha_estimated = away_alpha_estimated = False
 
     if featured and priors_db:
-        league_data = priors_db.get(LEAGUE_KEY, {})
+        league_data = priors_db.get(active_league, {})
         teams = league_data.get("teams", {})
         meta  = league_data.get("meta", {})
         hk = TEAM_NAME_ALIASES.get(home_name if featured else "", "")
@@ -1488,12 +1507,46 @@ async def match(request: Request):
         league_gamma = meta.get("gamma_home_advantage")
         league_rho   = meta.get("rho_draw_correction")
 
-    # Upcoming fixtures from FPL (no key, free, EAT times)
-    fixtures = get_upcoming_fixtures(max_fixtures=10)
+    # Fixture strip — source depends on league
+    # PL: FPL upcoming (free, no key), fallback to fd.org finished cache
+    # La Liga + others: fd.org scheduled fixtures
+    fixtures = []
+    if active_ctx_key == "pl":
+        try:
+            fixtures = get_upcoming_fixtures(max_fixtures=10)
+        except Exception:
+            pass
+    else:
+        # Non-PL: use fd.org scheduled fixtures
+        try:
+            from footballdata import get_upcoming_fixtures_fd
+            raw = get_upcoming_fixtures_fd(active_comp, season=2025, max_fixtures=10)
+            fixtures = [{"match_id": f["match_id"], "home": f["home"],
+                         "away": f["away"], "kickoff_eat": f["kickoff_eat"]}
+                        for f in raw]
+        except Exception:
+            pass
+
+    # If still empty, fall back to recent finished matches from fd.org cache
+    if not fixtures:
+        try:
+            from footballdata import _populate_finished_cache
+            fd_cache = _populate_finished_cache(active_comp)
+            recent = list(fd_cache.values())[-10:]
+            for m in reversed(recent):
+                fixtures.append({
+                    "match_id"   : str(m.get("fd_id", "")),
+                    "home"       : m.get("home_team", ""),
+                    "away"       : m.get("away_team", ""),
+                    "kickoff_eat": "Finished",
+                })
+        except Exception:
+            pass
 
     ctx = {
         "request"          : request,
-        "current_league"   : "Premier League",
+        "current_league"   : active_name,
+        **league_ctx(active_ctx_key),
         "featured"         : featured,
         "prior"            : prior,
         "posterior"        : posterior,
