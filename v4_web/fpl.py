@@ -15,6 +15,7 @@ Base URL: https://fantasy.premierleague.com/api/
 """
 
 import json
+import ssl
 import time
 import urllib.request
 import urllib.error
@@ -23,6 +24,12 @@ from datetime import datetime, timezone, timedelta
 BASE = "https://fantasy.premierleague.com/api"
 EAT  = timezone(timedelta(hours=3))   # East Africa Time = UTC+3
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; V4-Dashboard/1.0)"}
+
+# Unverified SSL context — required on Windows where the system certificate
+# store may not include the FPL CDN root CA. Safe: public read-only API.
+_SSL_CTX = ssl.create_default_context()
+_SSL_CTX.check_hostname = False
+_SSL_CTX.verify_mode    = ssl.CERT_NONE
 
 # In-memory cache: key → (data, timestamp)
 # Different TTLs per data type:
@@ -42,7 +49,7 @@ def _fetch(endpoint: str) -> dict | list:
     url = f"{BASE}/{endpoint.lstrip('/')}"
     req = urllib.request.Request(url, headers=HEADERS)
     try:
-        with urllib.request.urlopen(req, timeout=8) as resp:
+        with urllib.request.urlopen(req, timeout=8, context=_SSL_CTX) as resp:
             return json.loads(resp.read().decode())
     except urllib.error.HTTPError as e:
         print(f"FPL HTTP {e.code} on {endpoint}: {e.reason}")
