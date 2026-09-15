@@ -866,21 +866,43 @@ async def match(request: Request):
 
     if not match_id:
         # Default: redirect to the next upcoming PL fixture
-        upcoming = get_upcoming_fixtures(max_fixtures=1)
+        # Try FPL first, fall back to most recent finished match from fd.org
+        upcoming = []
+        try:
+            upcoming = get_upcoming_fixtures(max_fixtures=1)
+        except Exception:
+            pass
+
         if upcoming:
             found_id = upcoming[0].get("match_id")
             if found_id:
                 return RedirectResponse(url=f"/match?match_id={found_id}", status_code=302)
-        # Final fallback: last completed match
-        found_id = get_last_completed_pl_match()
-        if found_id:
-            return RedirectResponse(url=f"/match?match_id={found_id}", status_code=302)
+
+        # FPL failed or no upcoming — use most recent finished match from fd.org
+        # This gives us a real match page rather than an empty state
+        from footballdata import _populate_finished_cache, PL_CODE
+        try:
+            cache = _populate_finished_cache(PL_CODE)
+            if cache:
+                # Most recently finished match (last in sorted cache)
+                last = list(cache.values())[-1]
+                found_id = last.get("fd_id")
+                if found_id:
+                    return RedirectResponse(
+                        url=f"/match?match_id={found_id}", status_code=302
+                    )
+        except Exception:
+            pass
+
+        # Absolute fallback — empty match page
         ctx = {"request": request, "current_league": "Premier League",
                "featured": {}, "prior": None, "posterior": None,
                "pitch_svg": "", "fixtures": [],
                "home_colour": "#14b8a6", "away_colour": "#f43f5e",
                "home_formation": "", "away_formation": ""}
-        return templates.TemplateResponse(request=request, name="match.html", context=ctx)
+        return templates.TemplateResponse(
+            request=request, name="match.html", context=ctx
+        )
 
     prior, posterior, featured = None, None, {}
     pitch_svg    = ""
@@ -1153,24 +1175,41 @@ async def match(request: Request):
 
     elif match_id:
         # Match not in FPL upcoming. Strategy:
-        # 1. Get team names from predictions DB (logged at announcement)
-        # 2. Use team names to find finished match in football-data.org
-        #    (direct ID lookup FAILS — FPL codes ≠ fd.org IDs)
+        # 1. Check if this is a football-data.org match ID (6 digits)
+        #    → look up directly in finished match cache
+        # 2. Get team names from predictions DB (logged at announcement)
         # 3. Fall back to FotMob date cache for live matches
 
         from predictions import get_all_predictions
+        from footballdata import _populate_finished_cache, PL_CODE
         fd_home = fd_away = ""
         live_data = None
+        # Initialise lineup vars — populated later if FotMob has them
+        home_players   = None
+        away_players   = None
+        home_formation = None
+        away_formation = None
 
-        # Step 1: predictions DB
-        preds = get_all_predictions()
-        pred  = next((p for p in preds
-                      if str(p["match_id"]) == str(match_id)), None)
-        if pred:
-            fd_home = pred["home_team"]
-            fd_away = pred["away_team"]
+        # Step 1: direct fd.org ID lookup (6-digit IDs from finished cache)
+        try:
+            fd_cache = _populate_finished_cache(PL_CODE)
+            if str(match_id) in fd_cache:
+                live_data = fd_cache[str(match_id)]
+                fd_home   = live_data.get("home_team", "")
+                fd_away   = live_data.get("away_team", "")
+        except Exception:
+            pass
 
-        # Step 2: if still no team names, scan FPL all fixtures for this code
+        # Step 2: predictions DB (for FPL match codes — 7-digit IDs)
+        if not fd_home:
+            preds = get_all_predictions()
+            pred  = next((p for p in preds
+                          if str(p["match_id"]) == str(match_id)), None)
+            if pred:
+                fd_home = pred["home_team"]
+                fd_away = pred["away_team"]
+
+        # Step 3: if still no team names, scan FPL fixtures cache
         if not fd_home:
             # FPL stores 'code' = FPL match code in bootstrap
             from fpl import get_team_map
