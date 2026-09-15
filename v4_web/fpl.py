@@ -24,9 +24,18 @@ BASE = "https://fantasy.premierleague.com/api"
 EAT  = timezone(timedelta(hours=3))   # East Africa Time = UTC+3
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; V4-Dashboard/1.0)"}
 
-# Simple in-memory cache: (data, timestamp)
+# In-memory cache: key → (data, timestamp)
+# Different TTLs per data type:
+#   bootstrap  — team names, GW info: 1 hour (changes rarely mid-season)
+#   fixtures   — full fixture list:   6 hours (only updates Thursday)
+#   live       — live GW scores:      60 seconds (changes during matches)
 _cache: dict = {}
-CACHE_TTL = 300   # 5 minutes
+_CACHE_TTLS: dict[str, int] = {
+    "bootstrap": 3600,    # 1 hour
+    "fixtures":  21600,   # 6 hours
+    "live":      60,      # 1 minute
+}
+CACHE_TTL = 3600   # default fallback (1 hour)
 
 
 def _fetch(endpoint: str) -> dict | list:
@@ -43,12 +52,17 @@ def _fetch(endpoint: str) -> dict | list:
 
 
 def _cached(key: str, endpoint: str) -> dict | list:
+    ttl = _CACHE_TTLS.get(key, CACHE_TTL)
     now = time.time()
-    if key in _cache and now - _cache[key][1] < CACHE_TTL:
+    if key in _cache and now - _cache[key][1] < ttl:
         return _cache[key][0]
     data = _fetch(endpoint)
     if data:
         _cache[key] = (data, now)
+    elif key in _cache:
+        # Serve stale data rather than empty on fetch failure
+        print(f"[fpl] fetch failed for {key} — serving stale cache")
+        return _cache[key][0]
     return data
 
 
@@ -148,3 +162,22 @@ def fpl_fixture_to_football_data_id(fpl_fixture_id: int) -> int | None:
         if f.get("id") == fpl_fixture_id:
             return f.get("code")
     return None
+
+
+def warm_cache() -> None:
+    """
+    Pre-fetch bootstrap and fixtures into cache on server startup.
+    This means the first user to hit any page never waits for a cold
+    FPL API call — data is already in memory.
+    Called from main.py lifespan startup.
+    """
+    try:
+        _cached("bootstrap", "bootstrap-static/")
+        print("[fpl] bootstrap cached")
+    except Exception as e:
+        print(f"[fpl] bootstrap warm failed: {e}")
+    try:
+        _cached("fixtures", "fixtures/")
+        print("[fpl] fixtures cached (TTL 6h)")
+    except Exception as e:
+        print(f"[fpl] fixtures warm failed: {e}")

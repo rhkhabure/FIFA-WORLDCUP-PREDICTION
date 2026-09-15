@@ -112,8 +112,17 @@ from predictions import (init_db, log_pre_lineup, log_post_lineup,
 
 @asynccontextmanager
 async def lifespan(app):
-    """FastAPI lifespan — starts background prediction job on startup."""
+    """FastAPI lifespan — starts background jobs and warms caches on startup."""
     init_db()
+
+    # Warm FPL fixture cache so first page load is instant
+    # Runs in a thread to avoid blocking the event loop
+    import asyncio, concurrent.futures
+    from fpl import warm_cache as fpl_warm
+    loop = asyncio.get_event_loop()
+    with concurrent.futures.ThreadPoolExecutor() as pool:
+        await loop.run_in_executor(pool, fpl_warm)
+
     if priors_db:
         asyncio.create_task(
             schedule_prediction_job(priors_db, LEAGUE_KEY, interval_minutes=30)
@@ -533,6 +542,30 @@ async def admin_predictions_status():
         })
     except Exception as e:
         return JSONResponse({"status": "error", "message": str(e)}, status_code=500)
+
+
+@app.get("/admin/cache-status")
+async def admin_cache_status():
+    """Check FPL cache state — what's cached and how stale it is."""
+    from fpl import _cache, _CACHE_TTLS
+    now = time.time()
+    status = {}
+    for key, (data, ts) in _cache.items():
+        ttl     = _CACHE_TTLS.get(key, 3600)
+        age_s   = int(now - ts)
+        expires = max(0, ttl - age_s)
+        size    = len(data) if isinstance(data, list) else len(str(data))
+        status[key] = {
+            "cached"         : True,
+            "age_seconds"    : age_s,
+            "expires_seconds": expires,
+            "ttl_seconds"    : ttl,
+            "size"           : size,
+        }
+    for key in _CACHE_TTLS:
+        if key not in status:
+            status[key] = {"cached": False}
+    return JSONResponse({"cache": status})
 
 
 @app.get("/player", response_class=HTMLResponse)

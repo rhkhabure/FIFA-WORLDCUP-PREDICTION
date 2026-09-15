@@ -151,20 +151,23 @@
      Shows: dribble → skill → sprint → shoot → GOAL + celebrate
      Fades out on window load (max 5.5s safety cap)
      ══════════════════════════════════════════════════════════════ -->
+{% set _league = league | default('pl') %}
 <div id="md-loader">
-    <div class="ld-pane" id="ld-pl" style="background:#3D185A">
+    <div class="ld-pane" id="ld-pl"
+         style="background:#3D185A{% if _league != 'pl' %};display:none{% endif %}">
         <canvas class="ld-canvas" id="ld-c1"></canvas>
         <div class="ld-hud">
             <div class="ld-league" style="color:#F9D000">Premier League</div>
-            <div class="ld-txt"  id="ld-t1">Fetching fixtures...</div>
+            <div class="ld-txt"   id="ld-t1">Fetching fixtures...</div>
             <div class="ld-bar-wrap"><div class="ld-bar" id="ld-b1" style="background:#F9D000"></div></div>
         </div>
     </div>
-    <div class="ld-pane" id="ld-ll" style="background:#7A0000">
+    <div class="ld-pane" id="ld-ll"
+         style="background:#7A0000{% if _league != 'laliga' %};display:none{% endif %}">
         <canvas class="ld-canvas" id="ld-c2"></canvas>
         <div class="ld-hud">
             <div class="ld-league" style="color:#FFD700">La Liga</div>
-            <div class="ld-txt"  id="ld-t2">Fetching La Liga fixtures...</div>
+            <div class="ld-txt"   id="ld-t2">Fetching La Liga fixtures...</div>
             <div class="ld-bar-wrap"><div class="ld-bar" id="ld-b2" style="background:#FFD700"></div></div>
         </div>
     </div>
@@ -262,31 +265,47 @@
 
     // Only show loader for PL or La Liga pages — skip for admin/live endpoints
     const path = window.location.pathname;
-    const skipLoader = path.startsWith('/admin') || path.startsWith('/live') || path.startsWith('/crest');
+    const skipLoader = path.startsWith('/admin')
+                    || path.startsWith('/live')
+                    || path.startsWith('/crest')
+                    || path.startsWith('/match')
+                    || path.startsWith('/team')
+                    || path.startsWith('/player');
     if(skipLoader){
         document.getElementById('md-loader').style.display='none';
         return;
     }
 
-    // ── Dismiss loader ─────────────────────────────────────────
-    let dismissed = false;
-    function dismiss(){
-        if(dismissed) return;
+    // ── Dismiss logic ──────────────────────────────────────────
+    // Both conditions must be true before dismissing:
+    //   1. Page has fully loaded (window.load fired)
+    //   2. Animation has reached the celebration phase (t >= 0.91)
+    // This means fast connections still see the full animation.
+    // Hard cap at 8s so slow connections are never stuck forever.
+    let dismissed   = false;
+    let pageLoaded  = false;
+    let animDone    = false;   // set by the RAF loop when t >= 0.91
+
+    function tryDismiss(){
+        if(dismissed || !pageLoaded || !animDone) return;
         dismissed = true;
         const loader = document.getElementById('md-loader');
         loader.classList.add('hidden');
-        setTimeout(()=>{ loader.style.display='none'; }, 600);
+        setTimeout(()=>{ loader.style.display = 'none'; }, 600);
     }
 
-    // Safety cap: 5.5 seconds max regardless of load state
-    const safetyCap = setTimeout(dismiss, 5500);
+    // Hard safety cap — 8 seconds absolute max
+    setTimeout(()=>{
+        pageLoaded = true; animDone = true; tryDismiss();
+    }, 8000);
 
-    // Dismiss on page ready
-    if(document.readyState === 'complete'){
-        setTimeout(dismiss, 400);
-    } else {
-        window.addEventListener('load', ()=>setTimeout(dismiss, 400), {once:true});
+    // Mark page as loaded
+    function onPageLoad(){
+        pageLoaded = true;
+        tryDismiss();
     }
+    if(document.readyState === 'complete') onPageLoad();
+    else window.addEventListener('load', onPageLoad, {once:true});
 
     // ── Canvas setup ──────────────────────────────────────────
     const C1 = document.getElementById('ld-c1');
@@ -574,6 +593,12 @@
                 ctx.restore();
             }
         });
+
+        // Signal that the celebration phase has started — page can now dismiss
+        if(t >= 0.91 && !animDone){
+            animDone = true;
+            tryDismiss();
+        }
 
         if(!dismissed) animRaf = requestAnimationFrame(animFrame);
     }
