@@ -180,17 +180,34 @@ def get_match_details(match_id: str | int) -> dict | None:
 
 
 def _refresh_date_cache_if_stale(date_str: str):
-    """Re-fetch date cache if older than 2 minutes."""
-    cache_key = f"matches_{date_str}"
-    ts_key    = f"{cache_key}_ts"
-    ts        = _lineup_cache.get(ts_key, 0)
+    """Re-fetch date cache if older than 2 minutes. Respects 5-min failure backoff."""
+    cache_key  = f"matches_{date_str}"
+    ts_key     = f"{cache_key}_ts"
+    failed_key = f"{cache_key}_failed"
+    failed_ts  = f"{failed_key}_ts"
+
+    # If last fetch failed, back off for 5 minutes before retrying
+    if _lineup_cache.get(failed_key):
+        fail_time = _lineup_cache.get(failed_ts, 0)
+        if time.time() - fail_time < 300:
+            return  # still in backoff window
+        # Backoff expired — clear the failed flag and try again
+        _lineup_cache.pop(failed_key, None)
+        _lineup_cache.pop(failed_ts, None)
+
+    ts = _lineup_cache.get(ts_key, 0)
     if isinstance(ts, (int, float)) and time.time() - ts < 120:
         return  # fresh enough
+
     # Re-fetch
     data = _fetch("get_matches_by_date", {"date": date_str})
     if data.get("status") == "success":
         _lineup_cache[cache_key] = data
         _lineup_cache[ts_key]    = time.time()
+    else:
+        # Mark failure with timestamp
+        _lineup_cache[failed_key] = True
+        _lineup_cache[failed_ts]  = time.time()
 
 
 def get_match_status_from_date_cache(match_id: str | int,
@@ -414,13 +431,22 @@ def get_fotmob_match_id(home_name: str, away_name: str, date_str: str | None = N
         from datetime import datetime, timezone
         date_str = datetime.now(timezone.utc).strftime("%Y%m%d")
 
-    cache_key = f"matches_{date_str}"
+    cache_key  = f"matches_{date_str}"
+    failed_key = f"{cache_key}_failed"
+
+    # Don't retry if we already know today's fetch failed (e.g. 429)
+    if _lineup_cache.get(failed_key):
+        return None
+
     if cache_key not in _lineup_cache:
         data = _fetch("get_matches_by_date", {"date": date_str})
         if data.get("status") == "success":
-            _lineup_cache[cache_key]              = data
-            _lineup_cache[f"{cache_key}_ts"]      = time.time()
+            _lineup_cache[cache_key]         = data
+            _lineup_cache[f"{cache_key}_ts"] = time.time()
         else:
+            # Mark as failed for 5 minutes so the loop doesn't retry 50x
+            _lineup_cache[failed_key]    = True
+            _lineup_cache[f"{failed_key}_ts"] = time.time()
             return None
     data = _lineup_cache[cache_key]
 
