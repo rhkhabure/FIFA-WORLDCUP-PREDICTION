@@ -1407,6 +1407,11 @@ async def match(request: Request):
             minute  = 0
 
         if home_name not in (None, "Unknown Home", ""):
+            try:
+                fixture_id_int = int(str(match_id).replace("fm_",""))
+            except (ValueError, TypeError):
+                fixture_id_int = 0
+
             featured = {
                 "home_name" : home_name,
                 "away_name" : away_name,
@@ -1416,7 +1421,7 @@ async def match(request: Request):
                 "a_score"   : a_score,
                 "h_xg"      : 0.0,
                 "a_xg"      : 0.0,
-                "fixture_id": int(match_id),
+                "fixture_id": fixture_id_int,
                 "fotmob_id" : fotmob_id or "",
                 "venue"     : live_data.get("venue", "") if live_data else "",
                 "referee"   : live_data.get("referee", "") if live_data else "",
