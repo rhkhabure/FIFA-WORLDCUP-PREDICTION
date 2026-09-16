@@ -1634,19 +1634,28 @@ async def match(request: Request):
     # Fixture strip — source depends on league
     fixtures = []
     if active_ctx_key == "pl":
-        # FPL upcoming fixtures (free, no key needed)
         try:
             fixtures = get_upcoming_fixtures(max_fixtures=10)
         except Exception:
             pass
     else:
-        # Non-PL: use FotMob today + upcoming from date cache
+        # Non-PL: read from FotMob date cache
+        # Force-clear any stale failed flag so we retry after rate limit clears
         try:
             from fotmob import _lineup_cache, _refresh_date_cache_if_stale
             from datetime import datetime, timezone, timedelta
             today_str = datetime.now(
                 timezone(timedelta(hours=3))
             ).strftime("%Y%m%d")
+            failed_key = f"matches_{today_str}_failed"
+            failed_ts  = f"matches_{today_str}_failed_ts"
+            fail_time  = _lineup_cache.get(failed_ts, 0)
+            # If failed flag is older than 5 min, clear it and retry
+            if _lineup_cache.get(failed_key) and (time.time() - fail_time) > 300:
+                _lineup_cache.pop(failed_key, None)
+                _lineup_cache.pop(failed_ts, None)
+                print(f"[match] FotMob backoff expired — retrying date cache")
+
             _refresh_date_cache_if_stale(today_str)
             cache_key = f"matches_{today_str}"
             date_data = _lineup_cache.get(cache_key, {})
@@ -1657,21 +1666,40 @@ async def match(request: Request):
                 "ligue1"    : ["ligue 1", "france"],
             }
             filters = _LEAGUE_FILTERS.get(active_ctx_key, [])
+            EAT_TZ  = timezone(timedelta(hours=3))
             for lg in date_data.get("data", {}).get("leagues", []):
                 name = lg.get("name", "").lower()
                 if any(f in name for f in filters):
                     for m in lg.get("matches", []):
-                        st = m.get("status", {}) or {}
-                        score = st.get("scoreStr", "")
-                        is_fin = st.get("finished", False)
+                        st      = m.get("status", {}) or {}
+                        score   = st.get("scoreStr", "")
+                        is_fin  = st.get("finished", False)
+                        is_live = st.get("ongoing",  False)
+                        # Parse kickoff time from utcTime to EAT
+                        utc_raw = st.get("utcTime", "")
+                        kickoff_display = ""
+                        if utc_raw:
+                            try:
+                                from datetime import datetime as _dt
+                                ko = _dt.fromisoformat(
+                                    utc_raw.replace("Z", "+00:00")
+                                ).astimezone(EAT_TZ)
+                                kickoff_display = ko.strftime("%H:%M EAT")
+                            except Exception:
+                                kickoff_display = utc_raw[:5]
+                        if is_fin:
+                            label = f"FT {score}"
+                        elif is_live:
+                            label = f"🔴 {score}"
+                        else:
+                            label = kickoff_display or "Today"
                         fixtures.append({
                             "match_id"   : f"fm_{m.get('id','')}",
                             "home"       : m.get("home", {}).get("name", ""),
                             "away"       : m.get("away", {}).get("name", ""),
-                            "kickoff_eat": ("FT " + score) if is_fin
-                                          else ("LIVE " + score) if st.get("ongoing")
-                                          else m.get("status", {}).get("utcTime", "Today")[:5],
+                            "kickoff_eat": label,
                         })
+                    break
         except Exception as e:
             print(f"[match] fixture strip FotMob error: {e}")
 
