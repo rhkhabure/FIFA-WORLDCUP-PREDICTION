@@ -1209,18 +1209,17 @@ async def match(request: Request):
         # 3. Fall back to FotMob date cache for live matches
 
         from predictions import get_all_predictions
-        from footballdata import _populate_finished_cache, PL_CODE
+        from footballdata import _populate_finished_cache
         fd_home = fd_away = ""
         live_data = None
-        # Initialise lineup vars — populated later if FotMob has them
         home_players   = None
         away_players   = None
         home_formation = None
         away_formation = None
 
-        # Step 1: direct fd.org ID lookup (6-digit IDs from finished cache)
+        # Step 1: direct fd.org ID lookup in the correct league cache
         try:
-            fd_cache = _populate_finished_cache(PL_CODE)
+            fd_cache = _populate_finished_cache(active_comp)
             if str(match_id) in fd_cache:
                 live_data = fd_cache[str(match_id)]
                 fd_home   = live_data.get("home_team", "")
@@ -1261,9 +1260,11 @@ async def match(request: Request):
         home_name = fd_home or "Unknown Home"
         away_name = fd_away or "Unknown Away"
 
-        # Step 3: find finished match data by team name
+        # Step 3: find finished match data by team name in the correct league
         if fd_home and fd_away:
-            live_data = find_finished_match_by_teams(fd_home, fd_away)
+            live_data = find_finished_match_by_teams(
+                fd_home, fd_away, comp_code=active_comp
+            )
             if not live_data or live_data.get("home_team") == "Unknown Home":
                 live_data = None
 
