@@ -4,10 +4,10 @@
 <div class="space-y-3 max-w-screen-2xl mx-auto">
 
     <!-- HEADER -->
-    <div class="flex items-center justify-between text-slate-300 font-bold uppercase
+    <div class="flex items-center justify-between font-bold uppercase" style="color:var(--text-primary)
                 tracking-wider text-sm">
         <div class="flex items-center gap-2">
-            <span class="text-xl">⚽</span>
+            <span class="text-xl" style="color:var(--league-gold)">⚽</span>
             {% if featured.home_name and featured.away_name %}
                 {{ current_league }}: {{ featured.home_name|upper }} vs {{ featured.away_name|upper }}
             {% else %}
@@ -18,9 +18,9 @@
             <span id="match-status-badge"
                   class="text-[10px] font-mono px-2 py-1 rounded border
                 {% if featured.status in ['Finished','FT'] %}
-                    text-slate-400 border-slate-700 bg-slate-900/60
+                   border" style="color:var(--text-muted);background:var(--surface)
                 {% else %}
-                    text-emerald-400 border-emerald-800 bg-emerald-950/40
+                    border" style="color:#10b981;background:#064e3b
                 {% endif %}">
                 {{ featured.status|upper }}
                 <span id="live-minute">{% if featured.minute and featured.status == 'In Play' %}· {{ featured.minute }}'{% endif %}</span>
@@ -30,24 +30,23 @@
 
     <!-- FIXTURES STRIP -->
     {% if fixtures %}
-    <div class="bg-[#0f172a] border border-slate-800 rounded-xl px-4 py-2.5 shadow-xl">
-        <div class="text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-1.5">
-            Upcoming · Premier League · All times EAT (UTC+3)
+    <div class="fixture-strip-wrap border rounded-xl px-4 py-2.5 shadow-xl">
+        <div class="fixture-strip-label text-[10px] font-mono uppercase tracking-widest mb-1.5">
+            Fixtures · {{ league_name | default("Premier League") }} · All times EAT (UTC+3)
         </div>
         <div class="fixtures-strip flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
             {% for f in fixtures %}
-            <a href="/match?match_id={{ f.match_id }}"
-               class="flex-none border rounded-lg px-3 py-1.5 text-center min-w-[110px]
-                      transition cursor-pointer
+            <a href="/match?match_id={{ f.match_id }}&league={{ league | default('pl') }}"
+               class="flex-none rounded-lg px-3 py-1.5 text-center transition cursor-pointer
                       {% if f.match_id|string == featured.fixture_id|string %}
-                          border-cyan-700 bg-cyan-950/40 text-cyan-300
+                          fix-card-active
                       {% else %}
-                          border-slate-700 bg-slate-900/40 text-slate-300
-                          hover:border-slate-500 hover:bg-slate-800/40
-                      {% endif %}">
-                <div class="text-[9px] font-mono text-slate-500 mb-0.5">{{ f.kickoff_eat }}</div>
+                          fix-card-default
+                      {% endif %}"
+               style="min-width:110px;border:1.5px solid;text-decoration:none">
+                <div class="text-[9px] font-mono mb-0.5" style="color:var(--text-muted)">{{ f.kickoff_eat }}</div>
                 <div class="text-[11px] font-bold truncate">{{ f.home }}</div>
-                <div class="text-[9px] text-slate-500">vs</div>
+                <div class="text-[9px]" style="color:var(--text-muted)">vs</div>
                 <div class="text-[11px] font-bold truncate">{{ f.away }}</div>
             </a>
             {% endfor %}
@@ -62,13 +61,12 @@
     <div class="grid grid-cols-3 gap-3">
 
         <!-- Pre-game (DC) -->
-        <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl
-                    flex flex-col items-center gap-2">
+        <div class="rounded-xl p-4 shadow-xl flex flex-col items-center gap-2" style="background:var(--surface);border:1px solid var(--border)">
             <div class="text-center">
-                <h3 class="text-xs font-bold text-slate-200 uppercase tracking-widest">
+                <h3 class="text-xs font-bold uppercase tracking-widest" style="color:var(--league-primary)">
                     Prior (Static Base)
                 </h3>
-                <span class="text-[10px] text-cyan-400/70 font-mono">
+                <span class="text-[10px] font-mono" style="color:var(--league-mid)">
                     Dixon-Coles · dp 0.10
                 </span>
             </div>
@@ -84,7 +82,7 @@
                     </div>
                     <div class="flex flex-col items-center justify-end h-full">
                         <span class="text-sm text-slate-400 font-mono font-bold mb-1">{{ prior[1] }}%</span>
-                        <div class="w-14 bg-slate-600 rounded-sm transition-all duration-500"
+                        <div class="w-14 rounded-sm transition-all duration-500" style="background:var(--league-light)"
                              style="height:{{ [prior[1],4]|max }}%"></div>
                         <span class="text-[10px] text-slate-400 mt-2 uppercase tracking-widest">Draw</span>
                     </div>
@@ -99,7 +97,7 @@
                 {% else %}
                     <div class="flex items-center justify-center h-full w-full">
                         <span class="text-[10px] text-rose-400 font-mono uppercase
-                                     bg-rose-950/40 border border-rose-900 px-3 py-2 rounded">
+                                    bg-rose-950/40 border border-rose-900 px-3 py-2 rounded">
                             No prior data
                         </span>
                     </div>
@@ -108,8 +106,7 @@
         </div>
 
         <!-- Centre panel: Lineup Adjusted (when available) or Bookmaker Odds -->
-        <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl
-                    flex flex-col items-center justify-center gap-3">
+        <div class="rounded-xl p-4 shadow-xl flex flex-col items-center justify-center gap-3" style="background:var(--surface);border:1px solid var(--border)">
 
             {% if lineup_prior %}
             <!-- Lineup-adjusted DC odds -->
@@ -132,7 +129,7 @@
                 </div>
                 <div class="flex flex-col items-center justify-end h-full">
                     <span class="text-sm text-slate-400 font-mono font-bold mb-1">{{ lineup_prior[1] }}%</span>
-                    <div class="w-14 bg-slate-600 rounded-sm transition-all duration-500"
+                    <div class="w-14 rounded-sm transition-all duration-500" style="background:var(--league-light)"
                          style="height:{{ [lineup_prior[1],4]|max }}%"></div>
                     <span class="text-[10px] text-slate-400 mt-2 uppercase tracking-widest">Draw</span>
                 </div>
@@ -147,7 +144,7 @@
             </div>
 
             <!-- xG after adjustment + absent key players -->
-            <div class="w-full border-t border-slate-800 pt-2 space-y-1.5">
+            <div class="w-full border-t" style="border-color:var(--border) pt-2 space-y-1.5">
                 {% if adj_lam is not none %}
                 <div class="flex justify-between text-[10px] font-mono">
                     <span class="text-slate-500">Adj. xG</span>
@@ -198,7 +195,7 @@
                 </div>
             </div>
             {% if featured.referee %}
-            <div class="text-center border-t border-slate-800 pt-2 w-full">
+            <div class="text-center border-t" style="border-color:var(--border) pt-2 w-full">
                 <span class="text-[10px] text-slate-500 font-mono uppercase">Referee · </span>
                 <span class="text-[10px] text-slate-300 font-mono">{{ featured.referee }}</span>
             </div>
@@ -218,7 +215,7 @@
                     {% endif %}
                 </div>
                 {% if featured.referee %}
-                <div class="border-t border-slate-800 pt-2">
+                <div class="border-t" style="border-color:var(--border) pt-2">
                     <span class="text-[10px] text-slate-300 font-mono">{{ featured.referee }}</span>
                 </div>
                 {% endif %}
@@ -232,14 +229,13 @@
         </div>
 
         <!-- Live (Neural net) -->
-        <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl
-                    flex flex-col items-center gap-2">
+        <div class="rounded-xl p-4 shadow-xl flex flex-col items-center gap-2" style="background:var(--surface);border:1px solid var(--border)">
             <div class="text-center">
-                <h3 class="text-xs font-bold text-slate-200 uppercase tracking-widest">
+                <h3 class="text-xs font-bold uppercase tracking-widest" style="color:var(--league-primary)">
                     Posterior (In-Play Live)
                 </h3>
                 <span class="text-[10px] font-mono
-                    {% if posterior %}text-emerald-400/70{% else %}text-slate-500{% endif %}">
+                   {% if posterior %}text-emerald-400/70{% else %}text-slate-500{% endif %}">
                     {% if posterior %}Neural net · {{ featured.minute }}' in play
                     {% elif featured.status == 'Not Started' %}Awaiting kickoff
                     {% else %}Neural net · score + time{% endif %}
@@ -272,7 +268,7 @@
                 {% else %}
                     <div class="flex items-center justify-center h-full w-full">
                         <span class="text-[10px] text-slate-500 font-mono uppercase
-                                     bg-slate-900/60 border border-slate-800 px-3 py-2 rounded">
+                                    px-3 py-2 rounded" style="background:var(--surface);border:1px solid var(--border)">
                             {% if featured.status == 'Not Started' %}Awaiting kickoff
                             {% else %}No live data{% endif %}
                         </span>
@@ -290,7 +286,7 @@
         <!-- LEFT: Scoreline matrix -->
         <div class="flex flex-col">
             {% if matrix_svg %}
-            <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-3 shadow-xl flex-1">
+            <div class="border rounded-xl p-3 shadow-xl flex-1" style="background:var(--surface);border:1px solid var(--border)">
                 <div class="text-[10px] font-mono text-slate-400 uppercase tracking-widest mb-1">
                     Scoreline Probabilities
                 </div>
@@ -302,9 +298,9 @@
         <!-- CENTRE: Pitch (main focus) -->
         <div>
             {% if pitch_svg %}
-            <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-3 shadow-xl h-full">
+            <div class="border rounded-xl p-3 shadow-xl h-full" style="background:var(--surface);border:1px solid var(--border)">
                 <div class="flex items-center justify-between mb-1">
-                    <span class="text-[10px] font-mono text-slate-400 uppercase tracking-widest">
+                    <span class="text-[10px] font-mono uppercase tracking-widest" style="color:var(--text-muted)">
                         Starting Lineups
                     </span>
                     <div class="flex items-center gap-3 text-[9px] font-mono">
@@ -337,7 +333,7 @@
         <!-- RIGHT: Team ratings & DC parameters -->
         <div class="flex flex-col">
             {% if featured.home_name and featured.away_name %}
-            <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl flex-1">
+            <div class="border rounded-xl p-4 shadow-xl flex-1" style="background:var(--surface);border:1px solid var(--border)">
                 <div class="text-[10px] font-mono text-slate-400 uppercase tracking-widest mb-3">
                     Team Ratings & Parameters
                 </div>
@@ -349,7 +345,7 @@
                         {{ featured.home_name }}
                         {% if home_alpha_estimated %}
                         <span class="text-[8px] text-slate-500 font-normal normal-case
-                                     border border-slate-700 px-1 py-0.5 rounded">est.</span>
+                                    px-1 py-0.5 rounded" style="border:1px solid var(--border)">est.</span>
                         {% endif %}
                     </div>
                     {% if home_alpha %}
@@ -418,7 +414,7 @@
                     {% endif %}
                 </div>
 
-                <div class="border-t border-slate-800 my-2"></div>
+                <div class="border-t" style="border-color:var(--border) my-2"></div>
 
                 <!-- Away team gauges -->
                 <div class="mb-3">
@@ -427,7 +423,7 @@
                         {{ featured.away_name }}
                         {% if away_alpha_estimated %}
                         <span class="text-[8px] text-slate-500 font-normal normal-case
-                                     border border-slate-700 px-1 py-0.5 rounded">est.</span>
+                                    px-1 py-0.5 rounded" style="border:1px solid var(--border)">est.</span>
                         {% endif %}
                     </div>
                     {% if away_alpha %}
@@ -493,7 +489,7 @@
                     {% endif %}
                 </div>
 
-                <div class="border-t border-slate-800 my-2"></div>
+                <div class="border-t" style="border-color:var(--border) my-2"></div>
 
                 <!-- League parameters (compact) -->
                 {% if league_gamma %}
@@ -507,14 +503,14 @@
 
                 <!-- Live xG (populated by JS polling when FotMob key present) -->
                 {% if fotmob_available %}
-                <div class="border-t border-slate-800 mt-3 pt-3">
+                <div class="border-t" style="border-color:var(--border) mt-3 pt-3">
                     <div class="flex items-center justify-between mb-2">
                         <span class="text-[10px] text-slate-500 uppercase tracking-widest">
                             Live xG
                         </span>
                         <select id="poll-interval"
-                                class="bg-slate-900 border border-slate-700 text-slate-400
-                                       text-[9px] font-mono rounded px-1 py-0.5 cursor-pointer">
+                                class="border text-sm" style="background:var(--surface);border-color:var(--border);color:var(--text-muted)
+                                      text-[9px] font-mono rounded px-1 py-0.5 cursor-pointer">
                             <option value="60">1 min</option>
                             <option value="300" selected>5 min</option>
                             <option value="600">10 min</option>
@@ -549,9 +545,9 @@
     <!-- BOTTOM: Win probability timeline (full width)                     -->
     <!-- ═══════════════════════════════════════════════════════════════════ -->
     {% if timeline_svg %}
-    <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-3 shadow-xl">
+    <div class="rounded-xl p-3 shadow-xl" style="background:var(--surface);border:1px solid var(--border)">
         <div class="flex items-center justify-between mb-1">
-            <span class="text-[10px] font-mono text-slate-400 uppercase tracking-widest">
+            <span class="text-[10px] font-mono uppercase tracking-widest" style="color:var(--text-muted)">
                 Win Probability Timeline
             </span>
             <span class="text-[9px] font-mono text-slate-600">
@@ -565,7 +561,15 @@
 </div>
 
 <style>
-body { background-color: #0b0f19 !important; }
+/* ── Match page league theming ───────────────────────────────── */
+body { background: var(--league-tint) !important; }
+
+.fixture-strip-wrap {
+    background: var(--league-primary) !important;
+    border: 1px solid var(--league-vivid) !important;
+}
+.fixture-strip-label { color: var(--league-gold) !important; }
+
 .scrollbar-hide::-webkit-scrollbar { display: none; }
 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 </style>
