@@ -925,6 +925,22 @@ async def match(request: Request):
             except Exception as e:
                 print(f"[match] FotMob redirect error: {e}")
 
+        # FotMob unavailable or 429 — use fd.org finished cache for any league
+        # This gives us real team names and DC odds even without live data
+        if active_ctx_key != "pl":
+            try:
+                fd_cache = _populate_finished_cache(active_comp)
+                if fd_cache:
+                    last    = list(fd_cache.values())[-1]
+                    last_id = last.get("fd_id")
+                    if last_id:
+                        return RedirectResponse(
+                            url=f"/match?match_id={last_id}&league={active_ctx_key}",
+                            status_code=302
+                        )
+            except Exception as e:
+                print(f"[match] fd.org fallback redirect error: {e}")
+
         # PL: try FPL upcoming first, then FotMob today as fallback
         if active_ctx_key == "pl":
             # FPL upcoming (most reliable — gives next GW fixtures)
