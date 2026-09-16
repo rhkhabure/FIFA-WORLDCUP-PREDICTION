@@ -285,7 +285,34 @@ async def crest_proxy(team_name: str):
 
 @app.get("/live/{match_id}")
 async def live_poll(match_id: str, request: Request):
-    """Live polling — returns xG, score, minute from FotMob. Zero extra credits for status."""
+    """Live polling — returns score, minute from BBS (La Liga) or FotMob (PL)."""
+
+    # BBS live poll for La Liga matches
+    if str(match_id).startswith("bbs_"):
+        try:
+            from bbs import get_match_detail
+            bbs_uuid = str(match_id)[4:]
+            detail   = get_match_detail(bbs_uuid)
+            if not detail:
+                return JSONResponse({"status": "no_data"})
+            raw_st = detail.get("status", "Not Started")
+            st_map = {"live": "In Play", "finished": "Finished",
+                      "final": "Finished", "scheduled": "Not Started",
+                      "In Play": "In Play", "Finished": "Finished",
+                      "Not Started": "Not Started"}
+            match_status = st_map.get(raw_st, raw_st)
+            return JSONResponse({
+                "status"      : "ok",
+                "match_status": match_status,
+                "home_score"  : detail.get("h_score", 0),
+                "away_score"  : detail.get("a_score", 0),
+                "live_minute" : 60 if match_status == "In Play" else None,
+                "minute_str"  : "LIVE" if match_status == "In Play" else "",
+            })
+        except Exception as e:
+            print(f"[live] BBS poll error: {e}")
+            return JSONResponse({"status": "no_data"})
+
     if not fotmob_available():
         return _Response(status_code=204)
 
@@ -893,37 +920,57 @@ async def match(request: Request):
         from footballdata import _populate_finished_cache
         from datetime import datetime, timezone, timedelta
 
-        # For La Liga and other non-PL leagues: use FotMob by date
-        if active_ctx_key != "pl" and fotmob_available():
+        # For La Liga and other non-PL leagues: BBS API first, FotMob fallback
+        if active_ctx_key != "pl":
+            # Try BBS (Big Balls Sports Data) — primary La Liga live source
             try:
-                from fotmob import _lineup_cache, _refresh_date_cache_if_stale
-                from datetime import datetime, timezone, timedelta
-                today_str = datetime.now(
-                    timezone(timedelta(hours=3))
-                ).strftime("%Y%m%d")
-                _refresh_date_cache_if_stale(today_str)
-                cache_key = f"matches_{today_str}"
-                date_data = _lineup_cache.get(cache_key, {})
-                _LEAGUE_FILTERS = {
-                    "laliga"    : ["laliga", "la liga", "primera", "esp"],
-                    "bundesliga": ["bundesliga", "germany"],
-                    "seriea"    : ["serie a", "italy"],
-                    "ligue1"    : ["ligue 1", "france"],
-                }
-                filters = _LEAGUE_FILTERS.get(active_ctx_key, [])
-                for lg in date_data.get("data", {}).get("leagues", []):
-                    if any(f in lg.get("name","").lower() for f in filters):
-                        matches = lg.get("matches", [])
-                        if matches:
-                            first_id = matches[0].get("id")
-                            if first_id:
-                                return RedirectResponse(
-                                    url=f"/match?match_id=fm_{first_id}&league={active_ctx_key}",
-                                    status_code=302
-                                )
-                        break
+                from bbs import get_today_matches, has_key as bbs_ok
+                if bbs_ok():
+                    today_matches = get_today_matches(active_ctx_key)
+                    if today_matches:
+                        # Prefer live match, then most recent kickoff
+                        live = [m for m in today_matches if m.get("is_live")]
+                        target = live[0] if live else today_matches[0]
+                        bbs_id = target.get("bbs_id", "")
+                        if bbs_id:
+                            return RedirectResponse(
+                                url=f"/match?match_id=bbs_{bbs_id}&league={active_ctx_key}",
+                                status_code=302
+                            )
             except Exception as e:
-                print(f"[match] FotMob redirect error: {e}")
+                print(f"[match] BBS redirect error: {e}")
+
+            # FotMob fallback
+            if fotmob_available():
+                try:
+                    from fotmob import _lineup_cache, _refresh_date_cache_if_stale
+                    from datetime import datetime, timezone, timedelta
+                    today_str = datetime.now(
+                        timezone(timedelta(hours=3))
+                    ).strftime("%Y%m%d")
+                    _refresh_date_cache_if_stale(today_str)
+                    cache_key = f"matches_{today_str}"
+                    date_data = _lineup_cache.get(cache_key, {})
+                    _LEAGUE_FILTERS = {
+                        "laliga"    : ["laliga", "la liga", "primera", "esp"],
+                        "bundesliga": ["bundesliga", "germany"],
+                        "seriea"    : ["serie a", "italy"],
+                        "ligue1"    : ["ligue 1", "france"],
+                    }
+                    filters = _LEAGUE_FILTERS.get(active_ctx_key, [])
+                    for lg in date_data.get("data", {}).get("leagues", []):
+                        if any(f in lg.get("name","").lower() for f in filters):
+                            matches = lg.get("matches", [])
+                            if matches:
+                                first_id = matches[0].get("id")
+                                if first_id:
+                                    return RedirectResponse(
+                                        url=f"/match?match_id=fm_{first_id}&league={active_ctx_key}",
+                                        status_code=302
+                                    )
+                            break
+                except Exception as e:
+                    print(f"[match] FotMob redirect error: {e}")
 
         # FotMob unavailable or 429 — use fd.org finished cache for any league
         # This gives us real team names and DC odds even without live data
@@ -1279,7 +1326,34 @@ async def match(request: Request):
         home_formation = None
         away_formation = None
 
-        # Step 0: FotMob ID (fm_XXXXX) — La Liga live/recent matches
+        # Step 0a: BBS ID (bbs_UUID) — La Liga live matches
+        if str(match_id).startswith("bbs_"):
+            bbs_uuid = str(match_id)[4:]
+            try:
+                from bbs import get_match_detail
+                detail = get_match_detail(bbs_uuid)
+                if detail:
+                    fd_home = detail.get("home", "")
+                    fd_away = detail.get("away", "")
+                    live_data = {
+                        "home_team"     : fd_home,
+                        "away_team"     : fd_away,
+                        "h_score"       : detail.get("h_score", 0),
+                        "a_score"       : detail.get("a_score", 0),
+                        "status"        : ("Finished" if detail.get("is_finished")
+                                          else "In Play" if detail.get("is_live")
+                                          else "Not Started"),
+                        "current_minute": 90 if detail.get("is_finished") else 0,
+                        "referee"       : "",
+                        "venue"         : "",
+                    }
+                    print(f"[bbs] match detail: {fd_home} vs {fd_away} "
+                          f"{detail.get('h_score')}-{detail.get('a_score')} "
+                          f"{detail.get('status')}")
+            except Exception as e:
+                print(f"[match] BBS detail error: {e}")
+
+        # Step 0b: FotMob ID (fm_XXXXX) — fallback for other leagues
         raw_fotmob_id = None
         if str(match_id).startswith("fm_"):
             raw_fotmob_id = str(match_id)[3:]  # strip "fm_" prefix
@@ -1379,7 +1453,9 @@ async def match(request: Request):
         away_name = fd_away or "Unknown Away"
 
         # Step 3: find finished match data by team name in the correct league
-        if fd_home and fd_away:
+        # Skip if we already have live_data from BBS (don't overwrite live score)
+        bbs_live_data = live_data if str(match_id).startswith("bbs_") else None
+        if fd_home and fd_away and not bbs_live_data:
             live_data = find_finished_match_by_teams(
                 fd_home, fd_away, comp_code=active_comp
             )
@@ -1395,8 +1471,19 @@ async def match(request: Request):
                 fotmob_id or "0", fd_home, fd_away
             )
 
-        # Build status/score — football-data.org authoritative for finished
-        if live_data and live_data.get("status") == "Finished":
+        # Build status/score
+        # BBS live data takes priority when we have it
+        if bbs_live_data:
+            h_score = bbs_live_data.get("h_score", 0) or 0
+            a_score = bbs_live_data.get("a_score", 0) or 0
+            raw_st  = bbs_live_data.get("status", "Not Started")
+            # Normalise BBS status to our internal strings
+            status  = {"In Play": "In Play", "Finished": "Finished",
+                       "Not Started": "Not Started", "live": "In Play",
+                       "finished": "Finished", "final": "Finished",
+                       "scheduled": "Not Started"}.get(raw_st, raw_st)
+            minute  = 60 if status == "In Play" else (90 if status == "Finished" else 0)
+        elif live_data and live_data.get("status") == "Finished":
             h_score = live_data.get("h_score", 0) or 0
             a_score = live_data.get("a_score", 0) or 0
             status  = "Finished"
@@ -1419,12 +1506,15 @@ async def match(request: Request):
             minute  = live_data.get("current_minute", 0)
         else:
             h_score = a_score = 0
-            status  = "Unknown"
+            status  = "Not Started"
             minute  = 0
 
         if home_name not in (None, "Unknown Home", ""):
+            # Handle bbs_ and fm_ prefixes in match_id
             try:
-                fixture_id_int = int(str(match_id).replace("fm_",""))
+                _clean_id = str(match_id).replace("fm_","").replace("bbs_","")
+                # UUIDs can't convert to int — use 0
+                fixture_id_int = int(_clean_id) if _clean_id.isdigit() else 0
             except (ValueError, TypeError):
                 fixture_id_int = 0
 
@@ -1639,8 +1729,39 @@ async def match(request: Request):
         except Exception:
             pass
     else:
-        import time as _time
-        # Non-PL: read from FotMob date cache
+        # Non-PL: BBS primary, FotMob fallback, fd.org last resort
+        # BBS: get today's matches + upcoming
+        try:
+            from bbs import get_today_matches, get_upcoming_fixtures as bbs_upcoming
+            from bbs import has_key as bbs_ok
+            if bbs_ok():
+                # Today's matches first (shows live scores)
+                today = get_today_matches(active_ctx_key)
+                for m in today:
+                    sc = ""
+                    if m.get("is_live"):
+                        sc = f"🔴 {m['h_score']}-{m['a_score']}"
+                    elif m.get("is_finished"):
+                        sc = f"FT {m['h_score']}-{m['a_score']}"
+                    else:
+                        sc = m.get("kickoff_eat", "Today")
+                    fixtures.append({
+                        "match_id"   : f"bbs_{m['bbs_id']}",
+                        "home"       : m["home"],
+                        "away"       : m["away"],
+                        "kickoff_eat": sc,
+                    })
+                # Upcoming fixtures after today
+                upcoming = bbs_upcoming(active_ctx_key, max_fixtures=8)
+                for m in upcoming:
+                    fixtures.append({
+                        "match_id"   : f"bbs_{m['bbs_id']}",
+                        "home"       : m["home"],
+                        "away"       : m["away"],
+                        "kickoff_eat": m["kickoff_eat"],
+                    })
+        except Exception as e:
+            print(f"[match] BBS fixture strip error: {e}")
         # Clear stale failure flag so we retry after rate limit clears
         try:
             from fotmob import _lineup_cache, _refresh_date_cache_if_stale
