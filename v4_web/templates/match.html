@@ -562,14 +562,33 @@
 
 <style>
 /* ── Match page league theming ───────────────────────────────── */
-body { background: var(--league-tint) !important; }
+/* Body background comes from base.html / theme.css --league-tint */
 
+/* Fixture strip wrapper */
 .fixture-strip-wrap {
     background: var(--league-primary) !important;
     border: 1px solid var(--league-vivid) !important;
 }
-.fixture-strip-label { color: var(--league-gold) !important; }
+.fixture-strip-label { color: var(--league-gold) !important; opacity: 0.8; }
 
+/* Fixture cards inside strip — sit on the dark primary background */
+.fix-card-default {
+    border: 1.5px solid rgba(255,255,255,0.2) !important;
+    background: rgba(255,255,255,0.08) !important;
+    color: rgba(255,255,255,0.75) !important;
+}
+.fix-card-default:hover {
+    border-color: rgba(255,255,255,0.5) !important;
+    background: rgba(255,255,255,0.15) !important;
+    color: #fff !important;
+}
+.fix-card-active {
+    border-color: var(--league-gold) !important;
+    background: rgba(255,255,255,0.2) !important;
+    color: var(--league-gold) !important;
+}
+
+/* Scrollbar */
 .scrollbar-hide::-webkit-scrollbar { display: none; }
 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 </style>
