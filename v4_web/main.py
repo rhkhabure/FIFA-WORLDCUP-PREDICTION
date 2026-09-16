@@ -1697,42 +1697,24 @@ async def match(request: Request):
             print(f"[match] fixture strip FotMob error: {e}")
 
         # FotMob empty (still 429) — fall back to fd.org PD finished cache
-        # Filter to matches from the last 7 days so the strip shows recent games
         if not fixtures:
             try:
                 from footballdata import _populate_finished_cache
-                from datetime import datetime, timezone, timedelta
-                _EAT   = timezone(timedelta(hours=3))
-                _today = datetime.now(_EAT).date()
                 fd_cache = _populate_finished_cache(active_comp)
-                recent = []
-                for m in fd_cache.values():
-                    # utcDate field on fd.org matches: "2026-09-16T19:00:00Z"
-                    utc_raw = m.get("kickoff_utc", "") or m.get("utcDate", "")
-                    if not utc_raw:
-                        continue
-                    try:
-                        ko_date = datetime.fromisoformat(
-                            utc_raw.replace("Z", "+00:00")
-                        ).astimezone(_EAT).date()
-                        days_ago = (_today - ko_date).days
-                        if 0 <= days_ago <= 7:
-                            recent.append(m)
-                    except Exception:
-                        pass
-                # Sort by date descending, take 10
-                recent.sort(key=lambda x: x.get("kickoff_utc",""), reverse=True)
-                for m in recent[:10]:
-                    h = m.get("home_team","") or m.get("home","")
-                    a = m.get("away_team","") or m.get("away","")
-                    hg = m.get("h_score", m.get("home_score", ""))
-                    ag = m.get("a_score", m.get("away_score", ""))
+                # Take the last 10 finished matches — most recent first
+                recent = list(fd_cache.values())[-10:]
+                recent.reverse()
+                for m in recent:
+                    h  = m.get("home_team", "") or m.get("home", "")
+                    a  = m.get("away_team", "") or m.get("away", "")
+                    hg = m.get("h_score",   m.get("home_score", ""))
+                    ag = m.get("a_score",   m.get("away_score", ""))
                     score_str = f"{hg}-{ag}" if hg != "" else ""
                     fixtures.append({
-                        "match_id"   : str(m.get("fd_id", m.get("fixture_id",""))),
+                        "match_id"   : str(m.get("fd_id", m.get("fixture_id", ""))),
                         "home"       : h,
                         "away"       : a,
-                        "kickoff_eat": f"FT {score_str}" if score_str else "Recent",
+                        "kickoff_eat": f"FT {score_str}" if score_str else "Finished",
                     })
             except Exception as e:
                 print(f"[match] fixture strip fd.org fallback error: {e}")
