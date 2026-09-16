@@ -758,7 +758,7 @@ async def league_page(request: Request, league_key: str):
         return RedirectResponse(url="/match")
 
     if league_key == "laliga":
-        return await laliga_dashboard(request)
+        return RedirectResponse(url="/match?league=laliga")
 
     # All other leagues — under construction
     LEAGUE_FEATURES = {
@@ -889,23 +889,45 @@ async def match(request: Request):
     active_ctx_key = _lm["ctx_key"]  # e.g. "laliga"
 
     if not match_id:
-        # Default: redirect to the most recent finished match for this league
+        # Default: redirect to the most recent/current match for this league
         from footballdata import _populate_finished_cache
-        try:
-            cache = _populate_finished_cache(active_comp)
-            if cache:
-                last = list(cache.values())[-1]
-                found_id = last.get("fd_id")
-                if found_id:
-                    return RedirectResponse(
-                        url=f"/match?match_id={found_id}&league={active_ctx_key}",
-                        status_code=302
-                    )
-        except Exception:
-            pass
+        from datetime import datetime, timezone, timedelta
 
-        # PL fallback: try FPL upcoming
+        # For La Liga and other non-PL leagues: use FotMob by date
+        if active_ctx_key != "pl" and fotmob_available():
+            try:
+                from fotmob import _lineup_cache, _refresh_date_cache_if_stale
+                from datetime import datetime, timezone, timedelta
+                today_str = datetime.now(
+                    timezone(timedelta(hours=3))
+                ).strftime("%Y%m%d")
+                _refresh_date_cache_if_stale(today_str)
+                cache_key = f"matches_{today_str}"
+                date_data = _lineup_cache.get(cache_key, {})
+                _LEAGUE_FILTERS = {
+                    "laliga"    : ["laliga", "la liga", "primera", "esp"],
+                    "bundesliga": ["bundesliga", "germany"],
+                    "seriea"    : ["serie a", "italy"],
+                    "ligue1"    : ["ligue 1", "france"],
+                }
+                filters = _LEAGUE_FILTERS.get(active_ctx_key, [])
+                for lg in date_data.get("data", {}).get("leagues", []):
+                    if any(f in lg.get("name","").lower() for f in filters):
+                        matches = lg.get("matches", [])
+                        if matches:
+                            first_id = matches[0].get("id")
+                            if first_id:
+                                return RedirectResponse(
+                                    url=f"/match?match_id=fm_{first_id}&league={active_ctx_key}",
+                                    status_code=302
+                                )
+                        break
+            except Exception as e:
+                print(f"[match] FotMob redirect error: {e}")
+
+        # PL: try FPL upcoming first, then FotMob today as fallback
         if active_ctx_key == "pl":
+            # FPL upcoming (most reliable — gives next GW fixtures)
             try:
                 upcoming = get_upcoming_fixtures(max_fixtures=1)
                 if upcoming:
@@ -917,6 +939,31 @@ async def match(request: Request):
                         )
             except Exception:
                 pass
+
+            # FPL failed — try FotMob today for any PL match
+            if fotmob_available():
+                try:
+                    from fotmob import _lineup_cache, _refresh_date_cache_if_stale
+                    from datetime import datetime, timezone, timedelta
+                    today_str = datetime.now(
+                        timezone(timedelta(hours=3))
+                    ).strftime("%Y%m%d")
+                    _refresh_date_cache_if_stale(today_str)
+                    date_data = _lineup_cache.get(f"matches_{today_str}", {})
+                    for lg in date_data.get("data", {}).get("leagues", []):
+                        lg_name = lg.get("name", "").lower()
+                        if "premier league" in lg_name or "england" in lg_name:
+                            matches = lg.get("matches", [])
+                            if matches:
+                                first_id = matches[0].get("id")
+                                if first_id:
+                                    return RedirectResponse(
+                                        url=f"/match?match_id=fm_{first_id}",
+                                        status_code=302
+                                    )
+                            break
+                except Exception as e:
+                    print(f"[match] FotMob PL fallback error: {e}")
 
         # Absolute fallback — empty match page
         ctx = {
@@ -947,14 +994,13 @@ async def match(request: Request):
     home_formation = "4-3-3"
     away_formation = "4-3-3"
 
-    # Check if this match_id is in the FPL upcoming fixtures first.
-    # football-data.org free tier returns 400 for upcoming matches --
-    # it only serves individual match detail for finished games.
-    # For upcoming matches, we use FPL team names directly.
-    # ── Snapshot read ─────────────────────────────────────────────────────────
-    # Check local DB first — persists finished game state across restarts
-    # Only skip if match is in FPL upcoming (pre-game, snapshot may be stale)
-    all_upcoming = get_upcoming_fixtures(max_fixtures=50)
+    # Check if this match_id is in FPL upcoming fixtures (PL only)
+    all_upcoming = []
+    if active_ctx_key == "pl":
+        try:
+            all_upcoming = get_upcoming_fixtures(max_fixtures=50)
+        except Exception:
+            pass
     fpl_match = next(
         (f for f in all_upcoming if str(f.get("match_id")) == str(match_id)),
         None
@@ -1216,6 +1262,48 @@ async def match(request: Request):
         away_players   = None
         home_formation = None
         away_formation = None
+
+        # Step 0: FotMob ID (fm_XXXXX) — La Liga live/recent matches
+        raw_fotmob_id = None
+        if str(match_id).startswith("fm_"):
+            raw_fotmob_id = str(match_id)[3:]  # strip "fm_" prefix
+            if fotmob_available():
+                try:
+                    from fotmob import _lineup_cache, _refresh_date_cache_if_stale
+                    from datetime import datetime, timezone, timedelta
+                    today_str = datetime.now(
+                        timezone(timedelta(hours=3))
+                    ).strftime("%Y%m%d")
+                    _refresh_date_cache_if_stale(today_str)
+                    cache_key = f"matches_{today_str}"
+                    date_data = _lineup_cache.get(cache_key, {})
+                    leagues   = date_data.get("data", {}).get("leagues", [])
+                    for lg in leagues:
+                        for m in lg.get("matches", []):
+                            if str(m.get("id","")) == raw_fotmob_id:
+                                fd_home = m.get("home", {}).get("name", "")
+                                fd_away = m.get("away", {}).get("name", "")
+                                st      = m.get("status", {}) or {}
+                                score   = st.get("scoreStr","0 - 0") or "0 - 0"
+                                hg = ag = 0
+                                if " - " in score:
+                                    parts = score.split(" - ")
+                                    try: hg,ag = int(parts[0]),int(parts[1])
+                                    except: pass
+                                live_data = {
+                                    "home_team"     : fd_home,
+                                    "away_team"     : fd_away,
+                                    "h_score"       : hg,
+                                    "a_score"       : ag,
+                                    "status"        : ("Finished" if st.get("finished")
+                                                      else "In Play" if st.get("ongoing")
+                                                      else "Not Started"),
+                                    "current_minute": 90 if st.get("finished") else 0,
+                                }
+                                break
+                        if fd_home: break
+                except Exception as e:
+                    print(f"[match] FotMob fm_ lookup error: {e}")
 
         # Step 1: direct fd.org ID lookup in the correct league cache
         try:
@@ -1509,40 +1597,48 @@ async def match(request: Request):
         league_rho   = meta.get("rho_draw_correction")
 
     # Fixture strip — source depends on league
-    # PL: FPL upcoming (free, no key), fallback to fd.org finished cache
-    # La Liga + others: fd.org scheduled fixtures
     fixtures = []
     if active_ctx_key == "pl":
+        # FPL upcoming fixtures (free, no key needed)
         try:
             fixtures = get_upcoming_fixtures(max_fixtures=10)
         except Exception:
             pass
     else:
-        # Non-PL: use fd.org scheduled fixtures
+        # Non-PL: use FotMob today + upcoming from date cache
         try:
-            from footballdata import get_upcoming_fixtures_fd
-            raw = get_upcoming_fixtures_fd(active_comp, season=2025, max_fixtures=10)
-            fixtures = [{"match_id": f["match_id"], "home": f["home"],
-                         "away": f["away"], "kickoff_eat": f["kickoff_eat"]}
-                        for f in raw]
-        except Exception:
-            pass
-
-    # If still empty, fall back to recent finished matches from fd.org cache
-    if not fixtures:
-        try:
-            from footballdata import _populate_finished_cache
-            fd_cache = _populate_finished_cache(active_comp)
-            recent = list(fd_cache.values())[-10:]
-            for m in reversed(recent):
-                fixtures.append({
-                    "match_id"   : str(m.get("fd_id", "")),
-                    "home"       : m.get("home_team", ""),
-                    "away"       : m.get("away_team", ""),
-                    "kickoff_eat": "Finished",
-                })
-        except Exception:
-            pass
+            from fotmob import _lineup_cache, _refresh_date_cache_if_stale
+            from datetime import datetime, timezone, timedelta
+            today_str = datetime.now(
+                timezone(timedelta(hours=3))
+            ).strftime("%Y%m%d")
+            _refresh_date_cache_if_stale(today_str)
+            cache_key = f"matches_{today_str}"
+            date_data = _lineup_cache.get(cache_key, {})
+            _LEAGUE_FILTERS = {
+                "laliga"    : ["laliga", "la liga", "primera", "esp"],
+                "bundesliga": ["bundesliga", "germany"],
+                "seriea"    : ["serie a", "italy"],
+                "ligue1"    : ["ligue 1", "france"],
+            }
+            filters = _LEAGUE_FILTERS.get(active_ctx_key, [])
+            for lg in date_data.get("data", {}).get("leagues", []):
+                name = lg.get("name", "").lower()
+                if any(f in name for f in filters):
+                    for m in lg.get("matches", []):
+                        st = m.get("status", {}) or {}
+                        score = st.get("scoreStr", "")
+                        is_fin = st.get("finished", False)
+                        fixtures.append({
+                            "match_id"   : f"fm_{m.get('id','')}",
+                            "home"       : m.get("home", {}).get("name", ""),
+                            "away"       : m.get("away", {}).get("name", ""),
+                            "kickoff_eat": ("FT " + score) if is_fin
+                                          else ("LIVE " + score) if st.get("ongoing")
+                                          else m.get("status", {}).get("utcTime", "Today")[:5],
+                        })
+        except Exception as e:
+            print(f"[match] fixture strip FotMob error: {e}")
 
     ctx = {
         "request"          : request,
