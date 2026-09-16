@@ -1639,22 +1639,21 @@ async def match(request: Request):
         except Exception:
             pass
     else:
+        import time as _time
         # Non-PL: read from FotMob date cache
-        # Force-clear any stale failed flag so we retry after rate limit clears
+        # Clear stale failure flag so we retry after rate limit clears
         try:
             from fotmob import _lineup_cache, _refresh_date_cache_if_stale
             from datetime import datetime, timezone, timedelta
-            today_str = datetime.now(
-                timezone(timedelta(hours=3))
-            ).strftime("%Y%m%d")
+            _EAT = timezone(timedelta(hours=3))
+            today_str = datetime.now(_EAT).strftime("%Y%m%d")
             failed_key = f"matches_{today_str}_failed"
             failed_ts  = f"matches_{today_str}_failed_ts"
             fail_time  = _lineup_cache.get(failed_ts, 0)
-            # If failed flag is older than 5 min, clear it and retry
-            if _lineup_cache.get(failed_key) and (time.time() - fail_time) > 300:
+            if _lineup_cache.get(failed_key) and (_time.time() - fail_time) > 300:
                 _lineup_cache.pop(failed_key, None)
                 _lineup_cache.pop(failed_ts, None)
-                print(f"[match] FotMob backoff expired — retrying date cache")
+                print(f"[match] FotMob backoff expired — retrying")
 
             _refresh_date_cache_if_stale(today_str)
             cache_key = f"matches_{today_str}"
@@ -1666,33 +1665,27 @@ async def match(request: Request):
                 "ligue1"    : ["ligue 1", "france"],
             }
             filters = _LEAGUE_FILTERS.get(active_ctx_key, [])
-            EAT_TZ  = timezone(timedelta(hours=3))
             for lg in date_data.get("data", {}).get("leagues", []):
-                name = lg.get("name", "").lower()
-                if any(f in name for f in filters):
+                lg_name = lg.get("name", "").lower()
+                if any(f in lg_name for f in filters):
                     for m in lg.get("matches", []):
                         st      = m.get("status", {}) or {}
                         score   = st.get("scoreStr", "")
                         is_fin  = st.get("finished", False)
                         is_live = st.get("ongoing",  False)
-                        # Parse kickoff time from utcTime to EAT
                         utc_raw = st.get("utcTime", "")
                         kickoff_display = ""
                         if utc_raw:
                             try:
-                                from datetime import datetime as _dt
-                                ko = _dt.fromisoformat(
+                                ko = datetime.fromisoformat(
                                     utc_raw.replace("Z", "+00:00")
-                                ).astimezone(EAT_TZ)
+                                ).astimezone(_EAT)
                                 kickoff_display = ko.strftime("%H:%M EAT")
                             except Exception:
                                 kickoff_display = utc_raw[:5]
-                        if is_fin:
-                            label = f"FT {score}"
-                        elif is_live:
-                            label = f"🔴 {score}"
-                        else:
-                            label = kickoff_display or "Today"
+                        label = (f"FT {score}" if is_fin
+                                 else f"🔴 {score}" if is_live
+                                 else kickoff_display or "Today")
                         fixtures.append({
                             "match_id"   : f"fm_{m.get('id','')}",
                             "home"       : m.get("home", {}).get("name", ""),
@@ -1702,6 +1695,47 @@ async def match(request: Request):
                     break
         except Exception as e:
             print(f"[match] fixture strip FotMob error: {e}")
+
+        # FotMob empty (still 429) — fall back to fd.org PD finished cache
+        # Filter to matches from the last 7 days so the strip shows recent games
+        if not fixtures:
+            try:
+                from footballdata import _populate_finished_cache
+                from datetime import datetime, timezone, timedelta
+                _EAT   = timezone(timedelta(hours=3))
+                _today = datetime.now(_EAT).date()
+                fd_cache = _populate_finished_cache(active_comp)
+                recent = []
+                for m in fd_cache.values():
+                    # utcDate field on fd.org matches: "2026-09-16T19:00:00Z"
+                    utc_raw = m.get("kickoff_utc", "") or m.get("utcDate", "")
+                    if not utc_raw:
+                        continue
+                    try:
+                        ko_date = datetime.fromisoformat(
+                            utc_raw.replace("Z", "+00:00")
+                        ).astimezone(_EAT).date()
+                        days_ago = (_today - ko_date).days
+                        if 0 <= days_ago <= 7:
+                            recent.append(m)
+                    except Exception:
+                        pass
+                # Sort by date descending, take 10
+                recent.sort(key=lambda x: x.get("kickoff_utc",""), reverse=True)
+                for m in recent[:10]:
+                    h = m.get("home_team","") or m.get("home","")
+                    a = m.get("away_team","") or m.get("away","")
+                    hg = m.get("h_score", m.get("home_score", ""))
+                    ag = m.get("a_score", m.get("away_score", ""))
+                    score_str = f"{hg}-{ag}" if hg != "" else ""
+                    fixtures.append({
+                        "match_id"   : str(m.get("fd_id", m.get("fixture_id",""))),
+                        "home"       : h,
+                        "away"       : a,
+                        "kickoff_eat": f"FT {score_str}" if score_str else "Recent",
+                    })
+            except Exception as e:
+                print(f"[match] fixture strip fd.org fallback error: {e}")
 
     ctx = {
         "request"          : request,
