@@ -1693,6 +1693,14 @@ async def match(request: Request):
         "home_team_id"            : _CREST_IDS.get(home_name if featured else "", 0),
         "away_team_id"            : _CREST_IDS.get(away_name if featured else "", 0),
     }
+    # DEBUG — remove after confirming La Liga data flow
+    if active_ctx_key != "pl":
+        print(f"[DEBUG-LALIGA] match_id={match_id} featured={bool(featured)} "
+              f"home={featured.get('home_name','') if featured else ''} "
+              f"away={featured.get('away_name','') if featured else ''} "
+              f"prior={prior} pitch={bool(pitch_svg)} matrix={bool(matrix_svg)} "
+              f"fixtures={len(fixtures)} home_alpha={home_alpha}")
+
     return templates.TemplateResponse(request=request, name="match.html", context=ctx)
 
 
