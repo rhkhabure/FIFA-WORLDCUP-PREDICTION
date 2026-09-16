@@ -301,13 +301,29 @@ async def live_poll(match_id: str, request: Request):
                       "In Play": "In Play", "Finished": "Finished",
                       "Not Started": "Not Started"}
             match_status = st_map.get(raw_st, raw_st)
+            # Estimate minute from kickoff
+            live_minute = None
+            if match_status == "In Play":
+                try:
+                    from datetime import datetime, timezone as _tz
+                    ko_raw = detail.get("kickoff_utc", "")
+                    if ko_raw:
+                        ko_dt   = datetime.fromisoformat(ko_raw.replace("Z","+00:00"))
+                        elapsed = (datetime.now(_tz.utc) - ko_dt).total_seconds() / 60
+                        if elapsed > 60:
+                            elapsed -= 15
+                        live_minute = max(1, min(90, int(elapsed)))
+                    else:
+                        live_minute = 50
+                except Exception:
+                    live_minute = 50
             return JSONResponse({
                 "status"      : "ok",
                 "match_status": match_status,
                 "home_score"  : detail.get("h_score", 0),
                 "away_score"  : detail.get("a_score", 0),
-                "live_minute" : 60 if match_status == "In Play" else None,
-                "minute_str"  : "LIVE" if match_status == "In Play" else "",
+                "live_minute" : live_minute,
+                "minute_str"  : str(live_minute) if live_minute else "",
             })
         except Exception as e:
             print(f"[live] BBS poll error: {e}")
@@ -1477,12 +1493,30 @@ async def match(request: Request):
             h_score = bbs_live_data.get("h_score", 0) or 0
             a_score = bbs_live_data.get("a_score", 0) or 0
             raw_st  = bbs_live_data.get("status", "Not Started")
-            # Normalise BBS status to our internal strings
             status  = {"In Play": "In Play", "Finished": "Finished",
                        "Not Started": "Not Started", "live": "In Play",
                        "finished": "Finished", "final": "Finished",
                        "scheduled": "Not Started"}.get(raw_st, raw_st)
-            minute  = 60 if status == "In Play" else (90 if status == "Finished" else 0)
+            # Estimate minute from kickoff time — BBS doesn't provide a clock
+            if status == "In Play":
+                try:
+                    from datetime import datetime, timezone as _tz
+                    ko_raw = bbs_live_data.get("kickoff_utc", "")
+                    if ko_raw:
+                        ko_dt  = datetime.fromisoformat(ko_raw.replace("Z","+00:00"))
+                        elapsed = (datetime.now(_tz.utc) - ko_dt).total_seconds() / 60
+                        # Account for 15-min halftime break after 45 min
+                        if elapsed > 60:
+                            elapsed -= 15
+                        minute = max(1, min(90, int(elapsed)))
+                    else:
+                        minute = 50  # safe midpoint fallback
+                except Exception:
+                    minute = 50
+            elif status == "Finished":
+                minute = 90
+            else:
+                minute = 0
         elif live_data and live_data.get("status") == "Finished":
             h_score = live_data.get("h_score", 0) or 0
             a_score = live_data.get("a_score", 0) or 0
