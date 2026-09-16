@@ -1305,15 +1305,29 @@ async def match(request: Request):
                 except Exception as e:
                     print(f"[match] FotMob fm_ lookup error: {e}")
 
-        # Step 1: direct fd.org ID lookup in the correct league cache
-        try:
-            fd_cache = _populate_finished_cache(active_comp)
-            if str(match_id) in fd_cache:
-                live_data = fd_cache[str(match_id)]
-                fd_home   = live_data.get("home_team", "")
-                fd_away   = live_data.get("away_team", "")
-        except Exception:
-            pass
+        # Step 1: fd.org cache lookup — runs for ALL match IDs including fm_ ones
+        # When FotMob is 429ing, this provides the team names from last season's
+        # La Liga data so the DC charts still render with real teams
+        if not fd_home:
+            try:
+                fd_cache = _populate_finished_cache(active_comp)
+                # For fm_ IDs: scan all cached matches for today's teams
+                # For numeric IDs: direct lookup by fd_id
+                if not str(match_id).startswith("fm_"):
+                    if str(match_id) in fd_cache:
+                        live_data = fd_cache[str(match_id)]
+                        fd_home   = live_data.get("home_team", "")
+                        fd_away   = live_data.get("away_team", "")
+                else:
+                    # FotMob failed — use most recent finished match from fd.org
+                    # so charts render with real La Liga teams
+                    if fd_cache:
+                        last      = list(fd_cache.values())[-1]
+                        fd_home   = last.get("home_team", "")
+                        fd_away   = last.get("away_team", "")
+                        live_data = last
+            except Exception:
+                pass
 
         # Step 2: predictions DB (for FPL match codes — 7-digit IDs)
         if not fd_home:
