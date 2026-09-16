@@ -61,11 +61,18 @@ def _fetch(endpoint: str) -> dict | list:
 def _cached(key: str, endpoint: str) -> dict | list:
     ttl = _CACHE_TTLS.get(key, CACHE_TTL)
     now = time.time()
+    # Return fresh cache if within TTL
     if key in _cache and now - _cache[key][1] < ttl:
         return _cache[key][0]
+    # Attempt fetch
     data = _fetch(endpoint)
-    if data:
+    # Only cache if response is meaningfully non-empty
+    # Empty dict {} or [] means the API failed — use stale cache instead
+    is_valid = (isinstance(data, list) and len(data) > 0) or \
+               (isinstance(data, dict) and len(data) > 0)
+    if is_valid:
         _cache[key] = (data, now)
+        return data
     elif key in _cache:
         # Serve stale data rather than empty on fetch failure
         print(f"[fpl] fetch failed for {key} — serving stale cache")
@@ -174,17 +181,19 @@ def fpl_fixture_to_football_data_id(fpl_fixture_id: int) -> int | None:
 def warm_cache() -> None:
     """
     Pre-fetch bootstrap and fixtures into cache on server startup.
-    This means the first user to hit any page never waits for a cold
-    FPL API call — data is already in memory.
-    Called from main.py lifespan startup.
+    Only caches non-empty successful responses.
     """
     try:
-        _cached("bootstrap", "bootstrap-static/")
-        print("[fpl] bootstrap cached")
+        data = _cached("bootstrap", "bootstrap-static/")
+        teams = data.get("teams", []) if isinstance(data, dict) else []
+        print(f"[fpl] bootstrap cached ({len(teams)} teams)")
     except Exception as e:
         print(f"[fpl] bootstrap warm failed: {e}")
     try:
-        _cached("fixtures", "fixtures/")
-        print("[fpl] fixtures cached (TTL 6h)")
+        data = _cached("fixtures", "fixtures/")
+        n = len(data) if isinstance(data, list) else 0
+        upcoming = [f for f in (data if isinstance(data, list) else [])
+                    if not f.get("finished", True)]
+        print(f"[fpl] fixtures cached ({n} total, {len(upcoming)} upcoming, TTL 6h)")
     except Exception as e:
         print(f"[fpl] fixtures warm failed: {e}")

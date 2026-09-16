@@ -169,6 +169,19 @@ async def run_prediction_job(priors_db: dict, league_key: str):
             and not p["actual_result"]  # not finished yet
         ]
 
+        # Pre-warm FotMob date cache ONCE before the loop.
+        # get_fotmob_match_id() calls get_matches_by_date internally —
+        # without this, it fires one API call per fixture (50+ calls = 429).
+        # _refresh_date_cache_if_stale() fetches only if cache is stale,
+        # so this is at most 1 credit per cycle, not 50.
+        if needs_lineup:
+            try:
+                from fotmob import _refresh_date_cache_if_stale
+                today_str = now_utc.strftime("%Y%m%d")
+                _refresh_date_cache_if_stale(today_str)
+            except Exception as e:
+                print(f"[prediction_job] FotMob cache warm error: {e}")
+
         for p in needs_lineup:
             mid   = p["match_id"]
             home  = p["home_team"]
