@@ -438,3 +438,49 @@ def get_fotmob_match_id(home_name: str, away_name: str, date_str: str | None = N
             if (home_n in mh or mh in home_n) and (away_n in ma or ma in away_n):
                 return str(match.get("id"))
     return None
+
+
+def get_matches_by_date_for_league(date_str: str, league_key: str) -> list[dict]:
+    """
+    Return all FotMob matches for a given league on a given date.
+
+    date_str  : YYYYMMDD e.g. "20260916"
+    league_key: our internal key e.g. "laliga", "bundesliga"
+
+    Returns list of raw FotMob match dicts with id, home, away, status.
+    """
+    # Map our league key → FotMob league name fragments to match on
+    _LEAGUE_FILTERS = {
+        "laliga"    : ["laliga", "la liga", "primera", "spain", "esp"],
+        "bundesliga": ["bundesliga", "germany", "ger"],
+        "seriea"    : ["serie a", "calcio", "italy", "ita"],
+        "ligue1"    : ["ligue 1", "ligue1", "france", "fra"],
+        "pl"        : ["premier league", "england", "eng"],
+    }
+    filters = _LEAGUE_FILTERS.get(league_key, [])
+
+    # Use the date cache — refresh if stale
+    _refresh_date_cache_if_stale(date_str)
+    data = _lineup_cache.get(f"date_{date_str}_data") or {}
+
+    if not data:
+        # Direct fetch if cache empty
+        try:
+            data = _fetch("get_matches_by_date", {"date": date_str})
+        except Exception as e:
+            print(f"[fotmob] get_matches_by_date_for_league error: {e}")
+            return []
+
+    leagues = data.get("data", {}).get("leagues", [])
+    matches = []
+    for lg in leagues:
+        name = lg.get("name", "").lower()
+        if any(f in name for f in filters):
+            for m in lg.get("matches", []):
+                matches.append({
+                    "id"    : m.get("id"),
+                    "home"  : m.get("home", {}).get("name", ""),
+                    "away"  : m.get("away", {}).get("name", ""),
+                    "status": m.get("status", {}),
+                })
+    return matches
