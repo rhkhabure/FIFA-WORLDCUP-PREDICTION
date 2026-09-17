@@ -650,21 +650,65 @@ async def player_page(request: Request):
 
 @app.get("/history", response_class=HTMLResponse)
 async def history_page(request: Request):
-    """Prediction history — model accuracy tracker."""
+    """Prediction history — model accuracy tracker, filterable by league."""
     from predictions import get_accuracy_stats, get_all_predictions
     from datetime import datetime, timezone
+
+    # League filter from query param: ?league=pl / ?league=laliga / (all)
+    league_filter = request.query_params.get("league", "all").lower()
+
     try:
-        season = datetime.now(timezone.utc).year
+        season   = datetime.now(timezone.utc).year
         if datetime.now(timezone.utc).month < 8:
             season -= 1
-        stats   = get_accuracy_stats(season)
+
         all_pred = get_all_predictions(season)
 
-        # Split into finished and upcoming
+        # Apply league filter
+        if league_filter == "pl":
+            all_pred = [p for p in all_pred if p.get("league","pl") == "pl"]
+        elif league_filter == "laliga":
+            all_pred = [p for p in all_pred if p.get("league","pl") == "laliga"]
+
         finished = [p for p in all_pred if p["actual_result"]]
         upcoming = [p for p in all_pred if not p["actual_result"]]
 
-        # Compute per-confidence-band stats for finished games
+        # Per-league counts for tabs
+        all_preds_all = get_all_predictions(season)
+        pl_count  = sum(1 for p in all_preds_all if p.get("league","pl") == "pl")
+        ll_count  = sum(1 for p in all_preds_all if p.get("league","pl") == "laliga")
+
+        # Accuracy stats
+        def _stats(preds):
+            fin = [p for p in preds if p["actual_result"]]
+            if not fin:
+                return {"total_logged": len(preds), "total_finished": 0,
+                        "pre_accuracy": 0, "pre_correct": 0, "pre_total": 0,
+                        "adj_accuracy": 0, "adj_correct": 0, "adj_total": 0}
+            pre_total   = len(fin)
+            pre_correct = sum(1 for p in fin if p.get("pre_correct") == 1)
+            adj_set     = [p for p in fin if p.get("adj_logged_at")]
+            adj_correct = sum(1 for p in adj_set if p.get("adj_correct") == 1)
+            return {
+                "total_logged"  : len(preds),
+                "total_finished": pre_total,
+                "pre_accuracy"  : round(pre_correct/pre_total*100,1) if pre_total else 0,
+                "pre_correct"   : pre_correct,
+                "pre_total"     : pre_total,
+                "adj_accuracy"  : round(adj_correct/len(adj_set)*100,1) if adj_set else 0,
+                "adj_correct"   : adj_correct,
+                "adj_total"     : len(adj_set),
+            }
+
+        stats = _stats(all_pred)
+
+        # Per-league stats for tab badges
+        pl_preds  = [p for p in all_preds_all if p.get("league","pl") == "pl"]
+        ll_preds  = [p for p in all_preds_all if p.get("league","pl") == "laliga"]
+        pl_stats  = _stats(pl_preds)
+        ll_stats  = _stats(ll_preds)
+
+        # Confidence band breakdown
         bands = {
             "High (>60%)"  : [],
             "Mid (40-60%)" : [],
@@ -674,12 +718,9 @@ async def history_page(request: Request):
             if p["pre_dc_home"] is None:
                 continue
             conf = max(p["pre_dc_home"], p["pre_dc_draw"], p["pre_dc_away"])
-            if conf > 60:
-                bands["High (>60%)"].append(p)
-            elif conf >= 40:
-                bands["Mid (40-60%)"].append(p)
-            else:
-                bands["Low (<40%)"].append(p)
+            if conf > 60:   bands["High (>60%)"].append(p)
+            elif conf >= 40: bands["Mid (40-60%)"].append(p)
+            else:            bands["Low (<40%)"].append(p)
 
         band_stats = {}
         for label, games in bands.items():
@@ -690,10 +731,9 @@ async def history_page(request: Request):
             band_stats[label] = {
                 "n"      : len(games),
                 "correct": correct,
-                "pct"    : round(correct / len(games) * 100, 1),
+                "pct"    : round(correct/len(games)*100, 1),
             }
 
-        # Compute draw stats
         draws_actual    = sum(1 for p in finished if p["actual_result"] == "D")
         draws_predicted = sum(
             1 for p in finished
@@ -704,22 +744,30 @@ async def history_page(request: Request):
 
     except Exception as e:
         print(f"[history] error: {e}")
-        stats = None
+        stats = pl_stats = ll_stats = None
         finished = upcoming = []
         band_stats = {}
         draws_actual = draws_predicted = 0
+        pl_count = ll_count = 0
+        league_filter = "all"
 
     return templates.TemplateResponse(
         request=request, name="history.html",
         context={
             "request"         : request,
             "stats"           : stats,
+            "pl_stats"        : pl_stats,
+            "ll_stats"        : ll_stats,
+            "pl_count"        : pl_count,
+            "ll_count"        : ll_count,
+            "league_filter"   : league_filter,
             "finished"        : finished,
-            "upcoming"        : upcoming[:10],   # next 10
+            "upcoming"        : upcoming[:10],
             "band_stats"      : band_stats,
             "draws_actual"    : draws_actual,
             "draws_predicted" : draws_predicted,
             "season"          : season,
+            **league_ctx("pl"),
         }
     )
 
