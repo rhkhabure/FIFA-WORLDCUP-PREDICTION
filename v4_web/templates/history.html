@@ -1,302 +1,330 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="max-w-screen-2xl mx-auto space-y-4">
+<style>
+.tab-btn {
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    border: 1.5px solid var(--border);
+    background: var(--surface);
+    color: var(--text-muted);
+    text-decoration: none;
+    transition: all 0.15s;
+    letter-spacing: 0.3px;
+}
+.tab-btn:hover { border-color: var(--league-vivid); color: var(--league-primary); }
+.tab-btn.active {
+    background: var(--league-primary);
+    color: var(--league-gold);
+    border-color: var(--league-primary);
+}
+.stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px;
+}
+.stat-val { font-size: 28px; font-weight: 900; letter-spacing: -0.5px; font-family: var(--font-mono); }
+.stat-lbl { font-size: 10px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+.stat-sub { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+.league-mini-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.tbl { width: 100%; font-size: 12px; font-family: var(--font-mono); border-collapse: collapse; }
+.tbl th { color: var(--text-muted); font-weight: 700; text-transform: uppercase;
+           font-size: 9px; letter-spacing: 1px; padding: 8px 10px;
+           border-bottom: 1px solid var(--border); text-align: center; }
+.tbl th:first-child { text-align: left; }
+.tbl td { padding: 7px 10px; border-bottom: 1px solid var(--border); color: var(--text-primary); text-align: center; }
+.tbl td:first-child { text-align: left; }
+.tbl tr:hover td { background: var(--league-tint); }
+.badge-h { color: var(--league-primary); background: var(--league-tint); padding: 2px 7px; border-radius: 4px; font-weight: 800; }
+.badge-d { color: var(--text-secondary); background: var(--border); padding: 2px 7px; border-radius: 4px; font-weight: 800; }
+.badge-a { color: #C0392B; background: #FFF0EE; padding: 2px 7px; border-radius: 4px; font-weight: 800; }
+</style>
 
-    <!-- HEADER -->
-    <div class="flex items-center justify-between">
-        <div>
-            <h1 class="text-lg font-bold font-mono text-white tracking-wide">
-                Prediction History
-            </h1>
-            <p class="text-xs font-mono text-slate-500 mt-0.5">
-                Dixon-Coles model · 2025/26 PL season
-            </p>
-        </div>
-        <div class="text-xs font-mono text-slate-600">
-            {% if stats %}{{ stats.total_logged }} fixtures logged{% endif %}
-        </div>
+<!-- Header -->
+<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
+    <div>
+        <h1 style="font-size:20px;font-weight:900;color:var(--league-primary);letter-spacing:-0.5px;margin-bottom:4px">
+            Prediction History
+        </h1>
+        <p style="font-size:11px;color:var(--text-muted)">
+            Dixon-Coles model · 2025/26 season ·
+            {% if league_filter == "all" %}All leagues
+            {% elif league_filter == "pl" %}Premier League only
+            {% else %}La Liga only{% endif %}
+        </p>
     </div>
-
-    {% if not stats or stats.total_finished == 0 %}
-    <!-- NO DATA YET -->
-    <div class="bg-[#0f172a] border border-slate-800 rounded-2xl p-10 text-center">
-        <div class="text-5xl mb-4">📋</div>
-        <div class="text-slate-300 font-mono text-sm mb-2">No results logged yet</div>
-        <div class="text-slate-500 text-xs max-w-sm mx-auto">
-            Results are logged automatically after each match.
-            {{ stats.total_logged if stats else 0 }} upcoming fixtures are being tracked.
-        </div>
+    <!-- League tabs -->
+    <div style="display:flex;gap:6px;align-items:center">
+        <a href="/history" class="tab-btn {% if league_filter == 'all' %}active{% endif %}">
+            All ({{ (pl_count or 0) + (ll_count or 0) }})
+        </a>
+        <a href="/history?league=pl" class="tab-btn {% if league_filter == 'pl' %}active{% endif %}">
+            🏴󠁧󠁢󠁥󠁮󠁧󠁿 PL ({{ pl_count or 0 }})
+        </a>
+        <a href="/history?league=laliga" class="tab-btn {% if league_filter == 'laliga' %}active{% endif %}">
+            🇪🇸 La Liga ({{ ll_count or 0 }})
+        </a>
     </div>
+</div>
 
-    {% else %}
-
-    <!-- TOP STATS ROW -->
-    <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
-
-        <!-- Overall accuracy -->
-        <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl">
-            <div class="text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-1">
-                DC Accuracy
-            </div>
-            <div class="text-3xl font-bold font-mono
-                {% if stats.pre_accuracy >= 55 %}text-emerald-400
-                {% elif stats.pre_accuracy >= 40 %}text-amber-400
-                {% else %}text-rose-400{% endif %}">
-                {{ stats.pre_accuracy }}%
-            </div>
-            <div class="text-xs font-mono text-slate-500 mt-1">
-                {{ stats.pre_correct }}/{{ stats.pre_total }} correct
-            </div>
-            <div class="text-[10px] font-mono text-slate-700 mt-0.5">
-                baseline ~43%
+<!-- Per-league mini summary (only when showing All) -->
+{% if league_filter == "all" and pl_stats and ll_stats %}
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">
+    <div class="league-mini-card">
+        <div style="width:10px;height:10px;border-radius:50%;background:#3D185A;flex-shrink:0"></div>
+        <div style="flex:1">
+            <div style="font-size:11px;font-weight:800;color:#3D185A;margin-bottom:2px">Premier League</div>
+            <div style="font-size:10px;color:var(--text-muted)">
+                {{ pl_stats.total_finished }} results ·
+                <strong style="color:{% if pl_stats.pre_accuracy >= 55 %}#10b981{% elif pl_stats.pre_accuracy >= 40 %}#f59e0b{% else %}#ef4444{% endif %}">
+                    {{ pl_stats.pre_accuracy }}%
+                </strong> accuracy
             </div>
         </div>
+        <a href="/history?league=pl" style="font-size:10px;color:var(--text-muted);text-decoration:none">View →</a>
+    </div>
+    <div class="league-mini-card">
+        <div style="width:10px;height:10px;border-radius:50%;background:#8B0000;flex-shrink:0"></div>
+        <div style="flex:1">
+            <div style="font-size:11px;font-weight:800;color:#8B0000;margin-bottom:2px">La Liga</div>
+            <div style="font-size:10px;color:var(--text-muted)">
+                {{ ll_stats.total_finished }} results ·
+                {% if ll_stats.total_finished > 0 %}
+                <strong style="color:{% if ll_stats.pre_accuracy >= 55 %}#10b981{% elif ll_stats.pre_accuracy >= 40 %}#f59e0b{% else %}#ef4444{% endif %}">
+                    {{ ll_stats.pre_accuracy }}%
+                </strong> accuracy
+                {% else %}<span>No results yet</span>{% endif %}
+            </div>
+        </div>
+        <a href="/history?league=laliga" style="font-size:10px;color:var(--text-muted);text-decoration:none">View →</a>
+    </div>
+</div>
+{% endif %}
 
-        <!-- Lineup-adjusted accuracy -->
-        <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl">
-            <div class="text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-1">
-                Adj Accuracy
+{% if not stats or stats.total_finished == 0 %}
+<!-- No data -->
+<div class="stat-card" style="text-align:center;padding:48px">
+    <div style="font-size:48px;margin-bottom:12px">📋</div>
+    <div style="font-size:14px;font-weight:700;color:var(--text-primary);margin-bottom:6px">No results logged yet</div>
+    <div style="font-size:11px;color:var(--text-muted)">
+        {{ stats.total_logged if stats else 0 }} fixtures are being tracked.
+        Results are logged automatically after each match.
+    </div>
+</div>
+
+{% else %}
+
+<!-- Stats row -->
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px">
+    <div class="stat-card">
+        <div class="stat-lbl">DC Accuracy</div>
+        <div class="stat-val" style="color:{% if stats.pre_accuracy >= 55 %}#10b981{% elif stats.pre_accuracy >= 40 %}#f59e0b{% else %}#ef4444{% endif %}">
+            {{ stats.pre_accuracy }}%
+        </div>
+        <div class="stat-sub">{{ stats.pre_correct }}/{{ stats.pre_total }} correct · baseline 43%</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-lbl">Adj Accuracy</div>
+        {% if stats.adj_total > 0 %}
+        <div class="stat-val" style="color:{% if stats.adj_accuracy >= 55 %}#10b981{% elif stats.adj_accuracy >= 40 %}#f59e0b{% else %}#ef4444{% endif %}">
+            {{ stats.adj_accuracy }}%
+        </div>
+        <div class="stat-sub">{{ stats.adj_correct }}/{{ stats.adj_total }} with lineup data</div>
+        {% else %}
+        <div class="stat-val" style="color:var(--text-muted)">—</div>
+        <div class="stat-sub">No lineup data yet</div>
+        {% endif %}
+    </div>
+    <div class="stat-card">
+        <div class="stat-lbl">Draw Recall</div>
+        <div class="stat-val" style="color:var(--league-primary)">{{ draws_predicted }}/{{ draws_actual }}</div>
+        <div class="stat-sub">predicted / actual draws · avg ~28%</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-lbl">Season Progress</div>
+        <div class="stat-val" style="color:var(--league-primary)">{{ stats.total_finished }}</div>
+        <div class="stat-sub">of {{ stats.total_logged }} logged resolved</div>
+    </div>
+</div>
+
+<!-- Confidence band breakdown -->
+<div class="stat-card" style="margin-bottom:20px">
+    <div style="font-size:10px;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:16px">
+        Accuracy by Confidence Band
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
+        {% for label, bs in band_stats.items() %}
+        <div style="text-align:center">
+            <div style="font-size:10px;color:var(--text-muted);margin-bottom:8px;font-weight:600">{{ label }}</div>
+            {% if bs.n > 0 %}
+            <div style="height:4px;background:var(--border);border-radius:2px;margin:0 16px 8px;overflow:hidden">
+                <div style="height:100%;border-radius:2px;width:{{ bs.pct }}%;
+                    background:{% if bs.pct >= 55 %}#10b981{% elif bs.pct >= 40 %}#f59e0b{% else %}#ef4444{% endif %}">
+                </div>
             </div>
-            {% if stats.adj_total > 0 %}
-            <div class="text-3xl font-bold font-mono
-                {% if stats.adj_accuracy >= 55 %}text-emerald-400
-                {% elif stats.adj_accuracy >= 40 %}text-amber-400
-                {% else %}text-rose-400{% endif %}">
-                {{ stats.adj_accuracy }}%
+            <div style="font-size:22px;font-weight:900;font-family:var(--font-mono);
+                color:{% if bs.pct >= 55 %}#10b981{% elif bs.pct >= 40 %}#f59e0b{% else %}#ef4444{% endif %}">
+                {{ bs.pct }}%
             </div>
-            <div class="text-xs font-mono text-slate-500 mt-1">
-                {{ stats.adj_correct }}/{{ stats.adj_total }} with lineup data
-            </div>
+            <div style="font-size:10px;color:var(--text-muted);margin-top:2px">{{ bs.correct }}/{{ bs.n }} games</div>
             {% else %}
-            <div class="text-2xl font-bold font-mono text-slate-600">—</div>
-            <div class="text-xs font-mono text-slate-600 mt-1">No lineup data yet</div>
+            <div style="font-size:22px;font-weight:900;color:var(--border)">—</div>
+            <div style="font-size:10px;color:var(--border);margin-top:2px">no data</div>
             {% endif %}
         </div>
-
-        <!-- Draw recall -->
-        <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl">
-            <div class="text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-1">
-                Draw Recall
-            </div>
-            <div class="text-3xl font-bold font-mono text-slate-300">
-                {{ draws_predicted }}/{{ draws_actual }}
-            </div>
-            <div class="text-xs font-mono text-slate-500 mt-1">
-                predicted / actual draws
-            </div>
-            <div class="text-[10px] font-mono text-slate-700 mt-0.5">
-                league avg ~28%
-            </div>
-        </div>
-
-        <!-- Games tracked -->
-        <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl">
-            <div class="text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-1">
-                Season Progress
-            </div>
-            <div class="text-3xl font-bold font-mono text-slate-300">
-                {{ stats.total_finished }}
-            </div>
-            <div class="text-xs font-mono text-slate-500 mt-1">
-                of {{ stats.total_logged }} logged resolved
-            </div>
-            <div class="text-[10px] font-mono text-slate-700 mt-0.5">
-                38 GWs total
-            </div>
-        </div>
-
+        {% endfor %}
     </div>
-
-    <!-- CONFIDENCE BAND BREAKDOWN -->
-    <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl">
-        <div class="text-xs font-mono text-slate-400 uppercase tracking-widest mb-4">
-            Accuracy by Confidence Band
-        </div>
-        <div class="grid grid-cols-3 gap-4">
-            {% for label, bs in band_stats.items() %}
-            <div class="text-center">
-                <div class="text-[10px] font-mono text-slate-500 mb-2">{{ label }}</div>
-                {% if bs.n > 0 %}
-                <!-- Mini bar -->
-                <div class="relative h-1.5 bg-slate-800 rounded-full mb-2 mx-4">
-                    <div class="absolute left-0 top-0 h-1.5 rounded-full
-                        {% if bs.pct >= 55 %}bg-emerald-500
-                        {% elif bs.pct >= 40 %}bg-amber-500
-                        {% else %}bg-rose-500{% endif %}"
-                        style="width: {{ bs.pct }}%">
-                    </div>
-                </div>
-                <div class="text-xl font-bold font-mono
-                    {% if bs.pct >= 55 %}text-emerald-400
-                    {% elif bs.pct >= 40 %}text-amber-400
-                    {% else %}text-rose-400{% endif %}">
-                    {{ bs.pct }}%
-                </div>
-                <div class="text-[10px] font-mono text-slate-600 mt-0.5">
-                    {{ bs.correct }}/{{ bs.n }} games
-                </div>
-                {% else %}
-                <div class="text-xl font-bold font-mono text-slate-700">—</div>
-                <div class="text-[10px] font-mono text-slate-700 mt-0.5">no data</div>
-                {% endif %}
-            </div>
-            {% endfor %}
-        </div>
-    </div>
-
-    <!-- RESULTS TABLE -->
-    <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl">
-        <div class="text-xs font-mono text-slate-400 uppercase tracking-widest mb-3">
-            Finished Matches
-        </div>
-        <div class="overflow-x-auto">
-            <table class="w-full text-xs font-mono">
-                <thead>
-                    <tr class="text-slate-600 uppercase tracking-wider border-b border-slate-800">
-                        <th class="text-left py-2 pr-4">Match</th>
-                        <th class="text-center py-2 px-3">Kickoff</th>
-                        <th class="text-center py-2 px-3">DC Prior H/D/A</th>
-                        <th class="text-center py-2 px-3">Adj H/D/A</th>
-                        <th class="text-center py-2 px-3">Predicted</th>
-                        <th class="text-center py-2 px-3">Score</th>
-                        <th class="text-center py-2 px-3">Result</th>
-                        <th class="text-center py-2 px-3">DC ✓?</th>
-                        <th class="text-center py-2 px-3">Adj ✓?</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for p in finished %}
-                    {% set dc_pred = "H" if p.pre_dc_home > p.pre_dc_draw and p.pre_dc_home > p.pre_dc_away
-                                     else ("D" if p.pre_dc_draw > p.pre_dc_away else "A") %}
-                    {% set adj_pred = "H" if p.adj_home and p.adj_home > p.adj_draw and p.adj_home > p.adj_away
-                                      else ("D" if p.adj_home and p.adj_draw > p.adj_away else "") %}
-                    <tr class="border-b border-slate-800/40 hover:bg-slate-800/20 transition">
-                        <td class="py-2 pr-4">
-                            {% if p.match_id %}
-                            <a href="/match?match_id={{ p.match_id }}"
-                               class="text-slate-300 hover:text-white transition">
-                                {{ p.home_team }} vs {{ p.away_team }}
-                            </a>
-                            {% else %}
-                            {{ p.home_team }} vs {{ p.away_team }}
-                            {% endif %}
-                        </td>
-                        <td class="py-2 px-3 text-center text-slate-500">
-                            {{ p.kickoff_utc[:10] if p.kickoff_utc else "—" }}
-                        </td>
-                        <td class="py-2 px-3 text-center text-slate-300">
-                            {% if p.pre_dc_home %}
-                            {{ p.pre_dc_home|round(1) }}/{{ p.pre_dc_draw|round(1) }}/{{ p.pre_dc_away|round(1) }}
-                            {% else %}—{% endif %}
-                        </td>
-                        <td class="py-2 px-3 text-center text-slate-400">
-                            {% if p.adj_home %}
-                            {{ p.adj_home|round(1) }}/{{ p.adj_draw|round(1) }}/{{ p.adj_away|round(1) }}
-                            {% else %}—{% endif %}
-                        </td>
-                        <td class="py-2 px-3 text-center">
-                            <span class="px-2 py-0.5 rounded font-bold
-                                {% if dc_pred == 'H' %}text-cyan-400 bg-cyan-950/40
-                                {% elif dc_pred == 'D' %}text-slate-300 bg-slate-800/60
-                                {% else %}text-amber-400 bg-amber-950/40{% endif %}">
-                                {{ dc_pred }}
-                            </span>
-                        </td>
-                        <td class="py-2 px-3 text-center text-slate-200 font-bold">
-                            {{ p.actual_hg }}–{{ p.actual_ag }}
-                        </td>
-                        <td class="py-2 px-3 text-center">
-                            <span class="px-2 py-0.5 rounded font-bold
-                                {% if p.actual_result == 'H' %}text-cyan-400
-                                {% elif p.actual_result == 'D' %}text-slate-300
-                                {% else %}text-amber-400{% endif %}">
-                                {{ p.actual_result }}
-                            </span>
-                        </td>
-                        <td class="py-2 px-3 text-center text-lg">
-                            {% if p.pre_correct == 1 %}
-                            <span class="text-emerald-400">✓</span>
-                            {% elif p.pre_correct == 0 %}
-                            <span class="text-rose-400">✗</span>
-                            {% else %}—{% endif %}
-                        </td>
-                        <td class="py-2 px-3 text-center text-lg">
-                            {% if p.adj_correct == 1 %}
-                            <span class="text-emerald-400">✓</span>
-                            {% elif p.adj_correct == 0 %}
-                            <span class="text-rose-400">✗</span>
-                            {% else %}<span class="text-slate-700">—</span>{% endif %}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-    {% endif %}
-
-    <!-- UPCOMING PREDICTIONS -->
-    {% if upcoming %}
-    <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl">
-        <div class="text-xs font-mono text-slate-400 uppercase tracking-widest mb-3">
-            Next 10 Upcoming Predictions
-        </div>
-        <div class="overflow-x-auto">
-            <table class="w-full text-xs font-mono">
-                <thead>
-                    <tr class="text-slate-600 uppercase tracking-wider border-b border-slate-800">
-                        <th class="text-left py-2 pr-4">Match</th>
-                        <th class="text-center py-2 px-3">Kickoff</th>
-                        <th class="text-center py-2 px-3">DC H/D/A</th>
-                        <th class="text-center py-2 px-3">Prediction</th>
-                        <th class="text-center py-2 px-3">Lineup Logged</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for p in upcoming %}
-                    {% set dc_pred = "H" if p.pre_dc_home and p.pre_dc_home > p.pre_dc_draw and p.pre_dc_home > p.pre_dc_away
-                                     else ("D" if p.pre_dc_home and p.pre_dc_draw > p.pre_dc_away else "A") %}
-                    {% set conf = [p.pre_dc_home or 0, p.pre_dc_draw or 0, p.pre_dc_away or 0]|max %}
-                    <tr class="border-b border-slate-800/40 hover:bg-slate-800/20 transition">
-                        <td class="py-1.5 pr-4">
-                            <a href="/match?match_id={{ p.match_id }}"
-                               class="text-slate-300 hover:text-white transition">
-                                {{ p.home_team }} vs {{ p.away_team }}
-                            </a>
-                        </td>
-                        <td class="py-1.5 px-3 text-center text-slate-500">
-                            {{ p.kickoff_utc[:10] if p.kickoff_utc else "—" }}
-                        </td>
-                        <td class="py-1.5 px-3 text-center text-slate-300">
-                            {% if p.pre_dc_home %}
-                            {{ p.pre_dc_home|round(1) }}/{{ p.pre_dc_draw|round(1) }}/{{ p.pre_dc_away|round(1) }}
-                            {% else %}—{% endif %}
-                        </td>
-                        <td class="py-1.5 px-3 text-center">
-                            {% if p.pre_dc_home %}
-                            <span class="px-2 py-0.5 rounded font-bold
-                                {% if dc_pred == 'H' %}text-cyan-400 bg-cyan-950/40
-                                {% elif dc_pred == 'D' %}text-slate-300 bg-slate-800/60
-                                {% else %}text-amber-400 bg-amber-950/40{% endif %}">
-                                {{ dc_pred }} ({{ conf|round(1) }}%)
-                            </span>
-                            {% else %}—{% endif %}
-                        </td>
-                        <td class="py-1.5 px-3 text-center">
-                            {% if p.adj_logged_at %}
-                            <span class="text-emerald-400 text-[10px]">✓ Logged</span>
-                            {% else %}
-                            <span class="text-slate-700 text-[10px]">Awaiting</span>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-    {% endif %}
-
 </div>
+
+<!-- Finished matches table -->
+<div class="stat-card" style="margin-bottom:20px">
+    <div style="font-size:10px;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:12px">
+        Finished Matches ({{ finished|length }})
+    </div>
+    <div style="overflow-x:auto">
+        <table class="tbl">
+            <thead>
+                <tr>
+                    <th style="text-align:left">Match</th>
+                    <th>League</th>
+                    <th>Date</th>
+                    <th>DC H/D/A</th>
+                    <th>Adj H/D/A</th>
+                    <th>Predicted</th>
+                    <th>Score</th>
+                    <th>Result</th>
+                    <th>DC ✓</th>
+                    <th>Adj ✓</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in finished %}
+                {% set dc_pred = "H" if p.pre_dc_home > p.pre_dc_draw and p.pre_dc_home > p.pre_dc_away
+                                 else ("D" if p.pre_dc_draw > p.pre_dc_away else "A") %}
+                {% set p_league = p.get("league", "pl") if p.get else "pl" %}
+                {% set match_url = "/match?match_id=" ~ p.match_id ~ ("&league=laliga" if p_league == "laliga" else "&league=pl") %}
+                <tr>
+                    <td>
+                        <a href="{{ match_url }}" style="color:var(--league-primary);text-decoration:none;font-weight:600">
+                            {{ p.home_team }} vs {{ p.away_team }}
+                        </a>
+                    </td>
+                    <td>
+                        <span style="font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;
+                            background:{% if p_league == 'laliga' %}#FFF0EE{% else %}#F0EBF8{% endif %};
+                            color:{% if p_league == 'laliga' %}#8B0000{% else %}#3D185A{% endif %}">
+                            {{ "La Liga" if p_league == "laliga" else "PL" }}
+                        </span>
+                    </td>
+                    <td style="color:var(--text-muted)">{{ p.kickoff_utc[:10] if p.kickoff_utc else "—" }}</td>
+                    <td>
+                        {% if p.pre_dc_home %}
+                        {{ p.pre_dc_home|round(1) }}/{{ p.pre_dc_draw|round(1) }}/{{ p.pre_dc_away|round(1) }}
+                        {% else %}—{% endif %}
+                    </td>
+                    <td style="color:var(--text-muted)">
+                        {% if p.adj_home %}
+                        {{ p.adj_home|round(1) }}/{{ p.adj_draw|round(1) }}/{{ p.adj_away|round(1) }}
+                        {% else %}—{% endif %}
+                    </td>
+                    <td>
+                        <span class="badge-{{ dc_pred|lower }}">{{ dc_pred }}</span>
+                    </td>
+                    <td style="font-weight:800">{{ p.actual_hg }}–{{ p.actual_ag }}</td>
+                    <td>
+                        <span class="badge-{{ p.actual_result|lower }}">{{ p.actual_result }}</span>
+                    </td>
+                    <td style="font-size:16px">
+                        {% if p.pre_correct == 1 %}<span style="color:#10b981">✓</span>
+                        {% elif p.pre_correct == 0 %}<span style="color:#ef4444">✗</span>
+                        {% else %}—{% endif %}
+                    </td>
+                    <td style="font-size:16px">
+                        {% if p.adj_correct == 1 %}<span style="color:#10b981">✓</span>
+                        {% elif p.adj_correct == 0 %}<span style="color:#ef4444">✗</span>
+                        {% else %}<span style="color:var(--border)">—</span>{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<!-- Upcoming predictions -->
+{% if upcoming %}
+<div class="stat-card">
+    <div style="font-size:10px;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:12px">
+        Next 10 Upcoming Predictions
+    </div>
+    <div style="overflow-x:auto">
+        <table class="tbl">
+            <thead>
+                <tr>
+                    <th style="text-align:left">Match</th>
+                    <th>League</th>
+                    <th>Date</th>
+                    <th>DC H/D/A</th>
+                    <th>Prediction</th>
+                    <th>Lineup</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in upcoming %}
+                {% set dc_pred = "H" if p.pre_dc_home and p.pre_dc_home > p.pre_dc_draw and p.pre_dc_home > p.pre_dc_away
+                                 else ("D" if p.pre_dc_home and p.pre_dc_draw > p.pre_dc_away else "A") %}
+                {% set conf = [p.pre_dc_home or 0, p.pre_dc_draw or 0, p.pre_dc_away or 0]|max %}
+                {% set p_league = p.get("league", "pl") if p.get else "pl" %}
+                {% set match_url = "/match?match_id=" ~ p.match_id ~ ("&league=laliga" if p_league == "laliga" else "&league=pl") %}
+                <tr>
+                    <td>
+                        <a href="{{ match_url }}" style="color:var(--league-primary);text-decoration:none;font-weight:600">
+                            {{ p.home_team }} vs {{ p.away_team }}
+                        </a>
+                    </td>
+                    <td>
+                        <span style="font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;
+                            background:{% if p_league == 'laliga' %}#FFF0EE{% else %}#F0EBF8{% endif %};
+                            color:{% if p_league == 'laliga' %}#8B0000{% else %}#3D185A{% endif %}">
+                            {{ "La Liga" if p_league == "laliga" else "PL" }}
+                        </span>
+                    </td>
+                    <td style="color:var(--text-muted)">{{ p.kickoff_utc[:10] if p.kickoff_utc else "—" }}</td>
+                    <td>
+                        {% if p.pre_dc_home %}
+                        {{ p.pre_dc_home|round(1) }}/{{ p.pre_dc_draw|round(1) }}/{{ p.pre_dc_away|round(1) }}
+                        {% else %}—{% endif %}
+                    </td>
+                    <td>
+                        {% if p.pre_dc_home %}
+                        <span class="badge-{{ dc_pred|lower }}">{{ dc_pred }} ({{ conf|round(1) }}%)</span>
+                        {% else %}—{% endif %}
+                    </td>
+                    <td>
+                        {% if p.adj_logged_at %}
+                        <span style="color:#10b981;font-size:10px;font-weight:700">✓ Confirmed</span>
+                        {% else %}
+                        <span style="color:var(--text-muted);font-size:10px">Awaiting</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
 {% endblock %}
