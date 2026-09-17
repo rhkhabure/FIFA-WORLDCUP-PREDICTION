@@ -108,6 +108,7 @@ def _dc_probs(home_name: str, away_name: str, priors_db: dict,
 async def run_prediction_job(priors_db: dict, league_key: str):
     """
     Main job cycle. Safe to call repeatedly — all writes are idempotent.
+    Logs predictions for both PL (via FPL) and La Liga (via BBS).
     """
     (get_upcoming_fixtures, get_live_match_data,
      get_fotmob_match_id, get_lineup, fotmob_ok,
@@ -121,7 +122,7 @@ async def run_prediction_job(priors_db: dict, league_key: str):
 
     print(f"[prediction_job] cycle start {now_utc.strftime('%H:%M:%S UTC')}")
 
-    # ── Step 1: Upcoming fixtures → snapshot 1 ─────────────────────────────
+    # ── Step 1a: PL upcoming fixtures → snapshot 1 ────────────────────────
     try:
         upcoming = get_upcoming_fixtures(max_fixtures=50)
     except Exception as e:
@@ -129,36 +130,66 @@ async def run_prediction_job(priors_db: dict, league_key: str):
         upcoming = []
 
     for f in upcoming:
-        mid      = str(f.get("match_id", ""))
-        home     = f.get("home", "")
-        away     = f.get("away", "")
-        kickoff  = f.get("kickoff_utc", f.get("kickoff_eat", ""))
-
+        mid     = str(f.get("match_id", ""))
+        home    = f.get("home", "")
+        away    = f.get("away", "")
+        kickoff = f.get("kickoff_utc", f.get("kickoff_eat", ""))
         if not mid or not home or not away:
             continue
-
-        # Compute DC prior for this fixture
         try:
-            result = _dc_probs(home, away, priors_db, league_key)
+            result = _dc_probs(home, away, priors_db, "ENG-Premier League")
         except Exception as e:
             print(f"[prediction_job] DC error {home} v {away}: {e}")
             continue
-
         if not result:
             continue
-
         ph, pd, pa, lam, mu = result
-
-        # Log snapshot 1 (no-op if already logged)
         try:
             log_pre_lineup(
                 match_id=mid, home_team=home, away_team=away,
                 kickoff_utc=str(kickoff), season=season,
                 dc_home=ph, dc_draw=pd, dc_away=pa,
                 dc_lam=lam, dc_mu=mu,
+                league="pl",
             )
         except Exception as e:
-            print(f"[prediction_job] log_pre error {mid}: {e}")
+            print(f"[prediction_job] log_pre PL error {mid}: {e}")
+
+    # ── Step 1b: La Liga upcoming fixtures → snapshot 1 via BBS ───────────
+    try:
+        from bbs import get_upcoming_fixtures as bbs_fixtures, has_key as bbs_ok
+        if bbs_ok():
+            ll_upcoming = bbs_fixtures("laliga", max_fixtures=50)
+            ll_logged = 0
+            for f in ll_upcoming:
+                mid     = f"ll_{f.get('bbs_id','')}"
+                home    = f.get("home", "")
+                away    = f.get("away", "")
+                kickoff = f.get("kickoff_utc", "")
+                if not mid or not home or not away:
+                    continue
+                try:
+                    result = _dc_probs(home, away, priors_db, "ESP-La Liga")
+                except Exception:
+                    continue
+                if not result:
+                    continue
+                ph, pd, pa, lam, mu = result
+                try:
+                    log_pre_lineup(
+                        match_id=mid, home_team=home, away_team=away,
+                        kickoff_utc=str(kickoff), season=season,
+                        dc_home=ph, dc_draw=pd, dc_away=pa,
+                        dc_lam=lam, dc_mu=mu,
+                        league="laliga",
+                    )
+                    ll_logged += 1
+                except Exception as e:
+                    print(f"[prediction_job] log_pre LL error {mid}: {e}")
+            if ll_logged:
+                print(f"[prediction_job] La Liga: {ll_logged} fixtures logged")
+    except Exception as e:
+        print(f"[prediction_job] BBS fixtures error: {e}")
 
     # ── Step 2: Check for confirmed lineups → snapshot 2 ───────────────────
     if fotmob_ok():
@@ -218,10 +249,7 @@ async def run_prediction_job(priors_db: dict, league_key: str):
             except Exception as e:
                 print(f"[prediction_job] lineup error {mid}: {e}")
 
-    # ── Step 3: Log results for finished matches ────────────────────────────
-    # football-data.org direct match endpoint returns 400 for all matches
-    # on the free tier. Use find_finished_match_by_teams() instead which
-    # scans /competitions/PL/matches?status=FINISHED — works on free tier.
+    # ── Step 3: Log results for finished matches ───────────────────────────
     from footballdata import find_finished_match_by_teams
 
     existing   = get_all_predictions(season)
@@ -233,15 +261,40 @@ async def run_prediction_job(priors_db: dict, league_key: str):
     ]
 
     checked = 0
-    MAX_RESULTS_PER_CYCLE = 5
+    MAX_RESULTS_PER_CYCLE = 7  # 5 PL + 2 La Liga
     for p in unresolved[:MAX_RESULTS_PER_CYCLE]:
-        mid  = p["match_id"]
-        home = p["home_team"]
-        away = p["away_team"]
+        mid    = p["match_id"]
+        home   = p["home_team"]
+        away   = p["away_team"]
+        league = p.get("league", "pl")
         try:
             if checked > 0:
-                await asyncio.sleep(3)  # gentler delay — season endpoint is 1 call
+                await asyncio.sleep(3)
 
+            # La Liga: use BBS match detail
+            if league == "laliga" and mid.startswith("ll_"):
+                try:
+                    from bbs import get_match_detail, has_key as bbs_ok
+                    if not bbs_ok():
+                        continue
+                    bbs_uuid = mid[3:]  # strip "ll_" prefix
+                    detail   = get_match_detail(bbs_uuid)
+                    if not detail or not detail.get("is_finished"):
+                        continue
+                    hg = detail.get("h_score")
+                    ag = detail.get("a_score")
+                    if hg is None or ag is None:
+                        continue
+                    result = "H" if hg > ag else ("D" if hg == ag else "A")
+                    log_result(mid, result, int(hg), int(ag))
+                    print(f"[prediction_job] LL result: {home} {hg}-{ag} {away} → {result}")
+                    checked += 1
+                    continue
+                except Exception as e:
+                    print(f"[prediction_job] BBS result error {mid}: {e}")
+                    continue
+
+            # PL: use fd.org finished cache
             match_data = find_finished_match_by_teams(home, away)
             if not match_data or match_data.get("status") != "Finished":
                 continue
@@ -253,10 +306,8 @@ async def run_prediction_job(priors_db: dict, league_key: str):
 
             result = "H" if hg > ag else ("D" if hg == ag else "A")
             log_result(mid, result, int(hg), int(ag))
-            print(f"[prediction_job] result: {home} {hg}-{ag} {away} → {result}")
+            print(f"[prediction_job] PL result: {home} {hg}-{ag} {away} → {result}")
 
-            # Save match snapshot so the match page shows post-game state
-            # without requiring the user to have been on the site during the game
             try:
                 from predictions import save_match_snapshot
                 from utils import get_theme_for_team

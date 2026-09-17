@@ -71,7 +71,7 @@ def _conn() -> sqlite3.Connection:
 
 
 def init_db():
-    """Create tables if they don't exist."""
+    """Create tables if they don't exist. Idempotent."""
     with _conn() as conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS predictions (
@@ -80,6 +80,7 @@ def init_db():
                 away_team        TEXT,
                 kickoff_utc      TEXT,
                 season           INTEGER,
+                league           TEXT DEFAULT 'pl',
 
                 pre_dc_home      REAL,
                 pre_dc_draw      REAL,
@@ -106,6 +107,11 @@ def init_db():
                 adj_correct      INTEGER
             )
         """)
+        # Add league column to existing DBs (safe no-op if already present)
+        try:
+            conn.execute("ALTER TABLE predictions ADD COLUMN league TEXT DEFAULT 'pl'")
+        except Exception:
+            pass
         # Match snapshot table — stores everything needed to render match page
         # Persists across restarts so finished games always display correctly
         conn.execute("""
@@ -141,6 +147,7 @@ def log_pre_lineup(
     kickoff_utc: str, season: int,
     dc_home: float, dc_draw: float, dc_away: float,
     dc_lam: float, dc_mu: float,
+    league: str = "pl",
 ):
     """
     Insert snapshot 1 (pre-lineup DC prior).
@@ -157,22 +164,24 @@ def log_pre_lineup(
             return  # already logged — never overwrite
 
         if existing:
-            # Row exists but pre snapshot not yet filled
             conn.execute("""
                 UPDATE predictions SET
                     pre_dc_home=?, pre_dc_draw=?, pre_dc_away=?,
-                    pre_dc_lam=?, pre_dc_mu=?, pre_logged_at=?
+                    pre_dc_lam=?, pre_dc_mu=?, pre_logged_at=?,
+                    league=?
                 WHERE match_id=?
-            """, (dc_home, dc_draw, dc_away, dc_lam, dc_mu, now, match_id))
+            """, (dc_home, dc_draw, dc_away, dc_lam, dc_mu, now,
+                  league, match_id))
         else:
-            # New row
             conn.execute("""
                 INSERT INTO predictions
                     (match_id, home_team, away_team, kickoff_utc, season,
+                     league,
                      pre_dc_home, pre_dc_draw, pre_dc_away,
                      pre_dc_lam, pre_dc_mu, pre_logged_at)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
             """, (match_id, home_team, away_team, kickoff_utc, season,
+                  league,
                   dc_home, dc_draw, dc_away, dc_lam, dc_mu, now))
         conn.commit()
 
