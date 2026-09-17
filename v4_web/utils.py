@@ -544,15 +544,6 @@ def generate_pitch_svg_horizontal(home_formation="4-3-3", away_formation="4-3-3"
         '<rect width="10" height="200" fill="#1a6b2e"/>'
         '<rect x="10" width="10" height="200" fill="#1d7533"/>'
         '</pattern>'
-        # Player glow filters
-        '<filter id="glow-h" x="-80%" y="-80%" width="260%" height="260%">'
-        '<feGaussianBlur stdDeviation="2" result="blur"/>'
-        '<feComposite in="SourceGraphic" in2="blur" operator="over"/>'
-        '</filter>'
-        '<filter id="glow-a" x="-80%" y="-80%" width="260%" height="260%">'
-        '<feGaussianBlur stdDeviation="2" result="blur"/>'
-        '<feComposite in="SourceGraphic" in2="blur" operator="over"/>'
-        '</filter>'
         # Clip path for rounded pitch boundary
         '<clipPath id="pitch-clip">'
         '<rect x="8" y="8" width="304" height="184" rx="4"/>'
@@ -604,7 +595,168 @@ def generate_pitch_svg_horizontal(home_formation="4-3-3", away_formation="4-3-3"
         '<rect x="312" y="82" width="6" height="36" fill="none" stroke="white" stroke-width="1"/>'
     )
 
-    # ── Players ───────────────────────────────────────────────────────────────
+    # ── Kit definitions — jersey colours + initials ──────────────────────────
+    # Keyed by normalised team name. Each entry: (fill, stroke, initials)
+    # fill   = main jersey colour
+    # stroke = border / trim colour
+    # stripes = optional list of (x_offset, width, colour) for vertical stripes
+    # sash   = optional (x1,y1,x2,y2 polygon points) for diagonal sash
+    # The jersey path viewBox is 0 0 40 44; player dots map to r=6 circles
+    # so jersey is drawn at 12×13.2 in SVG coords (scaled from 40×44)
+
+    _KITS: dict[str, dict] = {
+        # ── Premier League ──────────────────────────────────────────────────
+        "Arsenal"          : {"fill":"#EF0107","stroke":"#fff","abbr":"ARS"},
+        "Aston Villa"      : {"fill":"#670E36","stroke":"#94BEE5","abbr":"AVL"},
+        "Brentford"        : {"fill":"#e00000","stroke":"#fff","abbr":"BRE",
+                               "stripes":[(15,5,"#fff"),(25,5,"#fff")]},
+        "Brighton"         : {"fill":"#0057B8","stroke":"#fff","abbr":"BHA",
+                               "stripes":[(10,5,"#fff"),(20,5,"#fff"),(30,5,"#fff")]},
+        "Bournemouth"      : {"fill":"#DA291C","stroke":"#000","abbr":"BOU",
+                               "stripes":[(14,5,"#000"),(24,5,"#000")]},
+        "Chelsea"          : {"fill":"#034694","stroke":"#fff","abbr":"CHE"},
+        "Crystal Palace"   : {"fill":"#C4122E","stroke":"#1B458F","abbr":"CRY",
+                               "stripes":[(19,11,"#1B458F")]},
+        "Everton"          : {"fill":"#003399","stroke":"#fff","abbr":"EVE"},
+        "Fulham"           : {"fill":"#fff","stroke":"#222","abbr":"FUL"},
+        "Ipswich Town"     : {"fill":"#0044A0","stroke":"#fff","abbr":"IPS"},
+        "Ipswich"          : {"fill":"#0044A0","stroke":"#fff","abbr":"IPS"},
+        "Leeds United"     : {"fill":"#fff","stroke":"#1D428A","abbr":"LEE"},
+        "Leeds"            : {"fill":"#fff","stroke":"#1D428A","abbr":"LEE"},
+        "Liverpool"        : {"fill":"#C8102E","stroke":"#fff","abbr":"LIV"},
+        "Manchester City"  : {"fill":"#6CABDD","stroke":"#fff","abbr":"MCI"},
+        "Man City"         : {"fill":"#6CABDD","stroke":"#fff","abbr":"MCI"},
+        "Manchester United": {"fill":"#DA291C","stroke":"#000","abbr":"MUN"},
+        "Man Utd"          : {"fill":"#DA291C","stroke":"#000","abbr":"MUN"},
+        "Newcastle United" : {"fill":"#000","stroke":"#000","abbr":"NEW",
+                               "stripes":[(19,11,"#fff")]},
+        "Newcastle"        : {"fill":"#000","stroke":"#000","abbr":"NEW",
+                               "stripes":[(19,11,"#fff")]},
+        "Nottingham Forest": {"fill":"#DD0000","stroke":"#fff","abbr":"NFO"},
+        "Nott'm Forest"    : {"fill":"#DD0000","stroke":"#fff","abbr":"NFO"},
+        "Sunderland"       : {"fill":"#EB172B","stroke":"#fff","abbr":"SUN",
+                               "stripes":[(8,8,"#fff"),(24,8,"#fff")]},
+        "Tottenham Hotspur": {"fill":"#fff","stroke":"#132257","abbr":"TOT"},
+        "Spurs"            : {"fill":"#fff","stroke":"#132257","abbr":"TOT"},
+        "West Ham United"  : {"fill":"#7A263A","stroke":"#1BB1E7","abbr":"WHU",
+                               "sleeves":"#1BB1E7"},
+        "West Ham"         : {"fill":"#7A263A","stroke":"#1BB1E7","abbr":"WHU",
+                               "sleeves":"#1BB1E7"},
+        "Wolverhampton Wanderers":{"fill":"#FDB913","stroke":"#231F20","abbr":"WOL"},
+        "Wolves"           : {"fill":"#FDB913","stroke":"#231F20","abbr":"WOL"},
+        "Coventry City"    : {"fill":"#66CCFF","stroke":"#003BA4","abbr":"COV",
+                               "stripes":[(19,11,"#003BA4")]},
+        "Hull City"        : {"fill":"#F5A12D","stroke":"#000","abbr":"HUL",
+                               "stripes":[(19,11,"#000")]},
+        # ── La Liga ─────────────────────────────────────────────────────────
+        "Real Madrid"      : {"fill":"#fff","stroke":"#D4AF37","abbr":"RMA"},
+        "Barcelona"        : {"fill":"#A50044","stroke":"#A50044","abbr":"BAR",
+                               "stripes":[(8,6,"#004D98"),(20,6,"#004D98"),(32,6,"#004D98")]},
+        "Atletico Madrid"  : {"fill":"#CB3524","stroke":"#CB3524","abbr":"ATM",
+                               "stripes":[(14,6,"#fff"),(26,6,"#fff")]},
+        "Sevilla"          : {"fill":"#fff","stroke":"#C00","abbr":"SEV"},
+        "Real Betis"       : {"fill":"#007A2F","stroke":"#007A2F","abbr":"BET",
+                               "stripes":[(14,6,"#fff"),(26,6,"#fff")]},
+        "Athletic Club"    : {"fill":"#E40000","stroke":"#E40000","abbr":"ATH",
+                               "stripes":[(8,7,"#fff"),(25,7,"#fff")]},
+        "Real Sociedad"    : {"fill":"#fff","stroke":"#0064A8","abbr":"RSO",
+                               "stripes":[(14,6,"#0064A8"),(26,6,"#0064A8")]},
+        "Valencia"         : {"fill":"#fff","stroke":"#000","abbr":"VAL"},
+        "Villarreal"       : {"fill":"#FFD700","stroke":"#004D98","abbr":"VIL"},
+        "Celta Vigo"       : {"fill":"#6ECAD4","stroke":"#6ECAD4","abbr":"CEL",
+                               "stripes":[(14,6,"#fff"),(26,6,"#fff")]},
+        "Getafe"           : {"fill":"#1B4F9C","stroke":"#fff","abbr":"GET"},
+        "Alaves"           : {"fill":"#1B4F9C","stroke":"#1B4F9C","abbr":"ALA",
+                               "stripes":[(14,6,"#fff"),(26,6,"#fff")]},
+        "Girona"           : {"fill":"#B22222","stroke":"#B22222","abbr":"GIR",
+                               "stripes":[(19,11,"#fff")]},
+        "Mallorca"         : {"fill":"#E40000","stroke":"#000","abbr":"MLL"},
+        "Osasuna"          : {"fill":"#B22222","stroke":"#000","abbr":"OSA"},
+        "Espanyol"         : {"fill":"#fff","stroke":"#005499","abbr":"ESP",
+                               "stripes":[(0,20,"#005499")]},
+        "Rayo Vallecano"   : {"fill":"#fff","stroke":"#E00","abbr":"RAY","sash":True},
+        "Levante"          : {"fill":"#003B8B","stroke":"#003B8B","abbr":"LEV",
+                               "stripes":[(19,21,"#C00")]},
+        "Oviedo"           : {"fill":"#003B8B","stroke":"#fff","abbr":"OVI"},
+        "Elche"            : {"fill":"#2E7D32","stroke":"#2E7D32","abbr":"ELC",
+                               "stripes":[(19,11,"#fff")]},
+        "Racing Santander" : {"fill":"#006400","stroke":"#fff","abbr":"RAC",
+                               "stripes":[(14,6,"#fff"),(26,6,"#fff")]},
+        "Deportivo La Coruna":{"fill":"#fff","stroke":"#003DA5","abbr":"DEP"},
+    }
+
+    def _luma(hex_col: str) -> int:
+        """Approximate luminance 0-255 from hex colour."""
+        try:
+            h = hex_col.lstrip("#")
+            if len(h) == 3: h = "".join(c*2 for c in h)
+            r, g, b = int(h[0:2],16), int(h[2:4],16), int(h[4:6],16)
+            return int(0.299*r + 0.587*g + 0.114*b)
+        except Exception:
+            return 128
+
+    def _get_kit(team_name: str, fallback_color: str) -> dict:
+        """Look up kit, falling back to solid colour + 3-letter abbr."""
+        k = _KITS.get(team_name)
+        if k:
+            return k
+        # Generate 3-letter abbr from team name
+        words = team_name.split()
+        if len(words) >= 2:
+            abbr = (words[0][0] + words[1][0] + (words[2][0] if len(words) > 2 else words[1][-1])).upper()
+        else:
+            abbr = team_name[:3].upper()
+        return {"fill": fallback_color, "stroke": "#fff", "abbr": abbr}
+
+    def _jersey_svg(cx: float, cy: float, kit: dict, is_home: bool, clip_defs: list) -> str:
+        """
+        Draw a jersey shape centred at (cx, cy) in the 320×200 pitch viewBox.
+        Jersey path drawn in a local 40×44 space, scaled to ~12×13 on pitch.
+        clip_defs: list to append <clipPath> definitions into (for global <defs>)
+        """
+        S = 0.30
+        tx = cx - 20 * S
+        ty = cy - 22 * S
+
+        fill   = kit["fill"]
+        stroke = kit.get("stroke", "#fff")
+        abbr   = kit.get("abbr", "?")
+        stripes= kit.get("stripes", [])
+        sash   = kit.get("sash", False)
+        sleeves= kit.get("sleeves", None)
+
+        jpath = "M14,2 L2,10 L8,14 L8,38 L32,38 L32,14 L38,10 L26,2 C24,5 20,7 20,7 C20,7 16,5 14,2Z"
+
+        uid     = f"{int(cx*10)}_{int(cy*10)}"
+        clip_id = f"jc_{uid}"
+
+        # Register clip path for global defs
+        clip_defs.append(f'<clipPath id="{clip_id}"><path d="{jpath}"/></clipPath>')
+
+        out = f'<g transform="translate({tx:.2f},{ty:.2f}) scale({S})">'
+        out += f'<path d="{jpath}" fill="{fill}" stroke="{stroke}" stroke-width="1.8"/>'
+
+        for sx, sw, sc in stripes:
+            out += f'<rect x="{sx}" y="0" width="{sw}" height="44" fill="{sc}" clip-path="url(#{clip_id})"/>'
+
+        if sleeves:
+            out += f'<rect x="0" y="14" width="9" height="11" fill="{sleeves}" clip-path="url(#{clip_id})"/>'
+            out += f'<rect x="31" y="14" width="9" height="11" fill="{sleeves}" clip-path="url(#{clip_id})"/>'
+
+        if sash:
+            out += f'<polygon points="8,18 32,8 32,22 8,32" fill="#E00" clip-path="url(#{clip_id})"/>'
+
+        luma = _luma(fill)
+        txt_col     = "#fff" if luma < 160 else "#222"
+        circle_fill = "rgba(0,0,0,0.25)" if luma > 120 else "rgba(255,255,255,0.20)"
+        out += f'<circle cx="20" cy="26" r="9" fill="{circle_fill}"/>'
+        out += (f'<text x="20" y="29.5" text-anchor="middle" font-size="7.5"'
+                f' font-weight="700" fill="{txt_col}" font-family="Inter,sans-serif"'
+                f'>{abbr}</text>')
+        out += '</g>'
+        return out
+
+    # Collect jersey SVG fragments and clip defs separately
     def parse_formation(fmt_str):
         if not fmt_str or fmt_str == "0-0": return [1, 4, 3, 3]
         return [1] + [int(x) for x in fmt_str.split("-")]
@@ -612,7 +764,13 @@ def generate_pitch_svg_horizontal(home_formation="4-3-3", away_formation="4-3-3"
     h_lines = parse_formation(home_formation)
     a_lines = parse_formation(away_formation)
 
-    # Home team (left → right), GK near left goal
+    jersey_clip_defs: list[str] = []
+    jersey_svgs: list[str] = []
+
+    h_kit = _get_kit(home_team, home_color)
+    a_kit = _get_kit(away_team, away_color)
+
+    # Home team
     if h_lines and home_players:
         x_steps = len(h_lines)
         p_idx = 0
@@ -621,11 +779,10 @@ def generate_pitch_svg_horizontal(home_formation="4-3-3", away_formation="4-3-3"
             for row_idx in range(num_players):
                 y = 14 + (172 / (num_players + 1)) * (row_idx + 1)
                 name = home_players[p_idx] if p_idx < len(home_players) else f"H{p_idx+1}"
-                glow = 'filter="url(#glow-h)"' if (p_idx % 3 == 0) else ""
-                svg += (
+                j = _jersey_svg(x, y, h_kit, True, jersey_clip_defs)
+                jersey_svgs.append(
                     f'<a href="/player?name={name}&team={home_team}" style="cursor:pointer;">'
-                    f'<circle cx="{x:.1f}" cy="{y:.1f}" r="6"'
-                    f' fill="{home_color}" stroke="white" stroke-width="1.2" {glow}/>'
+                    f'{j}'
                     f'<text x="{x:.1f}" y="{y+11:.1f}" fill="white"'
                     f' font-family="\'JetBrains Mono\',monospace"'
                     f' font-size="5px" text-anchor="middle"'
@@ -634,7 +791,7 @@ def generate_pitch_svg_horizontal(home_formation="4-3-3", away_formation="4-3-3"
                 )
                 p_idx += 1
 
-    # Away team (right → left), GK near right goal
+    # Away team
     if a_lines and away_players:
         x_steps = len(a_lines)
         p_idx = 0
@@ -643,11 +800,10 @@ def generate_pitch_svg_horizontal(home_formation="4-3-3", away_formation="4-3-3"
             for row_idx in range(num_players):
                 y = 14 + (172 / (num_players + 1)) * (row_idx + 1)
                 name = away_players[p_idx] if p_idx < len(away_players) else f"A{p_idx+1}"
-                glow = 'filter="url(#glow-a)"' if (p_idx % 4 == 0) else ""
-                svg += (
+                j = _jersey_svg(x, y, a_kit, False, jersey_clip_defs)
+                jersey_svgs.append(
                     f'<a href="/player?name={name}&team={away_team}" style="cursor:pointer;">'
-                    f'<circle cx="{x:.1f}" cy="{y:.1f}" r="6"'
-                    f' fill="{away_color}" stroke="white" stroke-width="1.2" {glow}/>'
+                    f'{j}'
                     f'<text x="{x:.1f}" y="{y+11:.1f}" fill="white"'
                     f' font-family="\'JetBrains Mono\',monospace"'
                     f' font-size="5px" text-anchor="middle"'
@@ -656,7 +812,10 @@ def generate_pitch_svg_horizontal(home_formation="4-3-3", away_formation="4-3-3"
                 )
                 p_idx += 1
 
-    # ── Score overlay (pill at top centre, inside pitch boundary) ─────────────
+    # Inject jersey clip paths into <defs> then append player jerseys
+    defs_inject = "".join(jersey_clip_defs)
+    svg = svg.replace("</defs>", defs_inject + "</defs>", 1)
+    svg += "".join(jersey_svgs)
     if h_score is not None and a_score is not None:
         svg += (
             '<rect x="118" y="8" width="84" height="22"'
