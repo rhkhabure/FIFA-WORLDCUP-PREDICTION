@@ -6,6 +6,7 @@
     <title>{% if title %}{{ title }} · {% endif %}Melios Dira Odds</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="{{ url_for('static', path='theme.css') }}">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=JetBrains+Mono:wght@400;700&display=swap');
 
@@ -56,7 +57,7 @@
         }
         .nav-item:hover { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.9); }
         .nav-item.active { background: rgba(255,255,255,0.12); color: #fff; border-left-color: var(--league-active-bar); }
-        .nav-icon { font-size: 15px; flex-shrink: 0; width: 20px; text-align: center; }
+        .nav-icon { font-size: 18px; flex-shrink: 0; width: 20px; text-align: center; line-height: 1; }
         .league-nav-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
 
         #main-content { flex: 1; min-width: 0; display: flex; flex-direction: column; }
@@ -115,11 +116,11 @@
 
     <nav style="flex:1;overflow-y:auto;overflow-x:hidden;padding:8px 0">
         <div class="nav-section-label">Navigation</div>
-        <a href="/"       class="nav-item" data-page="home">    <span class="nav-icon">🏠</span><span class="nav-label">Hub</span></a>
-        <a href="/match"  class="nav-item" data-page="match">   <span class="nav-icon">📊</span><span class="nav-label">Match dashboard</span></a>
-        <a href="/teams"  class="nav-item" data-page="teams">   <span class="nav-icon">🗺️</span><span class="nav-label">Team map</span></a>
-        <a href="/history"class="nav-item" data-page="history"> <span class="nav-icon">📋</span><span class="nav-label">Prediction history</span></a>
-        <a href="/tournament" class="nav-item" data-page="tournament"><span class="nav-icon">🏆</span><span class="nav-label">Tournament</span></a>
+        <a href="/"       class="nav-item" data-page="home">    <span class="nav-icon"><i class="ti ti-layout-dashboard" aria-hidden="true"></i></span><span class="nav-label">Hub</span></a>
+        <a href="/match"  class="nav-item" data-page="match">   <span class="nav-icon"><i class="ti ti-ball-football" aria-hidden="true"></i></span><span class="nav-label">Match dashboard</span></a>
+        <a href="/teams"  class="nav-item" data-page="teams">   <span class="nav-icon"><i class="ti ti-map-2" aria-hidden="true"></i></span><span class="nav-label">Team map</span></a>
+        <a href="/history"class="nav-item" data-page="history"> <span class="nav-icon"><i class="ti ti-chart-line" aria-hidden="true"></i></span><span class="nav-label">Prediction history</span></a>
+        <a href="/tournament" class="nav-item" data-page="tournament"><span class="nav-icon"><i class="ti ti-tournament" aria-hidden="true"></i></span><span class="nav-label">Tournament</span></a>
 
         <div class="nav-section-label">Leagues</div>
         {% set leagues_nav = [
