@@ -629,21 +629,130 @@ async def admin_cache_status():
 
 @app.get("/player", response_class=HTMLResponse)
 async def player_page(request: Request):
-    """Player profile placeholder — under construction."""
-    name    = request.query_params.get("name", "")
-    team    = request.query_params.get("team", "")
+    """Player profile — powered by TheSportsDB + DC priors."""
+    name    = request.query_params.get("name", "").strip()
+    team    = request.query_params.get("team", "").strip()
+    league  = request.query_params.get("league", "pl").lower()
+
+    # Resolve team_id for crest proxy
     team_id = request.query_params.get("team_id", "")
-    # Try to resolve team_id from team name if not provided
     if not team_id and team:
         from utils import _CREST_IDS
         team_id = str(_CREST_IDS.get(team, ""))
+
+    # ── TheSportsDB: player profile + career history ───────────────────────
+    from thesportsdb import search_player, get_career_history
+    tsdb_player  = None
+    career       = []
+    try:
+        tsdb_player = search_player(name)
+        if tsdb_player and tsdb_player.get("id"):
+            career = get_career_history(tsdb_player["id"])
+    except Exception as e:
+        print(f"[player] TheSportsDB error: {e}")
+
+    # ── DC priors for this player's team ──────────────────────────────────
+    priors_key = "ESP-La Liga" if league == "laliga" else "ENG-Premier League"
+    team_priors = {}
+    try:
+        league_data = priors_db.get(priors_key, {})
+        teams_data  = league_data.get("teams", {})
+        meta        = league_data.get("meta", {})
+        # Try exact match then fuzzy
+        team_key = TEAM_NAME_ALIASES.get(team, team)
+        team_priors = teams_data.get(team_key, {})
+        if not team_priors:
+            team_lower = team.lower()
+            for k, v in teams_data.items():
+                if k.lower() in team_lower or team_lower in k.lower():
+                    team_priors = v
+                    break
+    except Exception as e:
+        print(f"[player] priors lookup error: {e}")
+
+    alpha   = team_priors.get("alpha")
+    beta    = team_priors.get("beta")
+    gamma   = meta.get("gamma_home_advantage", 1.25) if 'meta' in dir() else 1.25
+    try:
+        gamma = priors_db.get(priors_key, {}).get("meta", {}).get("gamma_home_advantage", 1.25)
+    except Exception:
+        gamma = 1.25
+
+    # α bar width: scale 0-2 range to 0-100%
+    alpha_pct = round(min(100, (alpha / 2.0) * 100)) if alpha else 0
+    beta_pct  = round(min(100, (beta  / 2.0) * 100)) if beta  else 0
+
+    # ── Next match for this team from predictions DB ───────────────────────
+    next_match = None
+    try:
+        from predictions import get_all_predictions
+        from datetime import datetime, timezone as _tz
+        now_str = datetime.now(_tz.utc).isoformat()
+        season  = datetime.now(_tz.utc).year
+        if datetime.now(_tz.utc).month < 8:
+            season -= 1
+        preds = get_all_predictions(season)
+        upcoming = [
+            p for p in preds
+            if not p.get("actual_result")
+            and p.get("kickoff_utc", "") > now_str
+            and p.get("league", "pl") == league
+            and (team.lower() in p.get("home_team","").lower()
+                 or team.lower() in p.get("away_team","").lower())
+        ]
+        if upcoming:
+            upcoming.sort(key=lambda x: x.get("kickoff_utc",""))
+            p = upcoming[0]
+            # Convert kickoff to EAT display
+            ko_display = ""
+            try:
+                from datetime import timedelta
+                ko_dt = datetime.fromisoformat(p["kickoff_utc"].replace("Z","+00:00"))
+                eat   = ko_dt.astimezone(_tz(timedelta(hours=3)))
+                ko_display = eat.strftime("%a %d %b · %H:%M EAT")
+            except Exception:
+                ko_display = p.get("kickoff_utc","")[:10]
+            next_match = {
+                "home"       : p.get("home_team",""),
+                "away"       : p.get("away_team",""),
+                "kickoff_eat": ko_display,
+                "match_id"   : p.get("match_id",""),
+                "dc_home"    : p.get("pre_dc_home"),
+                "dc_draw"    : p.get("pre_dc_draw"),
+                "dc_away"    : p.get("pre_dc_away"),
+                "league"     : league,
+            }
+    except Exception as e:
+        print(f"[player] next match error: {e}")
+
+    # ── Kit for this team ──────────────────────────────────────────────────
+    try:
+        from utils import _KITS_PUBLIC
+        kit = _KITS_PUBLIC.get(team, {"fill": "#14b8a6", "stroke": "#fff", "abbr": team[:3].upper()})
+    except Exception:
+        kit = {"fill": "#14b8a6", "stroke": "#fff", "abbr": team[:3].upper() if team else "---"}
+
+    league_display = "La Liga" if league == "laliga" else "Premier League"
+
     return templates.TemplateResponse(
         request=request, name="player.html",
         context={
-            "request"    : request,
-            "player_name": name,
-            "team_name"  : team,
-            "team_id"    : team_id,
+            "request"       : request,
+            "player_name"   : tsdb_player["name"] if tsdb_player else name,
+            "team_name"     : team,
+            "team_id"       : team_id,
+            "league"        : league,
+            "league_display": league_display,
+            "tsdb"          : tsdb_player,
+            "career"        : career,
+            "alpha"         : round(alpha, 3) if alpha else None,
+            "beta"          : round(beta,  3) if beta  else None,
+            "gamma"         : round(gamma, 3),
+            "alpha_pct"     : alpha_pct,
+            "beta_pct"      : beta_pct,
+            "kit"           : kit,
+            "next_match"    : next_match,
+            **league_ctx(league),
         }
     )
 

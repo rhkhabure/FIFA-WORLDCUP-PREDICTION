@@ -1,57 +1,366 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="max-w-screen-2xl mx-auto flex items-center justify-center min-h-[70vh]">
-    <div class="text-center space-y-6 max-w-md">
+<style>
+body { background: var(--league-tint) !important; }
+.p-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+}
+.info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+}
+.info-row:last-child { border-bottom: none; }
+.info-key { color: var(--text-secondary); }
+.info-val { color: var(--text-primary); font-weight: 500; text-align: right; }
+.bar-track {
+    height: 5px;
+    background: var(--league-tint);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-top: 4px;
+}
+.lbl {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 10px;
+}
+.badge {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 4px;
+    display: inline-block;
+}
+.tl-dot-current {
+    position: absolute;
+    left: -16px;
+    top: 8px;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--league-vivid);
+    border: 2px solid var(--surface);
+}
+.tl-dot-past {
+    position: absolute;
+    left: -16px;
+    top: 8px;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--border);
+    border: 2px solid var(--surface);
+}
+.team-badge {
+    width: 28px;
+    height: 28px;
+    object-fit: contain;
+    border-radius: 4px;
+    background: var(--surface);
+    padding: 2px;
+    border: 1px solid var(--border);
+    flex-shrink: 0;
+}
+.move-badge {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 4px;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+</style>
 
-        <!-- Icon -->
-        <div class="text-6xl">👤</div>
+<div style="max-width:780px;margin:0 auto;display:flex;flex-direction:column;gap:0">
 
-        <!-- Title -->
-        <div>
-            <h1 class="text-2xl font-bold text-white tracking-wide">
-                {% if player_name %}{{ player_name }}{% else %}Player Profile{% endif %}
-            </h1>
-            {% if team_name %}
-            <p class="text-sm font-mono text-slate-500 mt-1">{{ team_name }}</p>
-            {% endif %}
+  <!-- ── HEADER CARD ────────────────────────────────────────────── -->
+  <div class="p-card" style="border-radius:14px 14px 0 0;border-bottom:none;padding:20px">
+    <div style="display:flex;gap:20px;align-items:flex-end">
+
+      <!-- Player photo -->
+      <div style="width:90px;height:110px;border-radius:10px;background:var(--league-tint);
+                  border:1px solid var(--border);flex-shrink:0;overflow:hidden;
+                  display:flex;align-items:center;justify-content:center">
+        {% if tsdb and tsdb.photo_url %}
+        <img src="{{ tsdb.photo_url }}"
+             style="width:100%;height:100%;object-fit:contain;object-position:bottom"
+             onerror="this.style.display='none';document.getElementById('photo-fallback').style.display='flex'"/>
+        <div id="photo-fallback" style="display:none;width:100%;height:100%;
+             align-items:center;justify-content:center;font-size:26px;font-weight:500;
+             color:var(--text-muted)">
+          {{ player_name[:2]|upper if player_name else "??" }}
         </div>
-
-        <!-- Under construction card -->
-        <div class="bg-[#0f172a] border border-amber-800/40 rounded-2xl p-8 shadow-xl">
-            <div class="text-amber-400 text-xs font-mono uppercase tracking-widest mb-3">
-                Under Construction
-            </div>
-            <p class="text-slate-400 text-sm leading-relaxed">
-                The player profile page is currently being built.
-                It will show career stats, heatmaps, xG contribution,
-                and historical performance data.
-            </p>
-            <div class="mt-6 flex gap-3 justify-center text-xs font-mono text-slate-600">
-                <span class="flex items-center gap-1.5">
-                    <span class="w-1.5 h-1.5 rounded-full bg-amber-600"></span>
-                    Season stats
-                </span>
-                <span class="flex items-center gap-1.5">
-                    <span class="w-1.5 h-1.5 rounded-full bg-amber-600"></span>
-                    xG / xA
-                </span>
-                <span class="flex items-center gap-1.5">
-                    <span class="w-1.5 h-1.5 rounded-full bg-amber-600"></span>
-                    Match history
-                </span>
-            </div>
+        {% else %}
+        <div style="display:flex;width:100%;height:100%;align-items:center;
+             justify-content:center;font-size:26px;font-weight:500;color:var(--text-muted)">
+          {{ player_name[:2]|upper if player_name else "??" }}
         </div>
-
-        <!-- Back link -->
-        {% if team_id %}
-        <a href="/team/{{ team_id }}"
-           class="inline-block text-xs font-mono text-slate-500 hover:text-slate-300
-                  border border-slate-800 px-4 py-2 rounded-lg transition">
-            ← Back to {{ team_name or "Team" }}
-        </a>
         {% endif %}
+      </div>
+
+      <!-- Name + bio -->
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:5px">
+          {% if tsdb and tsdb.status == "Active" %}
+          <span class="badge" style="background:var(--league-tint);color:var(--league-primary);
+                border:1px solid var(--league-vivid)">Active</span>
+          {% elif tsdb and tsdb.status %}
+          <span class="badge" style="background:var(--surface);color:var(--text-muted);
+                border:1px solid var(--border)">{{ tsdb.status }}</span>
+          {% endif %}
+          {% if tsdb and tsdb.position %}
+          <span class="badge" style="background:var(--surface);color:var(--text-secondary);
+                border:1px solid var(--border)">{{ tsdb.position }}</span>
+          {% endif %}
+          <span class="badge" style="background:var(--surface);color:var(--text-muted);
+                border:1px solid var(--border)">{{ league_display }}</span>
+        </div>
+
+        <div style="font-size:24px;font-weight:500;color:var(--league-primary);
+                    line-height:1.1;margin-bottom:3px">
+          {{ player_name }}
+        </div>
+        <div style="font-size:14px;color:var(--text-secondary);margin-bottom:12px">
+          {{ team_name }}{% if tsdb and tsdb.nationality %} · {{ tsdb.nationality }}{% endif %}
+        </div>
+
+        <!-- Bio tiles -->
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+          <div style="background:var(--league-tint);border-radius:8px;padding:8px 10px;
+                      border:1px solid var(--border)">
+            <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;
+                        letter-spacing:0.8px;font-weight:600;margin-bottom:2px">Age</div>
+            <div style="font-size:15px;font-weight:500;color:var(--text-primary)">
+              {{ tsdb.age if tsdb and tsdb.age else "—" }}
+            </div>
+          </div>
+          <div style="background:var(--league-tint);border-radius:8px;padding:8px 10px;
+                      border:1px solid var(--border)">
+            <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;
+                        letter-spacing:0.8px;font-weight:600;margin-bottom:2px">Born</div>
+            <div style="font-size:13px;font-weight:500;color:var(--text-primary)">
+              {{ tsdb.dob_display if tsdb and tsdb.dob_display else "—" }}
+            </div>
+          </div>
+          <div style="background:var(--league-tint);border-radius:8px;padding:8px 10px;
+                      border:1px solid var(--border)">
+            <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;
+                        letter-spacing:0.8px;font-weight:600;margin-bottom:2px">Nation</div>
+            <div style="font-size:13px;font-weight:500;color:var(--text-primary)">
+              {{ tsdb.nationality if tsdb and tsdb.nationality else "—" }}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Jersey -->
+      <div style="text-align:center;flex-shrink:0">
+        <svg width="48" height="54" viewBox="0 0 40 44" style="display:block;margin:0 auto 4px">
+          {% set fill   = kit.fill   if kit else "#14b8a6" %}
+          {% set stroke = kit.stroke if kit else "#fff" %}
+          {% set abbr   = kit.abbr   if kit else "???" %}
+          <clipPath id="jk"><path d="M14,2 L2,10 L8,14 L8,38 L32,38 L32,14 L38,10 L26,2 C24,5 20,7 20,7 C20,7 16,5 14,2Z"/></clipPath>
+          <path d="M14,2 L2,10 L8,14 L8,38 L32,38 L32,14 L38,10 L26,2 C24,5 20,7 20,7 C20,7 16,5 14,2Z"
+                fill="{{ fill }}" stroke="{{ stroke }}" stroke-width="1.8"/>
+          {% if kit and kit.stripes %}
+          {% for sx, sw, sc in kit.stripes %}
+          <rect x="{{ sx }}" y="0" width="{{ sw }}" height="44" fill="{{ sc }}" clip-path="url(#jk)"/>
+          {% endfor %}
+          {% endif %}
+          <circle cx="20" cy="26" r="9" fill="rgba(0,0,0,0.25)"/>
+          <text x="20" y="29.5" text-anchor="middle" font-size="7.5" font-weight="700"
+                fill="#fff" font-family="Inter,sans-serif">{{ abbr }}</text>
+        </svg>
+        <div style="font-size:11px;color:var(--text-muted)">{{ team_name }}</div>
+      </div>
 
     </div>
+  </div>
+
+  <!-- ── MIDDLE ROW: ratings + next match ──────────────────────── -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:0">
+
+    <!-- Team DC ratings -->
+    <div class="p-card" style="border-radius:0;border-right:none;border-top:none;
+                                border-bottom:none;padding:16px 18px">
+      <div class="lbl">Team ratings</div>
+
+      {% if alpha %}
+      <div style="margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;font-size:12px;
+                    color:var(--text-secondary)">
+          <span>Attack (α)</span>
+          <span style="font-family:var(--font-mono);color:var(--text-primary);font-weight:500">
+            {{ alpha }}
+          </span>
+        </div>
+        <div class="bar-track">
+          <div style="width:{{ alpha_pct }}%;height:100%;background:{{ kit.fill if kit else 'var(--league-primary)' }};
+                      border-radius:3px"></div>
+        </div>
+      </div>
+      <div style="margin-bottom:14px">
+        <div style="display:flex;justify-content:space-between;font-size:12px;
+                    color:var(--text-secondary)">
+          <span>Defence (β)</span>
+          <span style="font-family:var(--font-mono);color:var(--text-primary);font-weight:500">
+            {{ beta }}
+          </span>
+        </div>
+        <div class="bar-track">
+          <div style="width:{{ beta_pct }}%;height:100%;background:{{ kit.fill if kit else 'var(--league-primary)' }};
+                      border-radius:3px"></div>
+        </div>
+      </div>
+      {% else %}
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">
+        No DC prior data for this team.
+      </div>
+      {% endif %}
+
+      <div class="info-row">
+        <span class="info-key">League</span>
+        <span class="info-val">{{ league_display }}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-key">Home adv. (γ)</span>
+        <span class="info-val" style="font-family:var(--font-mono)">{{ gamma }}</span>
+      </div>
+    </div>
+
+    <!-- Next match -->
+    <div class="p-card" style="border-radius:0;border-top:none;border-bottom:none;padding:16px 18px">
+      <div class="lbl">Next match</div>
+
+      {% if next_match %}
+      <div style="font-size:14px;font-weight:500;color:var(--text-primary);margin-bottom:2px">
+        {{ next_match.home }} vs {{ next_match.away }}
+      </div>
+      <div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px">
+        {{ next_match.kickoff_eat }}
+      </div>
+
+      {% if next_match.dc_home %}
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:12px">
+        <div style="text-align:center;background:var(--league-tint);border-radius:6px;padding:7px 4px">
+          <div style="font-size:17px;font-weight:500;color:var(--league-primary);
+                      font-family:var(--font-mono)">
+            {{ next_match.dc_home | round(1) }}%
+          </div>
+          <div style="font-size:10px;color:var(--league-mid)">Home</div>
+        </div>
+        <div style="text-align:center;background:var(--surface);border-radius:6px;padding:7px 4px;
+                    border:1px solid var(--border)">
+          <div style="font-size:17px;font-weight:500;color:var(--text-primary);
+                      font-family:var(--font-mono)">
+            {{ next_match.dc_draw | round(1) }}%
+          </div>
+          <div style="font-size:10px;color:var(--text-muted)">Draw</div>
+        </div>
+        <div style="text-align:center;background:var(--surface);border-radius:6px;padding:7px 4px;
+                    border:1px solid var(--border)">
+          <div style="font-size:17px;font-weight:500;color:var(--text-primary);
+                      font-family:var(--font-mono)">
+            {{ next_match.dc_away | round(1) }}%
+          </div>
+          <div style="font-size:10px;color:var(--text-muted)">Away</div>
+        </div>
+      </div>
+      {% endif %}
+
+      <a href="/match?match_id={{ next_match.match_id }}&league={{ next_match.league }}"
+         style="font-size:12px;color:var(--league-primary);text-decoration:none">
+        View full prediction →
+      </a>
+
+      {% else %}
+      <div style="font-size:12px;color:var(--text-muted)">
+        No upcoming match found for {{ team_name }}.
+      </div>
+      {% endif %}
+    </div>
+
+  </div>
+
+  <!-- ── CAREER TIMELINE ────────────────────────────────────────── -->
+  <div class="p-card" style="border-radius:0 0 14px 14px;border-top:none;padding:16px 18px">
+    <div class="lbl">Career history</div>
+
+    {% if career %}
+    <div style="position:relative;padding-left:22px">
+      <!-- Vertical line -->
+      <div style="position:absolute;left:8px;top:8px;bottom:8px;width:1px;
+                  background:var(--border)"></div>
+
+      {% for club in career %}
+      <div style="position:relative;margin-bottom:{% if not loop.last %}18px{% else %}0{% endif %}">
+
+        <!-- Timeline dot -->
+        {% if club.is_current %}
+        <div class="tl-dot-current"></div>
+        {% else %}
+        <div class="tl-dot-past"></div>
+        {% endif %}
+
+        <div style="display:flex;align-items:center;gap:10px">
+          <!-- Team badge -->
+          {% if club.badge_url %}
+          <img src="{{ club.badge_url }}" class="team-badge"
+               onerror="this.style.visibility='hidden'"/>
+          {% else %}
+          <div class="team-badge" style="visibility:hidden"></div>
+          {% endif %}
+
+          <!-- Team info -->
+          <div style="flex:1;min-width:0">
+            <div style="font-size:14px;font-weight:500;color:var(--text-primary)">
+              {{ club.team_name }}
+            </div>
+            <div style="font-size:12px;color:var(--text-secondary)">
+              {{ club.joined }}{% if club.departed %} – {{ club.departed }}{% else %} – present{% endif %}
+              {% if club.appearances %} · {{ club.appearances }} apps{% endif %}
+              {% if club.goals %} · {{ club.goals }} goals{% endif %}
+            </div>
+          </div>
+
+          <!-- Move type badge -->
+          {% if club.is_current %}
+          <span class="move-badge" style="background:var(--league-tint);
+                color:var(--league-primary);border:1px solid var(--league-vivid)">
+            Current
+          </span>
+          {% elif club.move_type == "Youth" %}
+          <span class="move-badge" style="background:var(--surface);color:var(--text-muted);
+                border:1px solid var(--border)">Youth</span>
+          {% elif club.move_type == "Loan" %}
+          <span class="move-badge" style="background:var(--surface);color:var(--text-muted);
+                border:1px solid var(--border)">Loan</span>
+          {% else %}
+          <span class="move-badge" style="background:var(--surface);color:var(--text-muted);
+                border:1px solid var(--border)">{{ club.move_type or "—" }}</span>
+          {% endif %}
+
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    {% else %}
+    <div style="font-size:12px;color:var(--text-muted);padding:8px 0">
+      No career history found for {{ player_name }}.
+      TheSportsDB may not have this player in their database yet.
+    </div>
+    {% endif %}
+
+  </div>
+
 </div>
-<style>body { background-color: #0b0f19 !important; }</style>
 {% endblock %}
