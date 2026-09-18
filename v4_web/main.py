@@ -757,8 +757,152 @@ async def player_page(request: Request):
     )
 
 
-@app.get("/history", response_class=HTMLResponse)
-async def history_page(request: Request):
+@app.get("/tournament", response_class=HTMLResponse)
+async def tournament_page(request: Request):
+    """Tournament simulator — CL knockout + PL season Monte Carlo."""
+    import json
+
+    # Build team list per league from priors
+    all_teams: dict[str, list[dict]] = {}
+    for league_key, league_name in [
+        ("ENG-Premier League", "pl"),
+        ("ESP-La Liga",        "laliga"),
+        ("GER-Bundesliga",     "bundesliga"),
+        ("ITA-Serie A",        "seriea"),
+        ("FRA-Ligue 1",        "ligue1"),
+    ]:
+        data  = priors_db.get(league_key, {})
+        teams = data.get("teams", {})
+        ranked = sorted(teams.items(), key=lambda x: x[1]["alpha"], reverse=True)
+        from utils import _KITS_PUBLIC
+        all_teams[league_name] = [
+            {
+                "name"  : t,
+                "alpha" : round(v["alpha"], 3),
+                "abbr"  : _KITS_PUBLIC.get(t, {}).get("abbr", t[:3].upper()),
+                "fill"  : _KITS_PUBLIC.get(t, {}).get("fill", "#14b8a6"),
+                "stroke": _KITS_PUBLIC.get(t, {}).get("stroke", "#fff"),
+            }
+            for t, v in ranked
+        ]
+
+    return templates.TemplateResponse(
+        request=request, name="tournament.html",
+        context={
+            "request"  : request,
+            "all_teams": json.dumps(all_teams),
+            **league_ctx("pl"),
+        }
+    )
+
+
+@app.post("/api/simulate/cl")
+async def api_simulate_cl(request: Request):
+    """
+    Run CL knockout Monte Carlo simulation.
+    Body: {"teams": ["Liverpool", "Barcelona", ...], "league_map": {"Liverpool": "ENG-Premier League", ...}}
+    Returns: win_pct, sf_pct, qf_pct, most_likely bracket
+    """
+    from simulate import simulate_cl_tournament
+    body = await request.json()
+    teams     = body.get("teams", [])
+    league_map= body.get("league_map", {})
+
+    if len(teams) != 16:
+        return JSONResponse({"error": f"Need 16 teams, got {len(teams)}"}, status_code=400)
+
+    try:
+        result = simulate_cl_tournament(
+            teams=teams,
+            league_map=league_map,
+            priors_db=priors_db,
+            n_runs=10_000,
+        )
+        return JSONResponse(result)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.post("/api/simulate/pl")
+async def api_simulate_pl(request: Request):
+    """
+    Run PL season Monte Carlo simulation.
+    Fetches current standings from fd.org, remaining fixtures from FPL.
+    Returns: predicted table with title/top4/relegation probabilities.
+    """
+    from simulate import simulate_pl_season
+
+    # Get current standings
+    current_table = []
+    try:
+        import ssl, json as _json, urllib.request as _req
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode    = ssl.CERT_NONE
+        API_KEY = os.getenv("FOOTBALLDATA_ORG_KEY", "")
+        r = _req.Request(
+            "https://api.football-data.org/v4/competitions/PL/standings",
+            headers={"X-Auth-Token": API_KEY}
+        )
+        with _req.urlopen(r, timeout=8, context=ctx) as resp:
+            data = _json.loads(resp.read())
+        for row in data.get("standings", [{}])[0].get("table", []):
+            current_table.append({
+                "team"  : row["team"]["name"],
+                "played": row["playedGames"],
+                "won"   : row["won"],
+                "drawn" : row["draw"],
+                "lost"  : row["lost"],
+                "gf"    : row["goalsFor"],
+                "ga"    : row["goalsAgainst"],
+                "points": row["points"],
+            })
+    except Exception as e:
+        print(f"[simulate/pl] standings error: {e}")
+        # Fallback: build from fd.org finished cache
+        from footballdata import _populate_finished_cache, PL_CODE
+        from collections import defaultdict
+        cache = _populate_finished_cache(PL_CODE)
+        tbl   = defaultdict(lambda: {"played":0,"won":0,"drawn":0,"lost":0,"gf":0,"ga":0,"points":0})
+        for m in cache.values():
+            home, away = m.get("home_team",""), m.get("away_team","")
+            hg, ag = m.get("h_score"), m.get("a_score")
+            if not home or not away or hg is None: continue
+            tbl[home]["played"]+=1; tbl[away]["played"]+=1
+            tbl[home]["gf"]+=hg;   tbl[home]["ga"]+=ag
+            tbl[away]["gf"]+=ag;   tbl[away]["ga"]+=hg
+            if hg>ag:  tbl[home]["won"]+=1;   tbl[home]["points"]+=3; tbl[away]["lost"]+=1
+            elif hg==ag: tbl[home]["drawn"]+=1; tbl[home]["points"]+=1; tbl[away]["drawn"]+=1; tbl[away]["points"]+=1
+            else:      tbl[away]["won"]+=1;   tbl[away]["points"]+=3; tbl[home]["lost"]+=1
+        current_table = [{"team":t,**v} for t,v in tbl.items()]
+
+    # Get remaining fixtures from FPL
+    remaining = []
+    try:
+        fpl_fixtures = get_upcoming_fixtures(max_fixtures=500)
+        fpl_bootstrap= _get_bootstrap()
+        fpl_teams    = {t["id"]: t["name"] for t in fpl_bootstrap.get("teams",[])}
+        for f in fpl_fixtures:
+            remaining.append({
+                "home": f.get("home", ""),
+                "away": f.get("away", ""),
+            })
+    except Exception as e:
+        print(f"[simulate/pl] fixtures error: {e}")
+
+    if not current_table:
+        return JSONResponse({"error": "Could not load standings"}, status_code=503)
+
+    try:
+        result = simulate_pl_season(
+            current_table=current_table,
+            remaining_fixtures=remaining,
+            priors_db=priors_db,
+            n_runs=10_000,
+        )
+        return JSONResponse(result)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
     """Prediction history — model accuracy tracker, filterable by league."""
     from predictions import get_accuracy_stats, get_all_predictions
     from datetime import datetime, timezone
