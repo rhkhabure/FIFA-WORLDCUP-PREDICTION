@@ -357,7 +357,7 @@ async def live_poll(match_id: str, request: Request):
                     ko_raw = detail.get("kickoff_utc", "")
                     if ko_raw:
                         ko_dt   = datetime.fromisoformat(ko_raw.replace("Z","+00:00"))
-                        elapsed = (datetime.now(_tz.utc) - ko_dt).total_seconds() / 60
+                        elapsed = (datetime.now(timezone.utc) - ko_dt).total_seconds() / 60
                         if elapsed > 60:
                             elapsed -= 15
                         live_minute = max(1, min(90, int(elapsed)))
@@ -721,9 +721,9 @@ async def player_page(request: Request):
     # ── Next match for this team from predictions DB ───────────────────────
     next_match = None
     try:
-        now_str = datetime.now(_tz.utc).isoformat()
-        season  = datetime.now(_tz.utc).year
-        if datetime.now(_tz.utc).month < 8:
+        now_str = datetime.now(timezone.utc).isoformat()
+        season  = datetime.now(timezone.utc).year
+        if datetime.now(timezone.utc).month < 8:
             season -= 1
         preds = get_all_predictions(season)
         upcoming = [
@@ -741,7 +741,7 @@ async def player_page(request: Request):
             ko_display = ""
             try:
                 ko_dt = datetime.fromisoformat(p["kickoff_utc"].replace("Z","+00:00"))
-                eat   = ko_dt.astimezone(_tz(timedelta(hours=3)))
+                eat   = ko_dt.astimezone(EAT)
                 ko_display = eat.strftime("%a %d %b · %H:%M EAT")
             except Exception:
                 ko_display = p.get("kickoff_utc","")[:10]
@@ -1235,7 +1235,7 @@ async def match(request: Request):
 
     # Map URL param → priors key + competition code
     # LEAGUE_MAP imported from constants.py
-    _lm = _LEAGUE_MAP.get(_league_param, _LEAGUE_MAP["pl"])
+    _lm = LEAGUE_MAP.get(_league_param, LEAGUE_MAP["pl"])
     active_league  = _lm["priors"]   # e.g. "ESP-La Liga"
     active_comp    = _lm["comp"]     # e.g. "PD"
     active_name    = _lm["name"]     # e.g. "La Liga"
@@ -1449,7 +1449,7 @@ async def match(request: Request):
 
         # Check if kickoff has passed — if so, try football-data.org
         # for the actual status (it works for finished matches)
-        now_utc   = datetime.now(_tz.utc)
+        now_utc   = datetime.now(timezone.utc)
         kicked_off = False
         if kickoff:
             try:
@@ -1792,7 +1792,7 @@ async def match(request: Request):
                     ko_raw = bbs_live_data.get("kickoff_utc", "")
                     if ko_raw:
                         ko_dt  = datetime.fromisoformat(ko_raw.replace("Z","+00:00"))
-                        elapsed = (datetime.now(_tz.utc) - ko_dt).total_seconds() / 60
+                        elapsed = (datetime.now(timezone.utc) - ko_dt).total_seconds() / 60
                         # Account for 15-min halftime break after 45 min
                         if elapsed > 60:
                             elapsed -= 15
