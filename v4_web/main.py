@@ -17,6 +17,7 @@ Run:  uvicorn main:app --reload --port 8000
 """
 
 # ── Standard library ──────────────────────────────────────────────────────────
+import concurrent.futures
 import json
 import os
 import pickle
