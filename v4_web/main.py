@@ -16,38 +16,89 @@ Data sources:
 Run:  uvicorn main:app --reload --port 8000
 """
 
+# ── Standard library ──────────────────────────────────────────────────────────
 import json
+import os
 import pickle
 import sys
-import os
+from collections import defaultdict
+from datetime import datetime, timezone, timedelta
+from pathlib import Path
+
+# ── Third-party ───────────────────────────────────────────────────────────────
 import numpy as np
 import torch
 import torch.nn as nn
-from pathlib import Path
+import uvicorn
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from scipy.stats import poisson
 
-import uvicorn
-
+# ── Project root ──────────────────────────────────────────────────────────────
 ROOT = Path(__file__).resolve().parent
 sys.path.append(str(ROOT.parent))
 
-from footballdata import (get_live_match_data, get_last_completed_pl_match,
-                          get_finished_match, find_finished_match_by_teams)
-from utils import (generate_pitch_svg_horizontal, get_theme_for_team,
-                   get_formation_for_team, get_squad_for_team,
-                   get_crest_url, get_crest_proxy_url, _CREST_IDS)
-from timeline import build_match_timeline_svg
-from scoreline_matrix import build_scoreline_svg
-from fpl import get_upcoming_fixtures
-from fotmob import (get_lineup, get_live_xg, get_fotmob_match_id,
-                    get_match_status_from_date_cache, fotmob_to_fpl_team_name,
-                    has_key as fotmob_available)
-from lineup_adjustment import compute_lineup_adjusted_odds, get_absent_key_players
-from teamdata import get_team_profile, get_team_season_results, get_next_fixture, get_last_n_results, get_standings
+# ── Local modules — data sources ──────────────────────────────────────────────
+from bbs import (
+    get_match_detail as bbs_get_match_detail,
+    get_today_matches as bbs_get_today_matches,
+    get_upcoming_fixtures as bbs_get_upcoming_fixtures,
+    has_key as bbs_ok,
+)
 from football_co_uk import get_team_results_historical, get_pl_standings_historical
+from footballdata import (
+    get_live_match_data,
+    get_last_completed_pl_match,
+    get_finished_match,
+    find_finished_match_by_teams,
+    get_upcoming_fixtures_fd,
+    _populate_finished_cache,
+    PL_CODE,
+)
+from fotmob import (
+    get_lineup,
+    get_live_xg,
+    get_fotmob_match_id,
+    get_match_status_from_date_cache,
+    fotmob_to_fpl_team_name,
+    has_key as fotmob_available,
+    _lineup_cache,
+    _refresh_date_cache_if_stale,
+)
+from fpl import (
+    get_upcoming_fixtures,
+    get_team_map,
+    warm_cache as fpl_warm,
+    _cache as fpl_cache,
+    _CACHE_TTLS,
+)
+from lineup_adjustment import compute_lineup_adjusted_odds, get_absent_key_players
+from prediction_job import run_prediction_job
+from predictions import get_all_predictions, get_accuracy_stats
+from scoreline_matrix import build_scoreline_svg
+from simulate import simulate_cl_tournament, simulate_pl_season
+from teamdata import (
+    get_team_profile,
+    get_team_season_results,
+    get_next_fixture,
+    get_last_n_results,
+    get_standings,
+)
+from thesportsdb import search_player, get_career_history
+from timeline import build_match_timeline_svg
+from utils import (
+    generate_pitch_svg_horizontal,
+    generate_pitch_svg_vertical,
+    get_theme_for_team,
+    get_formation_for_team,
+    get_squad_for_team,
+    get_crest_url,
+    get_crest_proxy_url,
+    _CREST_IDS,
+    _KITS_PUBLIC,
+)
 from v4_backend.feature_builder import DCStrengthLookup, TEAM_NAME_ALIASES
 
 # ── Constants ─────────────────────────────────────────────────────────────────
@@ -117,8 +168,6 @@ async def lifespan(app):
 
     # Warm FPL fixture cache so first page load is instant
     # Runs in a thread to avoid blocking the event loop
-    import asyncio, concurrent.futures
-    from fpl import warm_cache as fpl_warm
     loop = asyncio.get_event_loop()
     with concurrent.futures.ThreadPoolExecutor() as pool:
         await loop.run_in_executor(pool, fpl_warm)
@@ -171,7 +220,6 @@ def get_effective_gamma(gamma_calibrated: float, season_start_month: int = 8,
     GW3: decay=0.80 → gamma≈1.189
     GW6: decay=1.00 → gamma=calibrated
     """
-    from datetime import datetime, timezone
     now = datetime.now(timezone.utc)
 
     year = now.year if now.month >= season_start_month else now.year - 1
@@ -290,7 +338,6 @@ async def live_poll(match_id: str, request: Request):
     # BBS live poll for La Liga matches
     if str(match_id).startswith("bbs_"):
         try:
-            from bbs import get_match_detail
             bbs_uuid = str(match_id)[4:]
             detail   = get_match_detail(bbs_uuid)
             if not detail:
@@ -305,7 +352,6 @@ async def live_poll(match_id: str, request: Request):
             live_minute = None
             if match_status == "In Play":
                 try:
-                    from datetime import datetime, timezone as _tz
                     ko_raw = detail.get("kickoff_utc", "")
                     if ko_raw:
                         ko_dt   = datetime.fromisoformat(ko_raw.replace("Z","+00:00"))
@@ -379,7 +425,6 @@ async def live_poll(match_id: str, request: Request):
 @app.get("/teams", response_class=HTMLResponse)
 async def teams_hub(request: Request):
     """Teams hub — England map with all PL clubs plotted."""
-    from utils import get_theme_for_team, _CREST_IDS
     team_colours = {
         name: get_theme_for_team(name)["primary"]
         for name in _CREST_IDS
@@ -409,10 +454,6 @@ async def teams_laliga(request: Request):
 @app.get("/team/{team_id}", response_class=HTMLResponse)
 async def team_profile(request: Request, team_id: int, season: int = 2025):
     """Team profile page — squad, ratings, form, season results."""
-    from utils import (generate_pitch_svg_vertical, get_theme_for_team,
-                       get_formation_for_team, get_squad_for_team,
-                       get_crest_proxy_url, TEAM_MANAGERS)
-    from v4_backend.feature_builder import TEAM_NAME_ALIASES
 
     profile  = get_team_profile(team_id)
     if not profile:
@@ -524,9 +565,8 @@ async def team_profile(request: Request, team_id: int, season: int = 2025):
         all_results = get_team_results_historical(team_name, season)
         standings   = get_pl_standings_historical(season)
         # Map fdco standings team_id using our _CREST_IDS
-        from utils import _CREST_IDS as _CID
         for row in standings:
-            row["team_id"] = _CID.get(row["team_name"])
+            row["team_id"] = _CREST_IDS.get(row["team_name"])
     else:
         all_results = get_team_season_results(team_id, season=season)
         standings   = get_standings(season=season)
@@ -562,8 +602,6 @@ async def team_profile(request: Request, team_id: int, season: int = 2025):
 @app.get("/admin/run-predictions")
 async def admin_run_predictions():
     """Manually trigger the prediction job — useful for initial setup."""
-    from prediction_job import run_prediction_job
-    from predictions import get_accuracy_stats
     try:
         await run_prediction_job(priors_db, LEAGUE_KEY)
         stats = get_accuracy_stats()
@@ -579,7 +617,6 @@ async def admin_run_predictions():
 @app.get("/admin/predictions-status")
 async def admin_predictions_status():
     """Check what's in the predictions DB."""
-    from predictions import get_all_predictions, get_accuracy_stats
     try:
         preds = get_all_predictions()
         stats = get_accuracy_stats()
@@ -606,7 +643,6 @@ async def admin_predictions_status():
 @app.get("/admin/cache-status")
 async def admin_cache_status():
     """Check FPL cache state — what's cached and how stale it is."""
-    from fpl import _cache, _CACHE_TTLS
     now = time.time()
     status = {}
     for key, (data, ts) in _cache.items():
@@ -637,11 +673,9 @@ async def player_page(request: Request):
     # Resolve team_id for crest proxy
     team_id = request.query_params.get("team_id", "")
     if not team_id and team:
-        from utils import _CREST_IDS
         team_id = str(_CREST_IDS.get(team, ""))
 
     # ── TheSportsDB: player profile + career history ───────────────────────
-    from thesportsdb import search_player, get_career_history
     tsdb_player  = None
     career       = []
     try:
@@ -685,8 +719,6 @@ async def player_page(request: Request):
     # ── Next match for this team from predictions DB ───────────────────────
     next_match = None
     try:
-        from predictions import get_all_predictions
-        from datetime import datetime, timezone as _tz
         now_str = datetime.now(_tz.utc).isoformat()
         season  = datetime.now(_tz.utc).year
         if datetime.now(_tz.utc).month < 8:
@@ -706,7 +738,6 @@ async def player_page(request: Request):
             # Convert kickoff to EAT display
             ko_display = ""
             try:
-                from datetime import timedelta
                 ko_dt = datetime.fromisoformat(p["kickoff_utc"].replace("Z","+00:00"))
                 eat   = ko_dt.astimezone(_tz(timedelta(hours=3)))
                 ko_display = eat.strftime("%a %d %b · %H:%M EAT")
@@ -727,7 +758,6 @@ async def player_page(request: Request):
 
     # ── Kit for this team ──────────────────────────────────────────────────
     try:
-        from utils import _KITS_PUBLIC
         kit = _KITS_PUBLIC.get(team, {"fill": "#14b8a6", "stroke": "#fff", "abbr": team[:3].upper()})
     except Exception:
         kit = {"fill": "#14b8a6", "stroke": "#fff", "abbr": team[:3].upper() if team else "---"}
@@ -760,7 +790,6 @@ async def player_page(request: Request):
 @app.get("/tournament", response_class=HTMLResponse)
 async def tournament_page(request: Request):
     """Tournament simulator — CL knockout + PL season Monte Carlo."""
-    import json
 
     # Build team list per league from priors
     all_teams: dict[str, list[dict]] = {}
@@ -774,7 +803,6 @@ async def tournament_page(request: Request):
         data  = priors_db.get(league_key, {})
         teams = data.get("teams", {})
         ranked = sorted(teams.items(), key=lambda x: x[1]["alpha"], reverse=True)
-        from utils import _KITS_PUBLIC
         all_teams[league_name] = [
             {
                 "name"  : t,
@@ -803,7 +831,6 @@ async def api_simulate_cl(request: Request):
     Body: {"teams": ["Liverpool", "Barcelona", ...], "league_map": {"Liverpool": "ENG-Premier League", ...}}
     Returns: win_pct, sf_pct, qf_pct, most_likely bracket
     """
-    from simulate import simulate_cl_tournament
     body = await request.json()
     teams     = body.get("teams", [])
     league_map= body.get("league_map", {})
@@ -830,12 +857,10 @@ async def api_simulate_pl(request: Request):
     Fetches current standings from fd.org, remaining fixtures from FPL.
     Returns: predicted table with title/top4/relegation probabilities.
     """
-    from simulate import simulate_pl_season
 
     # Get current standings
     current_table = []
     try:
-        import ssl, json as _json, urllib.request as _req
         ctx = ssl.create_default_context()
         ctx.check_hostname = False
         ctx.verify_mode    = ssl.CERT_NONE
@@ -860,8 +885,6 @@ async def api_simulate_pl(request: Request):
     except Exception as e:
         print(f"[simulate/pl] standings error: {e}")
         # Fallback: build from fd.org finished cache
-        from footballdata import _populate_finished_cache, PL_CODE
-        from collections import defaultdict
         cache = _populate_finished_cache(PL_CODE)
         tbl   = defaultdict(lambda: {"played":0,"won":0,"drawn":0,"lost":0,"gf":0,"ga":0,"points":0})
         for m in cache.values():
@@ -908,8 +931,6 @@ async def api_simulate_pl(request: Request):
 @app.get("/history", response_class=HTMLResponse)
 async def history_page(request: Request):
     """Prediction history — model accuracy tracker, filterable by league."""
-    from predictions import get_all_predictions
-    from datetime import datetime, timezone
 
     # League filter from query param: ?league=pl / ?league=laliga / (all)
     league_filter = request.query_params.get("league", "all").lower()
@@ -1031,9 +1052,6 @@ async def history_page(request: Request):
 
 @app.get("/", response_class=HTMLResponse)
 async def hub(request: Request):
-    from predictions import get_accuracy_stats, get_all_predictions
-    from datetime import datetime, timezone, timedelta
-    from fpl import get_upcoming_fixtures as fpl_upcoming
 
     now_eat = datetime.now(timezone(timedelta(hours=3)))
     today   = now_eat.date().isoformat()
@@ -1046,7 +1064,7 @@ async def hub(request: Request):
 
     # Upcoming PL fixtures for today strip fallback
     try:
-        upcoming = fpl_upcoming(max_fixtures=10)
+        upcoming = fpl_get_upcoming_fixtures(max_fixtures=10)
     except Exception:
         upcoming = []
 
@@ -1097,7 +1115,6 @@ async def league_page(request: Request, league_key: str):
     La Liga → live dashboard with DC odds and upcoming fixtures.
     Others  → under-construction page.
     """
-    from fastapi.responses import RedirectResponse
 
     if league_key not in LEAGUE_CONTEXTS:
         return RedirectResponse(url="/")
@@ -1156,8 +1173,6 @@ async def laliga_dashboard(request: Request):
     Fixture source: football-data.org /competitions/PD/matches
     DC odds: ESP-La Liga priors from v4_priors.json
     """
-    from footballdata import get_upcoming_fixtures_fd, PD_CODE
-    from datetime import datetime, timezone, timedelta
 
     LL_KEY = "ESP-La Liga"
     EAT    = timezone(timedelta(hours=3))
@@ -1190,7 +1205,6 @@ async def laliga_dashboard(request: Request):
     # La Liga accuracy from predictions DB (season=2025, league tagged laliga)
     ll_stats = None
     try:
-        from predictions import get_accuracy_stats
         ll_stats = get_accuracy_stats(season=2025)
     except Exception:
         pass
@@ -1238,14 +1252,11 @@ async def match(request: Request):
 
     if not match_id:
         # Default: redirect to the most recent/current match for this league
-        from footballdata import _populate_finished_cache
-        from datetime import datetime, timezone, timedelta
 
         # For La Liga and other non-PL leagues: BBS API first, FotMob fallback
         if active_ctx_key != "pl":
             # Try BBS (Big Balls Sports Data) — primary La Liga live source
             try:
-                from bbs import get_today_matches, has_key as bbs_ok
                 if bbs_ok():
                     today_matches = get_today_matches(active_ctx_key)
                     if today_matches:
@@ -1264,8 +1275,6 @@ async def match(request: Request):
             # FotMob fallback
             if fotmob_available():
                 try:
-                    from fotmob import _lineup_cache, _refresh_date_cache_if_stale
-                    from datetime import datetime, timezone, timedelta
                     today_str = datetime.now(
                         timezone(timedelta(hours=3))
                     ).strftime("%Y%m%d")
@@ -1327,8 +1336,6 @@ async def match(request: Request):
             # FPL failed — try FotMob today for any PL match
             if fotmob_available():
                 try:
-                    from fotmob import _lineup_cache, _refresh_date_cache_if_stale
-                    from datetime import datetime, timezone, timedelta
                     today_str = datetime.now(
                         timezone(timedelta(hours=3))
                     ).strftime("%Y%m%d")
@@ -1457,7 +1464,6 @@ async def match(request: Request):
 
         # Check if kickoff has passed — if so, try football-data.org
         # for the actual status (it works for finished matches)
-        from datetime import datetime, timezone as _tz
         now_utc   = datetime.now(_tz.utc)
         kicked_off = False
         if kickoff:
@@ -1638,8 +1644,6 @@ async def match(request: Request):
         # 2. Get team names from predictions DB (logged at announcement)
         # 3. Fall back to FotMob date cache for live matches
 
-        from predictions import get_all_predictions
-        from footballdata import _populate_finished_cache
         fd_home = fd_away = ""
         live_data = None
         home_players   = None
@@ -1651,7 +1655,6 @@ async def match(request: Request):
         if str(match_id).startswith("bbs_"):
             bbs_uuid = str(match_id)[4:]
             try:
-                from bbs import get_match_detail
                 detail = get_match_detail(bbs_uuid)
                 if detail:
                     fd_home = detail.get("home", "")
@@ -1680,8 +1683,6 @@ async def match(request: Request):
             raw_fotmob_id = str(match_id)[3:]  # strip "fm_" prefix
             if fotmob_available():
                 try:
-                    from fotmob import _lineup_cache, _refresh_date_cache_if_stale
-                    from datetime import datetime, timezone, timedelta
                     today_str = datetime.now(
                         timezone(timedelta(hours=3))
                     ).strftime("%Y%m%d")
@@ -1752,8 +1753,6 @@ async def match(request: Request):
         # Step 3: if still no team names, scan FPL fixtures cache
         if not fd_home:
             # FPL stores 'code' = FPL match code in bootstrap
-            from fpl import get_team_map
-            import urllib.request as _ur, json as _json
             try:
                 req = _ur.Request(
                     "https://fantasy.premierleague.com/api/fixtures/",
@@ -1805,7 +1804,6 @@ async def match(request: Request):
             # Estimate minute from kickoff time — BBS doesn't provide a clock
             if status == "In Play":
                 try:
-                    from datetime import datetime, timezone as _tz
                     ko_raw = bbs_live_data.get("kickoff_utc", "")
                     if ko_raw:
                         ko_dt  = datetime.fromisoformat(ko_raw.replace("Z","+00:00"))
@@ -2071,8 +2069,6 @@ async def match(request: Request):
         # Non-PL: BBS primary, FotMob fallback, fd.org last resort
         # BBS: get today's matches + upcoming
         try:
-            from bbs import get_today_matches, get_upcoming_fixtures as bbs_upcoming
-            from bbs import has_key as bbs_ok
             if bbs_ok():
                 # Today's matches first (shows live scores)
                 today = get_today_matches(active_ctx_key)
@@ -2091,7 +2087,7 @@ async def match(request: Request):
                         "kickoff_eat": sc,
                     })
                 # Upcoming fixtures after today
-                upcoming = bbs_upcoming(active_ctx_key, max_fixtures=8)
+                upcoming = bbs_get_upcoming_fixtures(active_ctx_key, max_fixtures=8)
                 for m in upcoming:
                     fixtures.append({
                         "match_id"   : f"bbs_{m['bbs_id']}",
@@ -2103,8 +2099,6 @@ async def match(request: Request):
             print(f"[match] BBS fixture strip error: {e}")
         # Clear stale failure flag so we retry after rate limit clears
         try:
-            from fotmob import _lineup_cache, _refresh_date_cache_if_stale
-            from datetime import datetime, timezone, timedelta
             _EAT = timezone(timedelta(hours=3))
             today_str = datetime.now(_EAT).strftime("%Y%m%d")
             failed_key = f"matches_{today_str}_failed"
@@ -2159,7 +2153,6 @@ async def match(request: Request):
         # FotMob empty (still 429) — fall back to fd.org PD finished cache
         if not fixtures:
             try:
-                from footballdata import _populate_finished_cache
                 fd_cache = _populate_finished_cache(active_comp)
                 # Take the last 10 finished matches — most recent first
                 recent = list(fd_cache.values())[-10:]
