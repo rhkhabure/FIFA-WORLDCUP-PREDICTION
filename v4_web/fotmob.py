@@ -29,6 +29,7 @@ import time
 import urllib.request
 import urllib.error
 from pathlib import Path
+from constants import EAT, LEAGUE_FILTERS
 
 PARSE_BASE = "https://api.parse.bot/scraper/645b8e03-271d-4c85-97e7-35d5733a2d78"
 
@@ -476,14 +477,7 @@ def get_matches_by_date_for_league(date_str: str, league_key: str) -> list[dict]
     Returns list of raw FotMob match dicts with id, home, away, status.
     """
     # Map our league key → FotMob league name fragments to match on
-    _LEAGUE_FILTERS = {
-        "laliga"    : ["laliga", "la liga", "primera", "spain", "esp"],
-        "bundesliga": ["bundesliga", "germany", "ger"],
-        "seriea"    : ["serie a", "calcio", "italy", "ita"],
-        "ligue1"    : ["ligue 1", "ligue1", "france", "fra"],
-        "pl"        : ["premier league", "england", "eng"],
-    }
-    filters = _LEAGUE_FILTERS.get(league_key, [])
+    filters = LEAGUE_FILTERS.get(league_key, [])
 
     # Use the date cache — refresh if stale
     _refresh_date_cache_if_stale(date_str)
