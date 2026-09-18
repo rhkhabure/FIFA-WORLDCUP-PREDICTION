@@ -117,18 +117,10 @@ def get_upcoming_fixtures(max_fixtures: int = 10) -> list[dict]:
     """
     team_map   = get_team_map()
     if not team_map:
-        # FPL bootstrap failing — try stale cache directly
-        boot = _cache.get("bootstrap", ({}, 0))[0]
-        if boot:
-            team_map = {t["id"]: t["name"] for t in boot.get("teams", [])}
-    if not team_map:
         return []
 
     all_fixtures = _cached("fixtures", "fixtures/")
     if not isinstance(all_fixtures, list):
-        # Try stale fixtures cache
-        all_fixtures = _cache.get("fixtures", ([], 0))[0]
-    if not isinstance(all_fixtures, list) or not all_fixtures:
         return []
 
     upcoming = [f for f in all_fixtures if not f.get("finished", True)]
