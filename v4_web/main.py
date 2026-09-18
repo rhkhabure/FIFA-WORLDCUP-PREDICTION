@@ -1623,7 +1623,7 @@ async def match(request: Request):
             except Exception as _e:
                 print(f"[snapshot] save failed: {_e}")
 
-    elif match_id:
+    elif match_id and not featured:
         # Match not in FPL upcoming. Strategy:
         # 1. Check if this is a football-data.org match ID (6 digits)
         #    → look up directly in finished match cache
