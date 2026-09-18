@@ -903,8 +903,12 @@ async def api_simulate_pl(request: Request):
         return JSONResponse(result)
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/history", response_class=HTMLResponse)
+async def history_page(request: Request):
     """Prediction history — model accuracy tracker, filterable by league."""
-    from predictions import get_accuracy_stats, get_all_predictions
+    from predictions import get_all_predictions
     from datetime import datetime, timezone
 
     # League filter from query param: ?league=pl / ?league=laliga / (all)
