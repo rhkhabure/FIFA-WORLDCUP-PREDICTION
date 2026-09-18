@@ -100,10 +100,11 @@ from utils import (
     _KITS_PUBLIC,
 )
 from v4_backend.feature_builder import DCStrengthLookup, TEAM_NAME_ALIASES
+from constants import EAT, DRAW_PROPENSITY, LEAGUE_FILTERS, LEAGUE_MAP
 
 # ── Constants ─────────────────────────────────────────────────────────────────
-DRAW_PROPENSITY = 0.10
-LEAGUE_KEY      = "ENG-Premier League"
+# DRAW_PROPENSITY, EAT, LEAGUE_FILTERS, LEAGUE_MAP imported from constants.py
+LEAGUE_KEY = "ENG-Premier League"   # default league for backward compat
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 def find_file(filename):
@@ -1232,18 +1233,7 @@ async def match(request: Request):
     _league_param = request.query_params.get("league", "pl").lower()
 
     # Map URL param → priors key + competition code
-    _LEAGUE_MAP = {
-        "pl":         {"priors": "ENG-Premier League", "comp": "PL",
-                       "name": "Premier League",   "ctx_key": "pl"},
-        "laliga":     {"priors": "ESP-La Liga",        "comp": "PD",
-                       "name": "La Liga",           "ctx_key": "laliga"},
-        "bundesliga": {"priors": "GER-Bundesliga",     "comp": "BL1",
-                       "name": "Bundesliga",        "ctx_key": "bundesliga"},
-        "seriea":     {"priors": "ITA-Serie A",        "comp": "SA",
-                       "name": "Serie A",           "ctx_key": "seriea"},
-        "ligue1":     {"priors": "FRA-Ligue 1",        "comp": "FL1",
-                       "name": "Ligue 1",           "ctx_key": "ligue1"},
-    }
+    # LEAGUE_MAP imported from constants.py
     _lm = _LEAGUE_MAP.get(_league_param, _LEAGUE_MAP["pl"])
     active_league  = _lm["priors"]   # e.g. "ESP-La Liga"
     active_comp    = _lm["comp"]     # e.g. "PD"
@@ -1281,12 +1271,6 @@ async def match(request: Request):
                     _refresh_date_cache_if_stale(today_str)
                     cache_key = f"matches_{today_str}"
                     date_data = _lineup_cache.get(cache_key, {})
-                    _LEAGUE_FILTERS = {
-                        "laliga"    : ["laliga", "la liga", "primera", "esp"],
-                        "bundesliga": ["bundesliga", "germany"],
-                        "seriea"    : ["serie a", "italy"],
-                        "ligue1"    : ["ligue 1", "france"],
-                    }
                     filters = _LEAGUE_FILTERS.get(active_ctx_key, [])
                     for lg in date_data.get("data", {}).get("leagues", []):
                         if any(f in lg.get("name","").lower() for f in filters):
@@ -2099,8 +2083,7 @@ async def match(request: Request):
             print(f"[match] BBS fixture strip error: {e}")
         # Clear stale failure flag so we retry after rate limit clears
         try:
-            _EAT = timezone(timedelta(hours=3))
-            today_str = datetime.now(_EAT).strftime("%Y%m%d")
+            today_str = datetime.now(EAT).strftime("%Y%m%d")
             failed_key = f"matches_{today_str}_failed"
             failed_ts  = f"matches_{today_str}_failed_ts"
             fail_time  = _lineup_cache.get(failed_ts, 0)
@@ -2112,12 +2095,6 @@ async def match(request: Request):
             _refresh_date_cache_if_stale(today_str)
             cache_key = f"matches_{today_str}"
             date_data = _lineup_cache.get(cache_key, {})
-            _LEAGUE_FILTERS = {
-                "laliga"    : ["laliga", "la liga", "primera", "esp"],
-                "bundesliga": ["bundesliga", "germany"],
-                "seriea"    : ["serie a", "italy"],
-                "ligue1"    : ["ligue 1", "france"],
-            }
             filters = _LEAGUE_FILTERS.get(active_ctx_key, [])
             for lg in date_data.get("data", {}).get("leagues", []):
                 lg_name = lg.get("name", "").lower()
@@ -2133,7 +2110,7 @@ async def match(request: Request):
                             try:
                                 ko = datetime.fromisoformat(
                                     utc_raw.replace("Z", "+00:00")
-                                ).astimezone(_EAT)
+                                ).astimezone(EAT)
                                 kickoff_display = ko.strftime("%H:%M EAT")
                             except Exception:
                                 kickoff_display = utc_raw[:5]
