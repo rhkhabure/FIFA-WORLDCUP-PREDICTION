@@ -99,6 +99,7 @@ from utils import (
     get_crest_proxy_url,
     _CREST_IDS,
     _KITS_PUBLIC,
+    TEAM_MANAGERS,
 )
 from v4_backend.feature_builder import DCStrengthLookup, TEAM_NAME_ALIASES
 from constants import EAT, DRAW_PROPENSITY, LEAGUE_FILTERS, LEAGUE_MAP
@@ -1249,7 +1250,7 @@ async def match(request: Request):
             # Try BBS (Big Balls Sports Data) — primary La Liga live source
             try:
                 if bbs_ok():
-                    today_matches = get_today_matches(active_ctx_key)
+                    today_matches = bbs_get_today_matches(active_ctx_key)
                     if today_matches:
                         # Prefer live match, then most recent kickoff
                         live = [m for m in today_matches if m.get("is_live")]
@@ -1272,7 +1273,7 @@ async def match(request: Request):
                     _refresh_date_cache_if_stale(today_str)
                     cache_key = f"matches_{today_str}"
                     date_data = _lineup_cache.get(cache_key, {})
-                    filters = _LEAGUE_FILTERS.get(active_ctx_key, [])
+                    filters = LEAGUE_FILTERS.get(active_ctx_key, [])
                     for lg in date_data.get("data", {}).get("leagues", []):
                         if any(f in lg.get("name","").lower() for f in filters):
                             matches = lg.get("matches", [])
@@ -2056,7 +2057,7 @@ async def match(request: Request):
         try:
             if bbs_ok():
                 # Today's matches first (shows live scores)
-                today = get_today_matches(active_ctx_key)
+                today = bbs_get_today_matches(active_ctx_key)
                 for m in today:
                     sc = ""
                     if m.get("is_live"):
@@ -2096,7 +2097,7 @@ async def match(request: Request):
             _refresh_date_cache_if_stale(today_str)
             cache_key = f"matches_{today_str}"
             date_data = _lineup_cache.get(cache_key, {})
-            filters = _LEAGUE_FILTERS.get(active_ctx_key, [])
+            filters = LEAGUE_FILTERS.get(active_ctx_key, [])
             for lg in date_data.get("data", {}).get("leagues", []):
                 lg_name = lg.get("name", "").lower()
                 if any(f in lg_name for f in filters):
