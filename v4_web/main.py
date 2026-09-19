@@ -22,6 +22,7 @@ import json
 import os
 import pickle
 import sys
+import time
 from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -2089,7 +2090,7 @@ async def match(request: Request):
             failed_key = f"matches_{today_str}_failed"
             failed_ts  = f"matches_{today_str}_failed_ts"
             fail_time  = _lineup_cache.get(failed_ts, 0)
-            if _lineup_cache.get(failed_key) and (_time.time() - fail_time) > 300:
+            if _lineup_cache.get(failed_key) and (time.time() - fail_time) > 300:
                 _lineup_cache.pop(failed_key, None)
                 _lineup_cache.pop(failed_ts, None)
                 print(f"[match] FotMob backoff expired — retrying")
