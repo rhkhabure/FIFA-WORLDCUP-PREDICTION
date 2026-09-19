@@ -103,7 +103,7 @@ from utils import (
     TEAM_MANAGERS,
 )
 from v4_backend.feature_builder import DCStrengthLookup, TEAM_NAME_ALIASES
-from routes.match import router as match_router, setup as match_setup, dc_pregame
+from routes.match import router as match_router, setup as match_setup, dc_pregame, get_effective_gamma
 from constants import EAT, DRAW_PROPENSITY, LEAGUE_FILTERS, LEAGUE_MAP
 
 # ── Constants ─────────────────────────────────────────────────────────────────
