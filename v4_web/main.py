@@ -343,7 +343,7 @@ async def live_poll(match_id: str, request: Request):
     if str(match_id).startswith("bbs_"):
         try:
             bbs_uuid = str(match_id)[4:]
-            detail   = get_match_detail(bbs_uuid)
+            detail   = bbs_get_match_detail(bbs_uuid)
             if not detail:
                 return JSONResponse({"status": "no_data"})
             raw_st = detail.get("status", "Not Started")
@@ -1642,7 +1642,7 @@ async def match(request: Request):
         if str(match_id).startswith("bbs_"):
             bbs_uuid = str(match_id)[4:]
             try:
-                detail = get_match_detail(bbs_uuid)
+                detail = bbs_get_match_detail(bbs_uuid)
                 if detail:
                     fd_home = detail.get("home", "")
                     fd_away = detail.get("away", "")
@@ -1769,11 +1769,16 @@ async def match(request: Request):
             if not live_data or live_data.get("home_team") == "Unknown Home":
                 live_data = None
 
-        # Step 4: FotMob date cache for today's live matches
+        # Step 4: FotMob date cache — check today AND yesterday for recent finished matches
         fotmob_id = None
         fm        = None
         if fotmob_available() and fd_home and fd_away:
             fotmob_id = get_fotmob_match_id(fd_home, fd_away)
+            if not fotmob_id:
+                # Try yesterday's cache for recently finished matches
+                yest_str = (datetime.now(EAT) - timedelta(days=1)).strftime("%Y%m%d")
+                _refresh_date_cache_if_stale(yest_str)
+                fotmob_id = get_fotmob_match_id(fd_home, fd_away, date_str=yest_str)
             fm = get_match_status_from_date_cache(
                 fotmob_id or "0", fd_home, fd_away
             )
@@ -2057,10 +2062,17 @@ async def match(request: Request):
         # BBS: get today's matches + upcoming
         try:
             if bbs_ok():
-                # Today's matches first (shows live scores)
+                # Get today's matches with live scores + upcoming fixtures
+                # Use today matches for status, upcoming for future games
+                # Merge them deduplicating by bbs_id
+                seen_ids = set()
+
                 today = bbs_get_today_matches(active_ctx_key)
                 for m in today:
-                    sc = ""
+                    bid = m.get("bbs_id", "")
+                    if bid in seen_ids:
+                        continue
+                    seen_ids.add(bid)
                     if m.get("is_live"):
                         sc = f"🔴 {m['h_score']}-{m['a_score']}"
                     elif m.get("is_finished"):
@@ -2068,67 +2080,72 @@ async def match(request: Request):
                     else:
                         sc = m.get("kickoff_eat", "Today")
                     fixtures.append({
-                        "match_id"   : f"bbs_{m['bbs_id']}",
+                        "match_id"   : f"bbs_{bid}",
                         "home"       : m["home"],
                         "away"       : m["away"],
                         "kickoff_eat": sc,
                     })
-                # Upcoming fixtures after today
-                upcoming = bbs_get_upcoming_fixtures(active_ctx_key, max_fixtures=8)
+
+                upcoming = bbs_get_upcoming_fixtures(active_ctx_key, max_fixtures=10)
                 for m in upcoming:
+                    bid = m.get("bbs_id", "")
+                    if bid in seen_ids:
+                        continue
+                    seen_ids.add(bid)
                     fixtures.append({
-                        "match_id"   : f"bbs_{m['bbs_id']}",
+                        "match_id"   : f"bbs_{bid}",
                         "home"       : m["home"],
                         "away"       : m["away"],
                         "kickoff_eat": m["kickoff_eat"],
                     })
         except Exception as e:
             print(f"[match] BBS fixture strip error: {e}")
-        # Clear stale failure flag so we retry after rate limit clears
-        try:
-            today_str = datetime.now(EAT).strftime("%Y%m%d")
-            failed_key = f"matches_{today_str}_failed"
-            failed_ts  = f"matches_{today_str}_failed_ts"
-            fail_time  = _lineup_cache.get(failed_ts, 0)
-            if _lineup_cache.get(failed_key) and (time.time() - fail_time) > 300:
-                _lineup_cache.pop(failed_key, None)
-                _lineup_cache.pop(failed_ts, None)
-                print(f"[match] FotMob backoff expired — retrying")
 
-            _refresh_date_cache_if_stale(today_str)
-            cache_key = f"matches_{today_str}"
-            date_data = _lineup_cache.get(cache_key, {})
-            filters = LEAGUE_FILTERS.get(active_ctx_key, [])
-            for lg in date_data.get("data", {}).get("leagues", []):
-                lg_name = lg.get("name", "").lower()
-                if any(f in lg_name for f in filters):
-                    for m in lg.get("matches", []):
-                        st      = m.get("status", {}) or {}
-                        score   = st.get("scoreStr", "")
-                        is_fin  = st.get("finished", False)
-                        is_live = st.get("ongoing",  False)
-                        utc_raw = st.get("utcTime", "")
-                        kickoff_display = ""
-                        if utc_raw:
-                            try:
-                                ko = datetime.fromisoformat(
-                                    utc_raw.replace("Z", "+00:00")
-                                ).astimezone(EAT)
-                                kickoff_display = ko.strftime("%H:%M EAT")
-                            except Exception:
-                                kickoff_display = utc_raw[:5]
-                        label = (f"FT {score}" if is_fin
-                                 else f"🔴 {score}" if is_live
-                                 else kickoff_display or "Today")
-                        fixtures.append({
-                            "match_id"   : f"fm_{m.get('id','')}",
-                            "home"       : m.get("home", {}).get("name", ""),
-                            "away"       : m.get("away", {}).get("name", ""),
-                            "kickoff_eat": label,
-                        })
-                    break
-        except Exception as e:
-            print(f"[match] fixture strip FotMob error: {e}")
+        # FotMob — only run if BBS returned nothing
+        if not fixtures:
+            try:
+                today_str = datetime.now(EAT).strftime("%Y%m%d")
+                failed_key = f"matches_{today_str}_failed"
+                failed_ts  = f"matches_{today_str}_failed_ts"
+                fail_time  = _lineup_cache.get(failed_ts, 0)
+                if _lineup_cache.get(failed_key) and (time.time() - fail_time) > 300:
+                    _lineup_cache.pop(failed_key, None)
+                    _lineup_cache.pop(failed_ts, None)
+                    print(f"[match] FotMob backoff expired — retrying")
+                _refresh_date_cache_if_stale(today_str)
+                cache_key = f"matches_{today_str}"
+                date_data = _lineup_cache.get(cache_key, {})
+                filters = LEAGUE_FILTERS.get(active_ctx_key, [])
+                for lg in date_data.get("data", {}).get("leagues", []):
+                    lg_name = lg.get("name", "").lower()
+                    if any(f in lg_name for f in filters):
+                        for m in lg.get("matches", []):
+                            st      = m.get("status", {}) or {}
+                            score   = st.get("scoreStr", "")
+                            is_fin  = st.get("finished", False)
+                            is_live = st.get("ongoing",  False)
+                            utc_raw = st.get("utcTime", "")
+                            kickoff_display = ""
+                            if utc_raw:
+                                try:
+                                    ko = datetime.fromisoformat(
+                                        utc_raw.replace("Z", "+00:00")
+                                    ).astimezone(EAT)
+                                    kickoff_display = ko.strftime("%H:%M EAT")
+                                except Exception:
+                                    kickoff_display = utc_raw[:5]
+                            label = (f"FT {score}" if is_fin
+                                     else f"🔴 {score}" if is_live
+                                     else kickoff_display or "Today")
+                            fixtures.append({
+                                "match_id"   : f"fm_{m.get('id','')}",
+                                "home"       : m.get("home", {}).get("name", ""),
+                                "away"       : m.get("away", {}).get("name", ""),
+                                "kickoff_eat": label,
+                            })
+                        break
+            except Exception as e:
+                print(f"[match] fixture strip FotMob error: {e}")
 
         # FotMob empty (still 429) — fall back to fd.org PD finished cache
         if not fixtures:
