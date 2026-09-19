@@ -16,9 +16,10 @@ Routes registered in main.py via:
 """
 
 # ── Standard library ──────────────────────────────────────────────────────────
+import json
 import os
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from collections import defaultdict
 
 # ── Third-party ───────────────────────────────────────────────────────────────
@@ -38,10 +39,12 @@ from bbs import (
 )
 from constants import EAT, DRAW_PROPENSITY, LEAGUE_FILTERS, LEAGUE_MAP
 from footballdata import (
+    get_live_match_data,
     get_finished_match,
     find_finished_match_by_teams,
     get_upcoming_fixtures_fd,
     _populate_finished_cache,
+    PL_CODE,
 )
 from fotmob import (
     get_lineup,
@@ -52,18 +55,21 @@ from fotmob import (
     _lineup_cache,
     _refresh_date_cache_if_stale,
 )
-from fpl import get_upcoming_fixtures
+from fpl import get_upcoming_fixtures, get_team_map
 from lineup_adjustment import compute_lineup_adjusted_odds, get_absent_key_players
-from predictions import get_all_predictions
+from predictions import get_all_predictions, get_match_snapshot, save_match_snapshot
 from scoreline_matrix import build_scoreline_svg
 from simulate import simulate_cl_tournament, simulate_pl_season
 from timeline import build_match_timeline_svg
 from utils import (
     generate_pitch_svg_horizontal,
     get_crest_proxy_url,
+    get_theme_for_team,
+    get_formation_for_team,
     _KITS_PUBLIC,
-    TEAM_NAME_ALIASES as _TEAM_NAME_ALIASES_DEFAULT,
+    _CREST_IDS,
 )
+from v4_backend.feature_builder import TEAM_NAME_ALIASES as _TEAM_NAME_ALIASES_DEFAULT
 
 # ── Router ────────────────────────────────────────────────────────────────────
 router = APIRouter()
@@ -94,6 +100,11 @@ def setup(p_db, model, scaler, t, lookup, tmpl, aliases, lkey, lctx):
     TEAM_NAME_ALIASES= aliases
     LEAGUE_KEY       = lkey
     LEAGUE_CONTEXTS  = lctx
+
+
+def league_ctx(league_key: str = "pl") -> dict:
+    """Returns template context dict for the given league."""
+    return LEAGUE_CONTEXTS.get(league_key, LEAGUE_CONTEXTS.get("pl", {}))
 
 
 def get_effective_gamma(gamma_calibrated: float, season_start_month: int = 8,
@@ -342,12 +353,12 @@ async def api_simulate_pl(request: Request):
         ctx.check_hostname = False
         ctx.verify_mode    = ssl.CERT_NONE
         API_KEY = os.getenv("FOOTBALLDATA_ORG_KEY", "")
-        r = _req.Request(
+        r = _urllib_req.Request(
             "https://api.football-data.org/v4/competitions/PL/standings",
             headers={"X-Auth-Token": API_KEY}
         )
-        with _req.urlopen(r, timeout=8, context=ctx) as resp:
-            data = _json.loads(resp.read())
+        with _urllib_req.urlopen(r, timeout=8, context=ctx) as resp:
+            data = json.loads(resp.read())
         for row in data.get("standings", [{}])[0].get("table", []):
             current_table.append({
                 "team"  : row["team"]["name"],
@@ -380,7 +391,9 @@ async def api_simulate_pl(request: Request):
     remaining = []
     try:
         fpl_fixtures = get_upcoming_fixtures(max_fixtures=500)
-        fpl_bootstrap= _get_bootstrap()
+        from fpl import _cache as _fpl_cache, _CACHE_TTLS
+        boot_entry = _fpl_cache.get("bootstrap")
+        fpl_bootstrap = boot_entry[0] if boot_entry else {}
         fpl_teams    = {t["id"]: t["name"] for t in fpl_bootstrap.get("teams",[])}
         for f in fpl_fixtures:
             remaining.append({
@@ -921,12 +934,12 @@ async def match(request: Request):
         if not fd_home:
             # FPL stores 'code' = FPL match code in bootstrap
             try:
-                req = _ur.Request(
+                req = _urllib_req.Request(
                     "https://fantasy.premierleague.com/api/fixtures/",
                     headers={"User-Agent": "Mozilla/5.0"}
                 )
-                with _ur.urlopen(req, timeout=8) as resp:
-                    all_fx = _json.loads(resp.read())
+                with _urllib_req.urlopen(req, timeout=8) as resp:
+                    all_fx = json.loads(resp.read())
                 team_map = get_team_map()
                 for fx in all_fx:
                     if str(fx.get("code")) == str(match_id):
