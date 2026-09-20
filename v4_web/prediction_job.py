@@ -253,15 +253,21 @@ async def run_prediction_job(priors_db: dict, league_key: str):
     from footballdata import find_finished_match_by_teams
 
     existing   = get_all_predictions(season)
-    unresolved = [
-        p for p in existing
-        if p["pre_logged_at"] and not p["actual_result"]
-        and p["kickoff_utc"]
-        and p["kickoff_utc"] < now_utc.isoformat()
-    ]
+    # Only check matches that kicked off at least 2 hours ago
+    # (90 min game + ~30 min for fd.org to update scores on free tier)
+    cutoff_utc = (now_utc - timedelta(hours=2)).isoformat()
+    unresolved = sorted(
+        [
+            p for p in existing
+            if p["pre_logged_at"] and not p["actual_result"]
+            and p["kickoff_utc"]
+            and p["kickoff_utc"] < cutoff_utc
+        ],
+        key=lambda x: x["kickoff_utc"]   # oldest first so backlog clears in order
+    )
 
     checked = 0
-    MAX_RESULTS_PER_CYCLE = 7  # 5 PL + 2 La Liga
+    MAX_RESULTS_PER_CYCLE = 11  # enough to clear a full GW in one pass
     for p in unresolved[:MAX_RESULTS_PER_CYCLE]:
         mid    = p["match_id"]
         home   = p["home_team"]
