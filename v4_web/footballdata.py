@@ -16,6 +16,7 @@ Competition codes: PL = Premier League, PD = La Liga
 
 import json
 import os
+import re
 import time as _time
 import urllib.request
 import urllib.error
@@ -76,21 +77,36 @@ _finished_cache: dict[str, tuple[dict, float]] = {}
 _FINISHED_TTL = 300   # 5 minutes
 
 
+def _current_season() -> int:
+    """
+    Return the fd.org season parameter for the current football season.
+
+    fd.org uses the END year of the season:
+      2024/25 → season=2025  (confirmed: returns 380 matches = full 2024/25 season)
+      2025/26 → season=2026  (confirmed: current season as of Sep 2026)
+
+    TODO: revisit in July 2027 — change to 2027 for the 2026/27 season.
+    """
+    return 2026
+
+
 def _populate_finished_cache(comp_code: str) -> dict:
     """Fill or refresh the finished-match cache for a competition."""
     cached = _finished_cache.get(comp_code)
     if cached and _time.time() - cached[1] < _FINISHED_TTL:
         return cached[0]
 
-    data = _fetch(f"competitions/{comp_code}/matches",
-                  {"status": "FINISHED", "season": 2025})
+    season = _current_season()
+    data   = _fetch(f"competitions/{comp_code}/matches",
+                    {"status": "FINISHED", "season": season})
     matches_by_id = {}
     for m in data.get("matches", []):
         parsed          = _parse_match(m)
         parsed["fd_id"] = m.get("id")
         matches_by_id[str(m.get("id"))] = parsed
     _finished_cache[comp_code] = (matches_by_id, _time.time())
-    print(f"[footballdata] {comp_code}: cached {len(matches_by_id)} finished matches")
+    print(f"[footballdata] {comp_code}: cached {len(matches_by_id)} finished matches "
+          f"(season={season})")
     return matches_by_id
 
 
@@ -134,6 +150,8 @@ def find_finished_match_by_teams(home_name: str, away_name: str,
 
     def norm(s: str) -> str:
         s = _clean_name(s).lower()
+        # Strip common suffixes fd.org appends
+        s = re.sub(r'\s+(fc|afc|cf|sc|ac|bc|bv|sv|if|fk|sk|mk|rfc)$', '', s)
         for w in ["hotspur", "wanderers", "& hove albion",
                   "city", "united", "town", "forest",
                   "club", "sporting", "deportivo", "real"]:
