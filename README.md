@@ -1,49 +1,144 @@
-# ⚽ V4 Quantitative Match Terminal (Bayesian Tri-State Engine)
+# ⚽ Melios Dira Odds — V4.2 Football Prediction Terminal
 
-> **V4 Update:** This repository has evolved from a World Cup predictor (V2) and a basic domestic league tracker (V3) into a professional-grade **Bayesian Tri-State Quantitative Engine (V4)**. It abandons "black box" neural networks in favor of a structurally transparent, Continuous xG Dixon-Coles Maximum Likelihood Estimator combined with live Markov Chain/Bivariate Poisson in-game projections.
-
-*(For a deep dive into the math and API pipeline, see `DOCUMENTATION.md`)*
+> A production-grade football match prediction suite combining Dixon-Coles statistical modelling with a live neural network, served through a FastAPI dashboard. Covers the Premier League and La Liga in real-time, with priors built for all Big 5 leagues.
 
 ---
 
-## 🚀 Key V4 Features
+## What it does
 
-### 🧠 The Mathematical Engine
-*   **Module 1: The Prior (Continuous xG Dixon-Coles).** A custom Maximum Likelihood Estimator (MLE) built in SciPy. It bypasses discrete, noisy goal metrics and trains directly on Continuous Expected Goals (xG). It features an exponential time-decay factor (weighting recent games) and a strict sum-to-1 normalization constraint across attack parameters to guarantee global optimums.
-*   **Module 2: The Likelihood (Lineup Adjustment).** Calculates Roster Deltas ($\Delta$) by dynamically comparing the announced Matchday XI against the historical Ideal XI. It uses hyperparameters ($\lambda_a, \lambda_d$) to safely dampen and apply these capability drops to the base Dixon-Coles parameters *before* kickoff. *(Pending API integration for live XI extraction).*
-*   **Module 3: The Posterior (In-Game Bivariate Poisson).** Overcomes the notorious "Ghost xG" bias. Instead of naively inflating odds for teams racking up xG while trailing against a low block, the live engine uses Game-State adjustments ($\omega$) and Remainder Time fractions ($\Delta t$) to project true fair odds dynamically through minute 90.
+The system predicts football match outcomes using two complementary models:
 
-### 🔌 Live API Ingestion (Footballdata.io)
-*   **Zero-Placeholder Policy:** The system strictly rejects hardcoded data or mock UI fallbacks. If the API cannot supply live data, the backend halts execution and the UI safely explicitly renders `NO DATA`.
-*   **Nested JSON Introspection:** A custom data parser (`v4_web/footballdata.py`) unpacks nested Footballdata.io JSON payloads to extract true `match_id` metadata.
-*   **Authoritative Score Parsing:** Immune to "VAR phantom goals." The ingestion pipeline extracts definitive `home_score` and `away_score` attributes directly from match metadata rather than tallying raw event arrays, while correctly extracting the `live_xg` dict payloads for real-time model updates.
+- **Pre-game:** Dixon-Coles bivariate Poisson, calibrated on 4 seasons of xG data across 125 teams and 5 leagues. Outputs home / draw / away probabilities with a scoreline probability matrix.
+- **Live (in-game):** A PyTorch neural network (11→40→20→3) that takes over once the match has started, adjusting odds dynamically using the current score, minute, and xG state.
 
-### 💻 The Web Dashboard (FastAPI + Tailwind)
-*   **Strict Blank Canvas:** Migrated from Streamlit to a blazing-fast FastAPI server utilizing Jinja2 Templates. The UI was intentionally wiped clean to enforce the "Zero-Placeholder Policy", rebuilding only strictly functional, mathematically backed widgets.
-*   **Dynamic Fallback Routing:** Automatic `/match` endpoint redirection. If no `match_id` is supplied, the backend securely hits the `/leagues/15/matches` endpoint to automatically load and evaluate the most recently completed Premier League match to guarantee the math engine operates on genuine data.
-*   **Three-Segment Probability Widget:** The live anchor of the terminal, visually projecting the Prior $\rightarrow$ Likelihood $\rightarrow$ Posterior evolution directly from the Bayesian matrices. 
+The dashboard is a local FastAPI server with Jinja2 templates, a dark-mode UI, and an SVG pitch that renders confirmed lineups with team-coloured jerseys.
 
 ---
 
-## 🏗️ Project Structure
+## Quick start
 
-```text
+```bash
+# 1. Install dependencies
+pip install fastapi uvicorn jinja2 pandas numpy scipy torch python-dotenv requests
+
+# 2. Set up environment variables
+cp .env.example .env
+# Edit .env and fill in:
+#   FOOTBALLDATA_ORG_KEY=<your key from football-data.org>
+#   BBS_API_KEY=<your Big Balls Sports key>
+#   PARSE_BOT_KEY=<your parse.bot key — optional, used for FotMob lineups>
+
+# 3. Run the dashboard
+cd v4_web
+python -m uvicorn main:app --reload
+
+# 4. Open in browser
+# http://localhost:8000
+```
+
+---
+
+## Project structure
+
+```
 FIFA-WORLDCUP-PREDICTION/
-├── v4_backend/                         # The V4 Bayesian Mathematical Engine
-│   ├── historical_scraper.py           # Understat xG scraper via soccerdata -> SQLite
-│   ├── dixon_coles_xg.py               # Module 1: Continuous xG NLL Optimizer
-│   ├── likelihood_adjustment.py        # Module 2: Bayesian Lineup Adjustments
-│   ├── bivariate_poisson.py            # Module 3: 1X2 Probabilities & Infinite Tail capture
-│   ├── in_play_posterior.py            # Module 3: Live Game-State Offset & Remainder Matrix
-│   └── v4_priors.json                  # The trained NLL static baseline alphas/betas
-├── v4_web/                             # The FastAPI Web Application (Dashboard)
-│   ├── main.py                         # Application routing and math engine triggers
-│   ├── footballdata.py                 # Live REST ingestion parser and API handler
-│   ├── utils.py                        # Legacy SVG generators (Pitch/Radar)
-│   └── templates/                      # Jinja2 HTML/Tailwind templates
-│       ├── base.html                   # Strict dark-mode master layout canvas
-│       ├── index.html                  # League Hub (WIP)
-│       └── match.html                  # Live Dashboard (3-Stage Probability Widget)
-├── notebooks/
-│   └── phase4_v4_footballdata_ingestion.ipynb # Core Footballdata.io testing & parsing env
-└── DOCUMENTATION.md                    # Deep dive into the V4 Mathematics & API Spec
+├── v4_backend/
+│   ├── historical_scraper.py        # Scrapes 4 seasons of xG from Understat → SQLite
+│   ├── dixon_coles_xg.py            # DC MLE optimiser (SLSQP, draw correction)
+│   ├── feature_builder.py           # DC strength lookup + TEAM_NAME_ALIASES
+│   ├── likelihood_adjustment.py     # Lineup delta → adjusted λ/μ
+│   └── notebooks/
+│       └── train_v4_priors.ipynb    # Runs the optimiser → outputs v4_priors.json
+│
+├── v4_web/                          # The running application
+│   ├── main.py                      # FastAPI app — all routes except /match
+│   ├── constants.py                 # EAT, DRAW_PROPENSITY, LEAGUE_FILTERS, LEAGUE_MAP
+│   ├── routes/
+│   │   └── match.py                 # /match, /live/{id}, /api/simulate/* routes
+│   ├── bbs.py                       # Big Balls Sports API client (La Liga)
+│   ├── footballdata.py              # football-data.org client (PL scores/fixtures)
+│   ├── fotmob.py                    # FotMob via parse.bot (lineups, live xG)
+│   ├── fpl.py                       # FPL API client (PL fixtures, team map)
+│   ├── thesportsdb.py               # TheSportsDB client (player photos, career)
+│   ├── predictions.py               # SQLite predictions DB (log + retrieve)
+│   ├── prediction_job.py            # Background job — logs predictions + results
+│   ├── simulate.py                  # Monte Carlo engines (CL knockout + PL season)
+│   ├── lineup_adjustment.py         # Applies roster delta to DC λ/μ
+│   ├── scoreline_matrix.py          # SVG scoreline probability heatmap
+│   ├── timeline.py                  # SVG match event timeline
+│   ├── utils.py                     # Pitch SVG, kit definitions, crest proxy
+│   ├── teamdata.py                  # PL team profiles
+│   ├── laliga_teamdata.py           # La Liga team metadata
+│   ├── feature_builder.py           # (symlink to v4_backend equivalent)
+│   ├── templates/                   # Jinja2 HTML templates
+│   │   ├── base.html                # Sidebar, nav, dark theme
+│   │   ├── index.html               # Hub page
+│   │   ├── match.html               # Main match prediction page
+│   │   ├── history.html             # Prediction history + accuracy stats
+│   │   ├── tournament.html          # CL simulator + PL season simulator
+│   │   ├── player.html              # Player profile page
+│   │   ├── team.html                # Team profile page
+│   │   ├── teams.html               # PL team map
+│   │   └── teams_laliga.html        # La Liga team map
+│   └── scripts/                     # Build/train/validate scripts (not part of app)
+│       ├── build_phase1-4.py        # DC training pipeline phases
+│       ├── validate_*.py            # Model validation scripts
+│       └── backfill_history.py      # One-time predictions DB backfill
+│
+├── v4_priors.json                   # Trained DC priors — 125 teams, 5 leagues
+├── football_v4.pth                  # Neural net weights
+├── v4_historical_data.sqlite        # 4 seasons xG data — training set
+├── .env                             # API keys (not committed)
+├── README.md                        # This file
+├── USER_MANUAL.md                   # Step-by-step setup and usage guide
+└── DOCUMENTATION.md                 # Full technical reference
+```
+
+---
+
+## Pages
+
+| URL | Description |
+|-----|-------------|
+| `/` | Hub — today's fixtures with DC odds across both leagues |
+| `/match` | PL match prediction — DC pre-game, pitch, scoreline matrix, fixture strip |
+| `/match?league=laliga` | La Liga match prediction — same layout, BBS data source |
+| `/teams` | PL team map — DC strength heatmap |
+| `/teams/laliga` | La Liga team map |
+| `/team/{id}` | Team profile — form, DC rating, head-to-head |
+| `/player?name=X&team=Y` | Player profile — TheSportsDB photo + career history |
+| `/history` | Prediction history — accuracy by confidence band, per league |
+| `/tournament` | CL knockout simulator + PL season Monte Carlo (10,000 runs) |
+
+---
+
+## Data sources
+
+| Source | Used for | Key |
+|--------|----------|-----|
+| football-data.org | PL finished scores, standings | `FOOTBALLDATA_ORG_KEY` in `.env` |
+| FPL API | PL upcoming fixtures, team names | None (free) |
+| Big Balls Sports | La Liga live scores, fixtures | `BBS_API_KEY` in `.env` |
+| FotMob via parse.bot | Lineups, live xG | `PARSE_BOT_KEY` in `.env` |
+| TheSportsDB | Player photos, career history | None (key `3`, free) |
+
+---
+
+## Model performance (2025/26 season, through GW5)
+
+| League | Correct | Total | Accuracy | Baseline |
+|--------|---------|-------|----------|---------|
+| La Liga | 2 | 3 | 66.7% | 43% |
+| Premier League | 1 | 5 | 20.0% | 43% |
+
+*Small sample — meaningful evaluation expected after GW10.*
+
+---
+
+## Environment variables (`.env`)
+
+```
+FOOTBALLDATA_ORG_KEY=your_key_here
+BBS_API_KEY=your_bbs_key_here
+PARSE_BOT_KEY=your_parsebot_key_here   # optional
+```
