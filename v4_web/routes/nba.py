@@ -41,8 +41,11 @@ from nba_api_client import (
     get_live_game,
     get_live_pbp,
     build_live_snapshot,
+    build_snapshot_series,
     to_eat,
     cache_stats,
+    _parse_clock,
+    _elapsed,
 )
 from nba_model import NBAModel
 
@@ -177,7 +180,8 @@ async def nba_match(request: Request, game_id: str = ""):
         return templates.TemplateResponse(
             request=request,
             name="nba_match.html",
-            context={"error": "Game not found", "game_id": game_id, "sport": "nba"},
+            context={"error": "Game not found", "game_id": game_id, "sport": "nba",
+                     "topbar_title": "NBA · Match", "title": "NBA Match"},
         )
 
     enriched = _enrich_game(game)
@@ -205,6 +209,9 @@ async def nba_match(request: Request, game_id: str = ""):
             "sport":          "nba",
             # Chart.js poll interval (ms)
             "poll_interval":  30000,
+            "topbar_title":   f"{enriched['away_tricode']} @ {enriched['home_tricode']}",
+            "live_count":     sum(1 for g in games if g["status"] == "live"),
+            "title":          f"{enriched['away_tricode']} @ {enriched['home_tricode']}",
         },
     )
 
@@ -346,13 +353,18 @@ async def nba_live_poll(game_id: str):
     home_elo = _model.get_elo(ht_id) if _model else 1500.0
     away_elo = _model.get_elo(at_id) if _model else 1500.0
 
-    # Build feature snapshot from live PBP
-    snapshot = build_live_snapshot(
-        game_id,
-        home_elo=home_elo,
-        away_elo=away_elo,
-        is_playoffs=0,
-    )
+    status = game.get("status", "pre")
+
+    # Before tip-off there is no game state: period=0 and an empty clock would
+    # be read as "Q1, 0:00 left in the quarter". Use the Elo pregame prob instead.
+    snapshot = {}
+    if status != "pre":
+        snapshot = build_live_snapshot(
+            game_id,
+            home_elo=home_elo,
+            away_elo=away_elo,
+            is_playoffs=0,
+        )
 
     # Run inference
     if snapshot and _model and _model.loaded:
@@ -382,7 +394,55 @@ async def nba_live_poll(game_id: str):
         "home_in_bonus":    snapshot.get("home_in_bonus", 0) if snapshot else 0,
         "away_in_bonus":    snapshot.get("away_in_bonus", 0) if snapshot else 0,
         "source":           pred.get("source", "unknown"),
+        # Seconds since tip-off — x-axis position for the chart (0 before tip)
+        "elapsed_sec":      (_elapsed(game.get("period") or 1, _parse_clock(game.get("clock", "")))
+                             if status != "pre" else 0),
     })
+
+
+@router.get("/curve/{game_id}")
+async def nba_curve(game_id: str):
+    """
+    /nba/curve/{game_id} — full win-probability history for the chart.
+    Called once when nba_match.html loads (and once more at the final buzzer),
+    so a game opened mid-way shows how it got there, not an empty chart.
+
+    One point per scoring play, plus a tip-off point at the pregame Elo prob.
+    Returns: {"points": [{"t", "hp", "hs", "as", "period", "clock", "desc"}]}
+    """
+    game = get_live_game(game_id)
+    if not game:
+        return JSONResponse({"error": "game not found"}, status_code=404)
+
+    ht_id = game.get("home_team_id")
+    at_id = game.get("away_team_id")
+    pre   = (_model.predict_pregame(ht_id, at_id) if _model
+             else {"home_win_prob": 0.5, "home_elo": 1500.0, "away_elo": 1500.0})
+
+    points = [{"t": 0, "hp": pre["home_win_prob"], "hs": 0, "as": 0,
+               "period": 1, "clock": "12:00", "desc": "Tip-off (pregame Elo)"}]
+
+    if game.get("status") == "pre":
+        return JSONResponse({"points": points})
+
+    series = build_snapshot_series(
+        game_id, ht_id,
+        home_elo=pre["home_elo"], away_elo=pre["away_elo"], is_playoffs=0,
+    )
+    if series and _model and _model.loaded:
+        preds = _model.predict_live_batch([s["snapshot"] for s in series])
+        for s, p in zip(series, preds):
+            points.append({
+                "t":      round(s["elapsed_sec"], 1),
+                "hp":     p["home_win_prob"],
+                "hs":     s["home_score"],
+                "as":     s["away_score"],
+                "period": s["period"],
+                "clock":  s["clock"],
+                "desc":   s["description"],
+            })
+
+    return JSONResponse({"points": points})
 
 
 @router.get("/debug")

@@ -329,56 +329,17 @@ def _snapshot_from_pbp(
     period_len   = 300.0 if period >= 5 else 720.0
     qte          = 1.0 - min(clock_sec / period_len, 1.0)
 
-    # ── Accumulate state from full PBP (two-pass mirrors Phase 1) ────────────
-    home_fouls  = 0
-    away_fouls  = 0
-    prev_per    = None
-    home_bonus  = 0
-    away_bonus  = 0
-    possession  = 0.5      # default neutral
-    lead_changes = 0
-    prev_leader  = 0
-    play_count   = 0
-
-    for action in pbp:
-        atype = str(action.get("actionType", ""))
-        sub   = str(action.get("subType", ""))
-        tid   = action.get("teamId")
-        per   = int(action.get("period", period))
-
-        # Reset fouls on new quarter
-        if per != prev_per:
-            home_fouls = 0
-            away_fouls = 0
-            prev_per   = per
-
-        # Foul accumulation
-        if atype == "Foul" and "Offensive Foul Turnover" not in sub:
-            if tid == home_team_id:
-                home_fouls += 1
-            else:
-                away_fouls += 1
-
-        # Bonus: home in bonus when away has ≥5 fouls (and vice versa)
-        home_bonus = int(away_fouls >= 5)
-        away_bonus = int(home_fouls >= 5)
-
-        # Possession: last scored play = team that had the ball
-        if atype in ("Made Shot", "Free Throw") and action.get("scoreHome"):
-            possession = 1.0 if tid == home_team_id else 0.0
-
-        # Lead changes
-        h = int(action.get("scoreHome") or 0)
-        a = int(action.get("scoreAway") or 0)
-        if h or a:
-            play_count += 1
-            diff   = h - a
-            leader = 1 if diff > 0 else (-1 if diff < 0 else 0)
-            if leader != 0 and leader != prev_leader and prev_leader != 0:
-                lead_changes += 1
-            prev_leader = leader
-
-    lead_changes_norm = lead_changes / max(play_count, 1)
+    # ── Walk the full PBP once; take the state after the last event ──────────
+    state = None
+    for state in _walk_pbp(pbp, home_team_id, emit_every_event=True):
+        pass
+    if state is None:
+        return _snapshot_from_scoreboard(game, home_elo, away_elo, is_playoffs,
+                                         home_avail_delta, away_avail_delta)
+    possession        = state["possession"]
+    home_bonus        = state["home_in_bonus"]
+    away_bonus        = state["away_in_bonus"]
+    lead_changes_norm = state["lead_changes_norm"]
 
     return {
         "score_diff":               score_diff,
@@ -396,6 +357,140 @@ def _snapshot_from_pbp(
         "home_avail_delta":         home_avail_delta,
         "away_avail_delta":         away_avail_delta,
     }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SECTION 5b — Shared PBP walker
+# Works on BOTH spellings:
+#   live endpoint  (nba_api.live):  "foul", "freethrow", "2pt", "3pt"
+#   stats V3       (training data): "Foul", "Free Throw", "Made Shot"
+# A "scoring play" = an event where the running score changed. This matches
+# Phase 1, where lead_changes_norm was divided by scored plays only.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _walk_pbp(pbp: list[dict], home_team_id, emit_every_event: bool = False):
+    """
+    Yield running game state. By default yields once per scoring play
+    (for the chart curve); with emit_every_event=True yields after every
+    event (so the caller can take the very latest state).
+    """
+    home_fouls = away_fouls = 0
+    prev_per   = None
+    possession = 0.5
+    lead_changes = 0
+    prev_leader  = 0
+    scored_plays = 0
+    last_h = last_a = 0
+
+    for action in pbp:
+        atype = str(action.get("actionType", "")).lower().replace(" ", "")
+        sub   = str(action.get("subType", "")).lower()
+        desc  = str(action.get("description", "")).lower()
+        tid   = action.get("teamId")
+        per   = int(action.get("period") or 1)
+        clock = str(action.get("clock", ""))
+
+        if per != prev_per:                      # team fouls reset each quarter
+            home_fouls = away_fouls = 0
+            prev_per   = per
+
+        # Team fouls for bonus. MUST match Phase 1 training, which counted every
+        # "Foul" event (offensive included). Real NBA rules exclude offensive
+        # fouls — change BOTH here and in phase1_data_pipeline.py, then retrain,
+        # if we ever want the rule-accurate version. Never change only one side.
+        if atype == "foul":
+            if tid == home_team_id:
+                home_fouls += 1
+            elif tid:
+                away_fouls += 1
+
+        # Possession = team that scored the most recent basket. This is exactly
+        # how Phase 1 built the training feature. The live feed's own
+        # "possession" field is deliberately ignored to avoid train/serve skew.
+        try:
+            h = int(action.get("scoreHome") or last_h)
+            a = int(action.get("scoreAway") or last_a)
+        except (TypeError, ValueError):
+            h, a = last_h, last_a
+
+        scored = (h, a) != (last_h, last_a)
+        if scored:
+            scored_plays += 1
+            if tid:
+                possession = 1.0 if tid == home_team_id else 0.0
+            leader = 1 if h > a else (-1 if h < a else 0)
+            if leader != 0 and leader != prev_leader and prev_leader != 0:
+                lead_changes += 1
+            prev_leader = leader
+            last_h, last_a = h, a
+
+        if scored or emit_every_event:
+            clock_sec = _parse_clock(clock)
+            yield {
+                "period":          per,
+                "clock":           clock,
+                "clock_sec":       clock_sec,
+                "elapsed_sec":     _elapsed(per, clock_sec),
+                "home_score":      h,
+                "away_score":      a,
+                "possession":      possession,
+                "home_in_bonus":   int(away_fouls >= 5),
+                "away_in_bonus":   int(home_fouls >= 5),
+                "lead_changes_norm": lead_changes / max(scored_plays, 1),
+                "description":     action.get("description", ""),
+            }
+
+
+def build_snapshot_series(
+    game_id: str,
+    home_team_id,
+    home_elo: float = 1500.0,
+    away_elo: float = 1500.0,
+    is_playoffs: int = 0,
+) -> list[dict]:
+    """
+    One feature snapshot per scoring play, for rebuilding the full win
+    probability curve on the match page. Each item:
+        {"elapsed_sec", "period", "clock", "home_score", "away_score",
+         "description", "snapshot": {...16-feature dict...}}
+    """
+    pbp = get_live_pbp(game_id)
+    out = []
+    for st in _walk_pbp(pbp, home_team_id):
+        per        = st["period"]
+        period_len = 300.0 if per >= 5 else 720.0
+        out.append({
+            "elapsed_sec": st["elapsed_sec"],
+            "period":      per,
+            "clock":       st["clock"],
+            "home_score":  st["home_score"],
+            "away_score":  st["away_score"],
+            "description": st["description"],
+            "snapshot": {
+                "score_diff":               st["home_score"] - st["away_score"],
+                "time_remaining_sec":       _time_remaining(per, st["clock_sec"]),
+                "quarter":                  per,
+                "quarter_time_elapsed_pct": 1.0 - min(st["clock_sec"] / period_len, 1.0),
+                "home_elo":                 home_elo,
+                "away_elo":                 away_elo,
+                "is_playoffs":              is_playoffs,
+                "is_overtime":              int(per >= 5),
+                "lead_changes_norm":        st["lead_changes_norm"],
+                "possession":               st["possession"],
+                "home_in_bonus":            st["home_in_bonus"],
+                "away_in_bonus":            st["away_in_bonus"],
+                "home_avail_delta":         0.0,
+                "away_avail_delta":         0.0,
+            },
+        })
+    return out
+
+
+def _elapsed(period: int, clock_sec: float) -> float:
+    """Seconds since tip-off. Regulation 4×720s, each OT 300s."""
+    if period <= 4:
+        return (period - 1) * 720.0 + (720.0 - clock_sec)
+    return 2880.0 + (period - 5) * 300.0 + (300.0 - clock_sec)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

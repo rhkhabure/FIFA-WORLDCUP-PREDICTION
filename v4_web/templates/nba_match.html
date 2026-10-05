@@ -1,0 +1,470 @@
+{% extends "base.html" %}
+{#
+  nba_match.html — /nba/match?game_id=...
+  Context (routes/nba.py → nba_match):
+    game        — enriched game dict (scores, status, colours, win probs, Elo, tip_off_eat, game_time_utc)
+    home_team / away_team — {name, city, tricode, division, conference, primary, secondary}
+    home_form / away_form — list of {won, opponent, score}  (may be empty)
+    model_info  — {loaded, roc_auc, brier, temperature, ...}
+    poll_interval — ms between /nba/live polls
+    error       — set only when the game_id isn't on today's scoreboard
+  Data endpoints used by the JS:
+    GET /nba/curve/{id}  — full probability history (once on load, once at final)
+    GET /nba/live/{id}   — current state (every poll_interval)
+#}
+
+{% macro logo(team_id, tricode, colour, size=56) -%}
+<span class="nba-logo" style="width:{{ size }}px;height:{{ size }}px;background:{{ colour }}">
+    <img src="https://cdn.nba.com/logos/nba/{{ team_id }}/global/L/logo.svg"
+         alt="{{ tricode }}" loading="lazy" onerror="this.remove()">
+    <span class="nba-logo-fallback">{{ tricode }}</span>
+</span>
+{%- endmacro %}
+
+{% block content %}
+<style>
+    .nba-logo { border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+                position: relative; overflow: hidden; flex-shrink: 0; }
+    .nba-logo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain;
+                    background: #fff; padding: 5px; z-index: 1; }
+    .nba-logo-fallback { font-family: var(--font-mono); font-size: 11px; font-weight: 800; color: #fff; }
+
+    .m-card { background: var(--surface, #fff); border: 1.5px solid var(--border, #e2e8f0);
+              border-radius: 12px; padding: 14px 16px; }
+    .m-label { font-family: var(--font-mono); font-size: 10px; font-weight: 700; text-transform: uppercase;
+               letter-spacing: 0.12em; color: var(--text-muted, #64748b); margin-bottom: 10px; }
+    .m-muted { color: var(--text-muted, #64748b); }
+
+    .prob-track { display: flex; border-radius: 99px; overflow: hidden; background: var(--border, #e2e8f0); }
+    .prob-track > div { transition: width 0.6s cubic-bezier(.4,0,.2,1); }
+
+    .live-dot { width: 8px; height: 8px; border-radius: 50%; background: #C8102E; display: inline-block;
+                animation: pulse 1.6s ease-in-out infinite; }
+    @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.3 } }
+
+    .ind { background: var(--surface, #fff); border: 1.5px solid var(--border, #e2e8f0);
+           border-radius: 10px; padding: 10px 12px; text-align: center; }
+    .ind .k { font-family: var(--font-mono); font-size: 9px; text-transform: uppercase;
+              letter-spacing: 0.1em; color: var(--text-muted, #64748b); }
+    .ind .v { font-size: 15px; font-weight: 800; margin-top: 4px; }
+
+    .elo-bar { height: 6px; border-radius: 99px; background: var(--border, #e2e8f0); overflow: hidden; }
+    .elo-bar > div { height: 100%; border-radius: 99px; }
+
+    .form-pip { width: 20px; height: 20px; border-radius: 5px; display: inline-flex; align-items: center;
+                justify-content: center; font-size: 10px; font-weight: 800; }
+    .form-w { background: #DCFCE7; color: #166534; }
+    .form-l { background: #FEE2E2; color: #991B1B; }
+
+    .m-grid { display: grid; grid-template-columns: 330px minmax(0, 1fr); gap: 16px; align-items: start; }
+    @media (max-width: 960px) { .m-grid { grid-template-columns: minmax(0, 1fr); } }
+
+    .chart-overlay { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center;
+                     justify-content: center; text-align: center; background: rgba(255,255,255,0.86);
+                     border-radius: 8px; }
+</style>
+
+{% if error %}
+<div class="m-card" style="max-width:520px;margin:40px auto;text-align:center;padding:32px">
+    <i class="ti ti-ball-basketball" style="font-size:34px;color:var(--league-primary)" aria-hidden="true"></i>
+    <div style="font-size:15px;font-weight:800;margin-top:10px">Game not on today's scoreboard</div>
+    <div class="m-muted" style="font-size:12px;margin-top:6px">
+        {% if game_id %}<code>{{ game_id }}</code> isn't scheduled today.{% else %}There are no NBA games today.{% endif %}
+        The match page covers today's games only for now.
+    </div>
+    <a href="/nba" style="display:inline-block;margin-top:14px;font-size:12px;font-weight:700;
+       color:var(--league-primary)">← Back to the NBA hub</a>
+</div>
+{% else %}
+
+{# Line colours: if both teams share a primary (e.g. NYK vs PHI), use the away secondary #}
+{% set home_line = game.home_colour %}
+{% if game.away_colour | lower == game.home_colour | lower %}
+    {% set away_line = away_team.secondary if away_team.secondary | upper not in ('#FFFFFF', '#000000') else '#94A3B8' %}
+{% else %}
+    {% set away_line = game.away_colour %}
+{% endif %}
+{% set fav_home = game.home_win_prob >= 0.5 %}
+{% set hp0 = (game.home_win_prob * 100) | round(0) | int %}
+
+<div style="display:flex;flex-direction:column;gap:16px;max-width:1280px;margin:0 auto">
+
+    <!-- ── Scoreboard header ─────────────────────────────────────── -->
+    <div class="m-card" style="padding:18px 22px">
+        <div style="display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:16px">
+            <div style="display:flex;align-items:center;gap:14px">
+                {{ logo(game.away_team_id, game.away_tricode, game.away_colour) }}
+                <div>
+                    <div style="font-size:17px;font-weight:900;line-height:1.1">{{ game.away_full }}</div>
+                    <div class="m-muted" style="font-size:11px;margin-top:3px">
+                        Away · {{ away_team.conference }} · Elo {{ game.away_elo | int }}
+                    </div>
+                </div>
+            </div>
+
+            <div style="text-align:center">
+                <div id="js-status" style="font-family:var(--font-mono);font-size:11px;font-weight:700;
+                     color:{{ '#C8102E' if game.status == 'live' else 'var(--text-muted,#64748b)' }}">
+                    {% if game.status == 'live' %}<span class="live-dot"></span> {{ game.status_text }}
+                    {% elif game.status == 'final' %}FINAL
+                    {% else %}TIP-OFF {{ game.tip_off_eat }}{% endif %}
+                </div>
+                <div style="font-size:42px;font-weight:900;font-family:var(--font-mono);letter-spacing:-2px;line-height:1.15">
+                    <span id="js-away-score">{{ game.away_score if game.status != 'pre' else '–' }}</span>
+                    <span class="m-muted" style="font-weight:400">:</span>
+                    <span id="js-home-score">{{ game.home_score if game.status != 'pre' else '–' }}</span>
+                </div>
+                <div id="js-final-banner" style="display:{{ 'block' if game.status == 'final' else 'none' }};
+                     font-size:11px;font-weight:700;margin-top:2px">
+                    {% if game.status == 'final' %}
+                        {% if (game.home_score > game.away_score) == fav_home %}
+                            <span style="color:#15803d"><i class="ti ti-circle-check" aria-hidden="true"></i> Pregame pick correct</span>
+                        {% else %}
+                            <span style="color:#C8102E"><i class="ti ti-circle-x" aria-hidden="true"></i> Pregame pick wrong</span>
+                        {% endif %}
+                    {% endif %}
+                </div>
+            </div>
+
+            <div style="display:flex;align-items:center;gap:14px;justify-content:flex-end;text-align:right">
+                <div>
+                    <div style="font-size:17px;font-weight:900;line-height:1.1">{{ game.home_full }}</div>
+                    <div class="m-muted" style="font-size:11px;margin-top:3px">
+                        Home · {{ home_team.conference }} · Elo {{ game.home_elo | int }}
+                    </div>
+                </div>
+                {{ logo(game.home_team_id, game.home_tricode, game.home_colour) }}
+            </div>
+        </div>
+    </div>
+
+    <div class="m-grid">
+
+        <!-- ══ LEFT: pregame analysis ══════════════════════════════════ -->
+        <div style="display:flex;flex-direction:column;gap:12px">
+
+            <div class="m-card">
+                <div class="m-label">Pregame win probability</div>
+                <div style="display:flex;justify-content:space-between;font-size:20px;font-weight:900;margin-bottom:6px">
+                    <span style="color:{{ away_line }}">{{ 100 - hp0 }}%</span>
+                    <span style="color:{{ home_line }}">{{ hp0 }}%</span>
+                </div>
+                <div class="prob-track" style="height:10px">
+                    <div style="width:{{ 100 - hp0 }}%;background:{{ away_line }}"></div>
+                    <div style="width:{{ hp0 }}%;background:{{ home_line }}"></div>
+                </div>
+                <div style="display:flex;justify-content:space-between;font-size:11px;font-weight:700;margin-top:6px">
+                    <span>{{ game.away_tricode }}</span><span>{{ game.home_tricode }}</span>
+                </div>
+                <div class="m-muted" style="font-size:11px;margin-top:10px;line-height:1.5">
+                    Model favours <b style="color:{{ home_line if fav_home else away_line }}">
+                    {{ game.home_tricode if fav_home else game.away_tricode }}</b>.
+                    Elo-only, including +100 home advantage.
+                </div>
+            </div>
+
+            <div class="m-card">
+                <div class="m-label">Elo ratings</div>
+                {% for tri, elo, col in [(game.away_tricode, game.away_elo, away_line), (game.home_tricode, game.home_elo, home_line)] %}
+                {% set pct = (((elo - 1300) / 500) * 100) | round(0) %}
+                <div style="margin-bottom:10px">
+                    <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;margin-bottom:4px">
+                        <span>{{ tri }}</span><span style="font-family:var(--font-mono)">{{ elo | int }}</span>
+                    </div>
+                    <div class="elo-bar"><div style="width:{{ [[pct, 3] | max, 100] | min }}%;background:{{ col }}"></div></div>
+                </div>
+                {% endfor %}
+                <div class="m-muted" style="font-size:11px;display:flex;justify-content:space-between">
+                    <span>Gap (home − away)</span>
+                    <b style="font-family:var(--font-mono);color:var(--league-primary)">{{ '%+d' | format(game.elo_diff | int) }}</b>
+                </div>
+            </div>
+
+            <div class="m-card">
+                <div class="m-label">How much pregame strength still counts</div>
+                <div style="display:flex;align-items:baseline;gap:8px">
+                    <span id="js-elo-weight-big" style="font-size:24px;font-weight:900;color:var(--league-primary)">
+                        {{ '1.00' if game.status == 'pre' else '—' }}
+                    </span>
+                    <span class="m-muted" style="font-size:11px">Elo prior weight</span>
+                </div>
+                <div class="elo-bar" style="margin-top:8px">
+                    <div id="js-elo-weight-bar" style="width:{{ '100' if game.status == 'pre' else '0' }}%;background:var(--league-primary)"></div>
+                </div>
+                <div class="m-muted" style="font-size:11px;margin-top:8px;line-height:1.5">
+                    At tip-off the model leans on team strength. As time runs out and the lead grows,
+                    the score takes over and this drops towards zero.
+                </div>
+            </div>
+
+            <div class="m-card">
+                <div class="m-label">Recent form</div>
+                {% for tri, form, col in [(game.away_tricode, away_form, away_line), (game.home_tricode, home_form, home_line)] %}
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+                    <span style="font-size:12px;font-weight:800;width:36px;color:{{ col }}">{{ tri }}</span>
+                    {% if form %}
+                        {% for f in form[:5] %}
+                        <span class="form-pip {{ 'form-w' if f.won else 'form-l' }}"
+                              title="{{ 'W' if f.won else 'L' }} vs {{ f.opponent }} {{ f.score }}">{{ 'W' if f.won else 'L' }}</span>
+                        {% endfor %}
+                    {% else %}
+                        <span class="m-muted" style="font-size:11px">Fills in as this season's results are logged</span>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- ══ RIGHT: live win probability ═════════════════════════════ -->
+        <div style="display:flex;flex-direction:column;gap:12px">
+
+            <div class="m-card">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+                    <div class="m-label" style="margin:0">Live win probability</div>
+                    <div style="display:flex;gap:14px;font-size:11px;font-weight:700">
+                        <span style="display:flex;align-items:center;gap:5px">
+                            <span style="width:14px;height:3px;border-radius:2px;background:{{ away_line }}"></span>{{ game.away_tricode }}
+                        </span>
+                        <span style="display:flex;align-items:center;gap:5px">
+                            <span style="width:14px;height:3px;border-radius:2px;background:{{ home_line }}"></span>{{ game.home_tricode }}
+                        </span>
+                    </div>
+                </div>
+
+                <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:6px">
+                    <span id="js-now-pct" style="font-size:28px;font-weight:900;color:{{ home_line if fav_home else away_line }}">
+                        {{ hp0 if fav_home else 100 - hp0 }}%
+                    </span>
+                    <span id="js-now-label" class="m-muted" style="font-size:12px">
+                        {{ game.home_tricode if fav_home else game.away_tricode }} to win · pregame
+                    </span>
+                </div>
+
+                <div style="position:relative;height:320px">
+                    <canvas id="wp-chart" role="img"
+                            aria-label="Win probability for {{ game.away_tricode }} and {{ game.home_tricode }} over the course of the game"></canvas>
+                    {% if game.status == 'pre' %}
+                    <div class="chart-overlay" id="js-pre-overlay">
+                        <i class="ti ti-clock" style="font-size:26px;color:var(--league-primary)" aria-hidden="true"></i>
+                        <div style="font-size:14px;font-weight:800;margin-top:6px">Tip-off {{ game.tip_off_eat }}</div>
+                        <div id="js-countdown" class="m-muted" style="font-family:var(--font-mono);font-size:12px;margin-top:4px"></div>
+                        <div class="m-muted" style="font-size:11px;margin-top:8px">Live tracking starts automatically</div>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <div class="m-muted" style="display:flex;justify-content:space-between;font-family:var(--font-mono);
+                     font-size:10px;margin-top:8px">
+                    <span id="js-source">{{ 'Pregame Elo' if game.status == 'pre' else 'Loading history…' }}</span>
+                    <span>updated <span id="js-updated">—</span></span>
+                </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px">
+                <div class="ind">
+                    <div class="k">Last scored</div>
+                    <div class="v" id="js-poss">—</div>
+                </div>
+                <div class="ind">
+                    <div class="k">In the bonus</div>
+                    <div class="v" id="js-bonus">—</div>
+                </div>
+                <div class="ind">
+                    <div class="k">Elo weight</div>
+                    <div class="v" id="js-elo-weight">—</div>
+                </div>
+                <div class="ind">
+                    <div class="k">Confidence</div>
+                    <div class="v" id="js-conf">—</div>
+                </div>
+            </div>
+
+            <div class="m-muted" style="font-family:var(--font-mono);font-size:10px;text-align:center">
+                WinProbNet V3 · 16 features · ROC-AUC {{ '%.3f' | format(model_info.roc_auc) if model_info.roc_auc else '—' }}
+                · Brier {{ '%.4f' | format(model_info.brier) if model_info.brier else '—' }}
+                · T={{ '%.3f' | format(model_info.temperature) if model_info.temperature else '—' }}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+(function () {
+    const CFG = {
+        gameId:   "{{ game_id }}",
+        status:   "{{ game.status }}",
+        homeTri:  "{{ game.home_tricode }}",
+        awayTri:  "{{ game.away_tricode }}",
+        homeCol:  "{{ home_line }}",
+        awayCol:  "{{ away_line }}",
+        poll:     {{ poll_interval | default(30000) }},
+        tipUtc:   "{{ game.game_time_utc }}",
+        pregame:  {{ game.home_win_prob }},
+    };
+    const $ = id => document.getElementById(id);
+    let status = CFG.status;
+    let timer  = null;
+
+    // ── Chart ────────────────────────────────────────────────────────
+    const QTR = [0, 720, 1440, 2160, 2880];
+    function xLabel(t) {
+        if (t < 2880) return 'Q' + (Math.floor(t / 720) + 1);
+        return 'OT' + (Math.floor((t - 2880) / 300) + 1);
+    }
+    const chart = new Chart($('wp-chart'), {
+        type: 'line',
+        data: { datasets: [
+            { label: CFG.awayTri, data: [], borderColor: CFG.awayCol, backgroundColor: CFG.awayCol,
+              borderWidth: 2.5, pointRadius: 0, pointHoverRadius: 4, tension: 0.25, stepped: false },
+            { label: CFG.homeTri, data: [], borderColor: CFG.homeCol, backgroundColor: CFG.homeCol,
+              borderWidth: 2.5, pointRadius: 0, pointHoverRadius: 4, tension: 0.25 },
+        ]},
+        options: {
+            responsive: true, maintainAspectRatio: false, parsing: false,
+            animation: { duration: 600 },
+            interaction: { mode: 'nearest', axis: 'x', intersect: false },
+            plugins: {
+                legend: { display: false },
+                tooltip: { callbacks: {
+                    title: items => {
+                        const m = items[0].raw.m || {};
+                        return `${xLabel(items[0].raw.x)} ${m.clock || ''}  ·  ${CFG.awayTri} ${m.as ?? ''} – ${m.hs ?? ''} ${CFG.homeTri}`;
+                    },
+                    label: item => ` ${item.dataset.label}: ${item.raw.y.toFixed(1)}%`,
+                    afterBody: items => (items[0].raw.m && items[0].raw.m.desc) ? '\n' + items[0].raw.m.desc : '',
+                }},
+            },
+            scales: {
+                x: { type: 'linear', min: 0, max: 2880,
+                     afterBuildTicks: ax => { ax.ticks = QTR.filter(v => v <= ax.max).map(v => ({ value: v })); },
+                     ticks: { callback: v => v >= ax_max() ? 'End' : xLabel(v) , font: { size: 11 } },
+                     grid: { color: 'rgba(148,163,184,0.25)' } },
+                y: { min: 0, max: 100,
+                     ticks: { stepSize: 25, callback: v => v + '%', font: { size: 11 } },
+                     grid: { color: ctx => ctx.tick.value === 50 ? 'rgba(100,116,139,0.6)' : 'rgba(148,163,184,0.18)' } },
+            },
+        },
+    });
+    function ax_max() { return chart.options.scales.x.max; }
+
+    function setX(maxT) {
+        // Extend the axis in 5-minute steps when the game goes to overtime
+        let max = 2880;
+        while (max < maxT) max += 300;
+        if (max !== chart.options.scales.x.max) {
+            chart.options.scales.x.max = max;
+            for (let q = 2880 + 300; q <= max; q += 300) if (!QTR.includes(q)) QTR.push(q);
+        }
+    }
+
+    function pushPoint(t, hp, meta) {
+        const [away, home] = chart.data.datasets;
+        const last = home.data[home.data.length - 1];
+        const y = hp * 100;
+        if (last && Math.abs(last.x - t) < 1) {           // same moment: replace
+            last.y = y; last.m = meta; away.data[away.data.length - 1].y = 100 - y;
+        } else if (!last || t > last.x) {                 // only move forward
+            home.data.push({ x: t, y: y, m: meta });
+            away.data.push({ x: t, y: 100 - y, m: meta });
+        }
+        setX(t);
+    }
+
+    function showNow(hp, source) {
+        const homeFav = hp >= 0.5;
+        const pct = Math.round((homeFav ? hp : 1 - hp) * 100);
+        $('js-now-pct').textContent   = pct + '%';
+        $('js-now-pct').style.color   = homeFav ? CFG.homeCol : CFG.awayCol;
+        $('js-now-label').textContent = (homeFav ? CFG.homeTri : CFG.awayTri) + ' to win · ' + source;
+    }
+
+    async function loadCurve() {
+        try {
+            const r = await fetch(`/nba/curve/${CFG.gameId}`);
+            if (!r.ok) return;
+            const { points } = await r.json();
+            chart.data.datasets.forEach(d => d.data = []);
+            points.forEach(p => pushPoint(p.t, p.hp,
+                { hs: p.hs, as: p.as, clock: p.clock, desc: p.desc }));
+            chart.update();
+            const lastP = points[points.length - 1];
+            if (lastP && status !== 'pre') showNow(lastP.hp, status === 'final' ? 'final' : 'live model');
+            $('js-source').textContent = points.length > 1
+                ? `${points.length - 1} scoring plays rebuilt from play-by-play`
+                : 'Pregame Elo';
+        } catch (e) { $('js-source').textContent = 'History unavailable'; }
+    }
+
+    // ── Live poll ────────────────────────────────────────────────────
+    async function poll() {
+        try {
+            const r = await fetch(`/nba/live/${CFG.gameId}`);
+            if (!r.ok) return;
+            const d = await r.json();
+
+            if (status === 'pre' && d.status !== 'pre') { location.reload(); return; }
+
+            $('js-updated').textContent = new Date().toLocaleTimeString('en-GB',
+                { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Africa/Nairobi' });
+            $('js-elo-weight').textContent     = d.elo_prior_weight.toFixed(2);
+            $('js-elo-weight-big').textContent = d.elo_prior_weight.toFixed(2);
+            $('js-elo-weight-bar').style.width = Math.round(d.elo_prior_weight * 100) + '%';
+            $('js-conf').textContent = d.confidence ? d.confidence[0].toUpperCase() + d.confidence.slice(1) : '—';
+
+            if (d.status === 'pre') return;
+
+            $('js-home-score').textContent = d.home_score;
+            $('js-away-score').textContent = d.away_score;
+            $('js-poss').textContent  = d.possession > 0.5 ? CFG.homeTri : d.possession < 0.5 ? CFG.awayTri : '—';
+            $('js-poss').style.color  = d.possession > 0.5 ? CFG.homeCol : d.possession < 0.5 ? CFG.awayCol : '';
+            const bonus = [d.away_in_bonus ? CFG.awayTri : null, d.home_in_bonus ? CFG.homeTri : null].filter(Boolean);
+            $('js-bonus').textContent = bonus.length ? bonus.join(' · ') : 'None';
+
+            if (d.status === 'final') {
+                status = 'final';
+                clearInterval(timer);
+                $('js-status').innerHTML = 'FINAL';
+                $('js-status').style.color = 'var(--text-muted,#64748b)';
+                await loadCurve();              // redraw the complete arc once
+                const homeWon = d.home_score > d.away_score;
+                const ok = homeWon === (CFG.pregame >= 0.5);
+                const b = $('js-final-banner');
+                b.style.display = 'block';
+                b.innerHTML = ok
+                    ? '<span style="color:#15803d"><i class="ti ti-circle-check"></i> Pregame pick correct</span>'
+                    : '<span style="color:#C8102E"><i class="ti ti-circle-x"></i> Pregame pick wrong</span>';
+                return;
+            }
+
+            $('js-status').innerHTML = '<span class="live-dot"></span> ' + d.status_text;
+            pushPoint(d.elapsed_sec, d.home_win_prob,
+                { hs: d.home_score, as: d.away_score, clock: d.status_text, desc: 'Live poll' });
+            chart.update();
+            showNow(d.home_win_prob, d.source === 'neural_net' ? 'live model' : 'pregame fallback');
+            $('js-source').textContent = d.source === 'neural_net'
+                ? 'Neural net · updating every ' + Math.round(CFG.poll / 1000) + 's'
+                : 'Model unavailable — Elo fallback';
+        } catch (e) { /* keep last values on network error */ }
+    }
+
+    // ── Pre-game countdown ───────────────────────────────────────────
+    function countdown() {
+        const el = $('js-countdown');
+        if (!el || !CFG.tipUtc) return;
+        const ms = new Date(CFG.tipUtc) - new Date();
+        if (ms <= 0) { el.textContent = 'Starting…'; return; }
+        const h = Math.floor(ms / 3.6e6), m = Math.floor(ms % 3.6e6 / 6e4), s = Math.floor(ms % 6e4 / 1e3);
+        el.textContent = `${h}h ${String(m).padStart(2, '0')}m ${String(s).padStart(2, '0')}s`;
+    }
+
+    // ── Boot ─────────────────────────────────────────────────────────
+    loadCurve().then(() => {
+        poll();
+        if (status !== 'final') timer = setInterval(poll, CFG.poll);
+    });
+    if (status === 'pre') { countdown(); setInterval(countdown, 1000); }
+})();
+</script>
+{% endif %}
+{% endblock %}

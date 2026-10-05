@@ -61,7 +61,7 @@ TEAM_NAME_ALIASES = {
     "Manchester United": "Manchester United",  # already correct, documented
     "Nott'm Forest"  : "Nottingham Forest",   # FPL abbreviation
     "Ipswich Town"   : "Ipswich",             # FPL full name  
-    "Newcastle"      : "Newcastle United",    # FPL short name
+     "Newcastle"      : "Newcastle United",    # FPL short name
 }
 
 
