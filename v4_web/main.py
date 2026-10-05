@@ -106,6 +106,8 @@ from utils import (
 )
 from v4_backend.feature_builder import DCStrengthLookup, TEAM_NAME_ALIASES
 from routes.match import router as match_router, setup as match_setup, dc_pregame, get_effective_gamma
+from routes.nba import router as nba_router, nba_setup
+from nba_model import nba_model
 from constants import EAT, DRAW_PROPENSITY, LEAGUE_FILTERS, LEAGUE_MAP
 
 # ── Constants ─────────────────────────────────────────────────────────────────
@@ -191,6 +193,21 @@ async def lifespan(app):
         priors_db, nn_model, nn_scaler, nn_T, dc_lookup,
         templates, TEAM_NAME_ALIASES, LEAGUE_KEY, LEAGUE_CONTEXTS,
     )
+
+    # ── NBA model ──────────────────────────────────────────────────
+    nba_model.setup()
+    # Pass the same predictions DB connection so NBA history
+    # lands in the same SQLite file under league='nba'
+    try:
+        import sqlite3
+        _nba_db = sqlite3.connect(str(ROOT / "predictions.db"), check_same_thread=False)
+    except Exception:
+        _nba_db = None
+    nba_setup(nba_model, _nba_db)
+    print(f"[startup] NBA model loaded: {nba_model.loaded}  "
+          f"(AUC={nba_model.info().get('roc_auc','—')}  "
+          f"Elo teams={nba_model.info().get('n_teams_elo','—')})")
+
     yield
     # Shutdown: nothing to clean up (SQLite handles its own flush)
 
@@ -198,6 +215,7 @@ from fastapi.staticfiles import StaticFiles
 
 app = FastAPI(title="Melios Dira Odds", lifespan=lifespan)
 app.include_router(match_router)
+app.include_router(nba_router, prefix="/nba")
 app.mount("/static", StaticFiles(directory=ROOT / "static"), name="static")
 templates = Jinja2Templates(directory=ROOT / "templates")
 
