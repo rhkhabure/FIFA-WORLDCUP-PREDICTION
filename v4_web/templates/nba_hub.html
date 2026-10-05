@@ -1,0 +1,307 @@
+{% extends "base.html" %}
+{#
+  nba_hub.html — /nba
+  Context (routes/nba.py → nba_hub):
+    live_games, upcoming_games, final_games, all_games  — enriched game dicts
+    model_info  — {loaded, roc_auc, brier, accuracy, temperature, ...}
+  Game dict keys used:
+    game_id, status, status_text, tip_off_eat,
+    home_team_id/away_team_id, home_tricode/away_tricode,
+    home_full/away_full, home_colour/away_colour,
+    home_score/away_score, home_win_prob/away_win_prob (0–1),
+    home_elo/away_elo
+#}
+
+{% macro logo(team_id, tricode, colour, size=34) -%}
+<span class="nba-logo" style="width:{{ size }}px;height:{{ size }}px;background:{{ colour }}">
+    <img src="https://cdn.nba.com/logos/nba/{{ team_id }}/global/L/logo.svg"
+         alt="{{ tricode }}" loading="lazy"
+         onerror="this.remove()">
+    <span class="nba-logo-fallback">{{ tricode }}</span>
+</span>
+{%- endmacro %}
+
+{% macro prob_bar(g, height=6) -%}
+{% set hp = (g.home_win_prob * 100) | round(0) | int %}
+<div class="prob-track" style="height:{{ height }}px">
+    <div class="prob-away" style="width:{{ 100 - hp }}%;background:{{ g.away_colour }}"></div>
+    <div class="prob-home" style="width:{{ hp }}%;background:{{ g.home_colour }}"></div>
+</div>
+{%- endmacro %}
+
+{% block content %}
+<style>
+    .nba-section-label {
+        font-family: var(--font-mono); font-size: 10px; font-weight: 700;
+        text-transform: uppercase; letter-spacing: 0.12em;
+        color: var(--text-muted, #64748b); margin: 0 0 8px;
+        display: flex; align-items: center; gap: 8px;
+    }
+    .nba-section-label::after { content: ""; flex: 1; height: 1px; background: var(--border, #e2e8f0); }
+
+    .nba-card {
+        background: var(--surface, #fff);
+        border: 1.5px solid var(--border, #e2e8f0);
+        border-radius: 12px;
+        text-decoration: none; color: inherit; display: block;
+        transition: border-color 0.12s, transform 0.12s;
+    }
+    .nba-card:hover { border-color: var(--league-primary); transform: translateY(-1px); }
+
+    .nba-logo {
+        border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+        position: relative; overflow: hidden; flex-shrink: 0;
+    }
+    .nba-logo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain;
+                    background: #fff; padding: 3px; z-index: 1; }
+    .nba-logo-fallback { font-family: var(--font-mono); font-size: 9px; font-weight: 800; color: #fff; }
+
+    .prob-track { display: flex; border-radius: 99px; overflow: hidden; background: var(--border, #e2e8f0); }
+    .prob-track > div { transition: width 0.6s cubic-bezier(.4,0,.2,1); }
+
+    .live-dot { width: 7px; height: 7px; border-radius: 50%; background: #C8102E; display: inline-block;
+                animation: pulse 1.6s ease-in-out infinite; }
+    @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.3 } }
+
+    .live-strip { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 6px; scroll-snap-type: x mandatory; }
+    .live-strip .nba-card { min-width: 250px; flex-shrink: 0; scroll-snap-align: start; border-color: #C8102E; }
+
+    .stat-tile { background: var(--surface, #fff); border: 1.5px solid var(--border, #e2e8f0);
+                 border-radius: 12px; padding: 12px 14px; }
+    .stat-tile .v { font-size: 22px; font-weight: 800; color: var(--league-primary); line-height: 1.1; }
+    .stat-tile .l { font-family: var(--font-mono); font-size: 9px; text-transform: uppercase;
+                    letter-spacing: 0.12em; color: var(--text-muted, #64748b); margin-top: 4px; }
+
+    .sched-row { display: grid; grid-template-columns: 70px minmax(0,1fr) 150px 90px 28px;
+                 align-items: center; gap: 12px; padding: 10px 14px; }
+    .sched-row .time { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted, #64748b); }
+    .sched-row .teams { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; min-width: 0; }
+    .sched-row .teams .at { color: var(--text-muted, #64748b); font-weight: 400; font-size: 11px; }
+    .sched-row .score { font-family: var(--font-mono); font-size: 13px; font-weight: 700; text-align: right; }
+    .pick { font-family: var(--font-mono); font-size: 10px; font-weight: 700; margin-top: 4px;
+            display: flex; justify-content: space-between; }
+    .final-row { opacity: 0.72; }
+    .final-row:hover { opacity: 1; }
+    .res-ok  { color: #15803d; font-size: 16px; }
+    .res-bad { color: #C8102E; font-size: 16px; }
+
+    @media (max-width: 760px) {
+        .sched-row { grid-template-columns: 56px minmax(0,1fr) 28px; }
+        .sched-row .prob-col, .sched-row .score { display: none; }
+    }
+</style>
+
+<div style="display:flex;flex-direction:column;gap:22px;max-width:1200px;margin:0 auto">
+
+    <!-- ── Summary tiles ─────────────────────────────────────────── -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px">
+        <div class="stat-tile">
+            <div class="v">{{ all_games | length }}</div>
+            <div class="l">Games today</div>
+        </div>
+        <div class="stat-tile">
+            <div class="v" style="color:#C8102E">{{ live_games | length }}</div>
+            <div class="l">Live now</div>
+        </div>
+        <div class="stat-tile">
+            <div class="v">{{ "%.3f" | format(model_info.roc_auc) if model_info.roc_auc else "—" }}</div>
+            <div class="l">Model ROC-AUC</div>
+        </div>
+        <div class="stat-tile">
+            <div class="v">{{ "%.4f" | format(model_info.brier) if model_info.brier else "—" }}</div>
+            <div class="l">Model Brier</div>
+        </div>
+    </div>
+
+    {% if not model_info.loaded %}
+    <div style="background:#FEF2F2;border:1.5px solid #FCA5A5;color:#991B1B;border-radius:12px;
+                padding:10px 14px;font-size:12px">
+        <i class="ti ti-alert-triangle" aria-hidden="true"></i>
+        NBA model not loaded — showing Elo-only probabilities. Check <code>v4_web/nba/model/</code>.
+    </div>
+    {% endif %}
+
+    <!-- ── Live strip ─────────────────────────────────────────────── -->
+    {% if live_games %}
+    <section>
+        <div class="nba-section-label"><span class="live-dot"></span> Live now</div>
+        <div class="live-strip">
+            {% for g in live_games %}
+            <a href="/nba/match?game_id={{ g.game_id }}" class="nba-card live-card"
+               data-game-id="{{ g.game_id }}" style="padding:12px 14px">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+                    <span style="font-family:var(--font-mono);font-size:10px;font-weight:700;color:#C8102E">
+                        <span class="live-dot" style="width:6px;height:6px"></span>
+                        <span class="js-status">{{ g.status_text }}</span>
+                    </span>
+                    <span style="font-family:var(--font-mono);font-size:9px;color:var(--text-muted,#64748b)">
+                        upd. <span class="js-updated">—</span>
+                    </span>
+                </div>
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+                    <div style="display:flex;flex-direction:column;align-items:center;gap:4px;width:56px">
+                        {{ logo(g.away_team_id, g.away_tricode, g.away_colour) }}
+                        <span style="font-size:11px;font-weight:800">{{ g.away_tricode }}</span>
+                    </div>
+                    <div style="font-size:24px;font-weight:900;font-family:var(--font-mono);letter-spacing:-1px">
+                        <span class="js-away-score">{{ g.away_score }}</span>
+                        <span style="color:var(--text-muted,#94a3b8);font-weight:400">–</span>
+                        <span class="js-home-score">{{ g.home_score }}</span>
+                    </div>
+                    <div style="display:flex;flex-direction:column;align-items:center;gap:4px;width:56px">
+                        {{ logo(g.home_team_id, g.home_tricode, g.home_colour) }}
+                        <span style="font-size:11px;font-weight:800">{{ g.home_tricode }}</span>
+                    </div>
+                </div>
+                <div style="margin-top:12px">
+                    <div class="prob-track" style="height:7px">
+                        <div class="js-away-bar" style="width:{{ (g.away_win_prob*100)|round(0) }}%;background:{{ g.away_colour }}"></div>
+                        <div class="js-home-bar" style="width:{{ (g.home_win_prob*100)|round(0) }}%;background:{{ g.home_colour }}"></div>
+                    </div>
+                    <div class="pick">
+                        <span style="color:{{ g.away_colour }}">{{ g.away_tricode }} <span class="js-away-pct">{{ (g.away_win_prob*100)|round(0)|int }}</span>%</span>
+                        <span style="color:var(--text-muted,#94a3b8);font-weight:400" class="js-source">pregame</span>
+                        <span style="color:{{ g.home_colour }}">{{ g.home_tricode }} <span class="js-home-pct">{{ (g.home_win_prob*100)|round(0)|int }}</span>%</span>
+                    </div>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
+    <!-- ── Full schedule ─────────────────────────────────────────── -->
+    <section>
+        <div class="nba-section-label">Today's schedule · times EAT (UTC+3)</div>
+
+        {% if not all_games %}
+        <div class="nba-card" style="padding:32px;text-align:center">
+            <i class="ti ti-ball-basketball" style="font-size:32px;color:var(--league-primary)" aria-hidden="true"></i>
+            <div style="font-size:14px;font-weight:700;margin-top:8px">No NBA games today</div>
+            <div style="font-size:12px;color:var(--text-muted,#64748b);margin-top:4px">
+                The scoreboard refreshes every minute. Check back on the next game day.
+            </div>
+        </div>
+        {% else %}
+        <div style="display:flex;flex-direction:column;gap:8px">
+            {% for g in live_games + upcoming_games + final_games %}
+            {% set fav_home = g.home_win_prob >= 0.5 %}
+            {% set fav_pct  = ((g.home_win_prob if fav_home else g.away_win_prob) * 100) | round(0) | int %}
+            {% set fav_tri  = g.home_tricode if fav_home else g.away_tricode %}
+            {% set fav_col  = g.home_colour if fav_home else g.away_colour %}
+            <a href="/nba/match?game_id={{ g.game_id }}"
+               class="nba-card sched-row {{ 'final-row' if g.status == 'final' else '' }}"
+               style="{% if g.status == 'live' %}border-color:#C8102E{% endif %}">
+
+                <div class="time">
+                    {% if g.status == 'live' %}
+                        <span style="color:#C8102E;font-weight:700">LIVE</span>
+                    {% elif g.status == 'final' %}
+                        FINAL
+                    {% else %}
+                        {{ g.tip_off_eat or g.status_text }}
+                    {% endif %}
+                </div>
+
+                <div class="teams">
+                    {{ logo(g.away_team_id, g.away_tricode, g.away_colour, 26) }}
+                    <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ g.away_full }}</span>
+                    <span class="at">@</span>
+                    {{ logo(g.home_team_id, g.home_tricode, g.home_colour, 26) }}
+                    <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ g.home_full }}</span>
+                </div>
+
+                <div class="prob-col">
+                    {{ prob_bar(g, 5) }}
+                    <div class="pick">
+                        <span style="color:{{ fav_col }}">{{ fav_tri }} {{ fav_pct }}%</span>
+                        <span style="color:var(--text-muted,#94a3b8);font-weight:400">Elo {{ g.home_elo|int }}–{{ g.away_elo|int }}</span>
+                    </div>
+                </div>
+
+                <div class="score">
+                    {% if g.status in ('live', 'final') %}
+                        {{ g.away_score }}–{{ g.home_score }}
+                    {% else %}
+                        <span style="color:var(--text-muted,#94a3b8);font-weight:400">—</span>
+                    {% endif %}
+                </div>
+
+                <div style="text-align:center">
+                    {% if g.status == 'final' %}
+                        {% set home_won = g.home_score > g.away_score %}
+                        {% if home_won == fav_home %}
+                            <i class="ti ti-circle-check res-ok" title="Prediction correct" aria-label="Prediction correct"></i>
+                        {% else %}
+                            <i class="ti ti-circle-x res-bad" title="Prediction wrong" aria-label="Prediction wrong"></i>
+                        {% endif %}
+                    {% else %}
+                        <i class="ti ti-chevron-right" style="color:var(--text-muted,#94a3b8)" aria-hidden="true"></i>
+                    {% endif %}
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+
+        {% if final_games %}
+        {% set ns = namespace(ok=0) %}
+        {% for g in final_games %}
+            {% if (g.home_score > g.away_score) == (g.home_win_prob >= 0.5) %}{% set ns.ok = ns.ok + 1 %}{% endif %}
+        {% endfor %}
+        <div style="font-family:var(--font-mono);font-size:11px;color:var(--text-muted,#64748b);margin-top:10px;text-align:right">
+            Today: {{ ns.ok }} / {{ final_games | length }} pregame picks correct
+        </div>
+        {% endif %}
+        {% endif %}
+    </section>
+
+    <div style="font-family:var(--font-mono);font-size:10px;color:var(--text-muted,#94a3b8);text-align:center">
+        Pregame odds = Elo with +100 home advantage · Live odds = WinProbNet V3 (16 features, T={{ "%.3f"|format(model_info.temperature) if model_info.temperature else "—" }})
+    </div>
+</div>
+
+<script>
+// ── Live card polling — /nba/live/{game_id} every 30s ──────────────
+(function () {
+    const cards = document.querySelectorAll('.live-card[data-game-id]');
+    if (!cards.length) {
+        // No live games: reload every 2 min so games that tip off appear in the strip
+        {% if upcoming_games %}setTimeout(() => location.reload(), 120000);{% endif %}
+        return;
+    }
+
+    async function pollCard(card) {
+        const id = card.dataset.gameId;
+        try {
+            const r = await fetch(`/nba/live/${id}`);
+            if (!r.ok) return;
+            const d = await r.json();
+            const hp = Math.round(d.home_win_prob * 100);
+            const q  = sel => card.querySelector(sel);
+
+            q('.js-home-score').textContent = d.home_score;
+            q('.js-away-score').textContent = d.away_score;
+            q('.js-status').textContent     = d.status === 'final' ? 'Final' : d.status_text;
+            q('.js-home-bar').style.width   = hp + '%';
+            q('.js-away-bar').style.width   = (100 - hp) + '%';
+            q('.js-home-pct').textContent   = hp;
+            q('.js-away-pct').textContent   = 100 - hp;
+            q('.js-source').textContent     = d.source === 'neural_net' ? 'live model' : 'pregame';
+            q('.js-updated').textContent    = new Date().toLocaleTimeString('en-GB',
+                { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Nairobi' });
+
+            if (d.status === 'final') {
+                card.style.borderColor = 'var(--border)';
+                card.dataset.done = '1';
+            }
+        } catch (e) { /* keep last values on network error */ }
+    }
+
+    function pollAll() {
+        cards.forEach(c => { if (!c.dataset.done) pollCard(c); });
+    }
+    pollAll();
+    setInterval(pollAll, 30000);
+})();
+</script>
+{% endblock %}

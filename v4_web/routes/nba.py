@@ -151,6 +151,9 @@ async def nba_hub(request: Request):
             "all_games":      games,
             "model_info":     _model.info() if _model else {},
             "sport":          "nba",
+            "topbar_title":   "NBA · Today",
+            "live_count":     len(live),
+            "title":          "NBA Hub",
         },
     )
 
