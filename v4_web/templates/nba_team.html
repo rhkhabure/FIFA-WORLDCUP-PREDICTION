@@ -102,9 +102,13 @@
         <div class="tp-label">Recent form</div>
         <div style="display:flex;gap:5px;flex-wrap:wrap">
           {% for r in recent[:10] %}
-          {% set won = r.correct == 1 %}
-          <span class="form-pip {{ 'form-w' if won else 'form-l' }}"
-                title="{{ 'W' if won else 'L' }}">{{ 'W' if won else 'L' }}</span>
+          {% if r.correct is not none %}
+            {% set won = r.correct == 1 %}
+            <span class="form-pip {{ 'form-w' if won else 'form-l' }}"
+                  title="{{ 'W' if won else 'L' }}">{{ 'W' if won else 'L' }}</span>
+          {% else %}
+            <span class="form-pip" style="background:#e2e8f0;color:#64748b" title="Pending">-</span>
+          {% endif %}
           {% endfor %}
         </div>
         <div style="font-size:11px;color:var(--text-muted,#64748b);margin-top:8px">
@@ -165,7 +169,7 @@
           </div>
           <div style="text-align:right">
             <div style="font-family:var(--font-mono);font-size:12px;font-weight:700">
-              {% if r.away_score is not none %}{{ r.away_score }}–{{ r.home_score }}{% else %}—{% endif %}
+              {% if r.away_score is not none %}{{ r.away_score|int }}–{{ r.home_score|int }}{% else %}—{% endif %}
             </div>
             <div style="font-size:10px;color:var(--text-muted,#64748b)">
               {{ r.created_at[:10] if r.created_at else '' }}
@@ -230,7 +234,7 @@
       </div>
       {% endif %}
 
-      <a href="/nba/teams" style="font-size:12px;font-weight:700;color:var(--league-primary);
+      <a href="/nba/teams" style="font-size:12px;font-weight:700;color:{{ col }};
          text-decoration:none;display:flex;align-items:center;gap:5px">
         <i class="ti ti-arrow-left" aria-hidden="true"></i> All teams
       </a>

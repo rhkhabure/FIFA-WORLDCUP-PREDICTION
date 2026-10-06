@@ -121,6 +121,8 @@ def _normalise_nba_prediction_row(row: dict) -> dict:
         or row.get("kickoff_utc")
         or ""
     )
+    # Add home_win_prob for NBA which is stored in the football columns
+    norm["home_win_prob"] = row.get("adj_home") if row.get("adj_home") is not None else row.get("pre_dc_home")
     return norm
 
 
