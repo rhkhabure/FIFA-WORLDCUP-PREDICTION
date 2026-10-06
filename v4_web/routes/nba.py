@@ -37,6 +37,7 @@ from constants import (
     EAT,
 )
 from nba_api_client import (
+    get_nba_fixtures_strip,
     get_today_scoreboard,
     get_live_game,
     get_live_pbp,
@@ -191,6 +192,7 @@ async def nba_match(request: Request, game_id: str = ""):
     Right panel: live win probability chart (Chart.js, polls /nba/live/{id}).
     """
     games = get_today_scoreboard()
+    fixtures = get_nba_fixtures_strip()
 
     # If no game_id given, use first live game, else first game today
     if not game_id:
@@ -227,6 +229,7 @@ async def nba_match(request: Request, game_id: str = ""):
             "away_team":      at,
             "home_form":      home_form,
             "away_form":      away_form,
+            "fixtures":       fixtures,
             "model_info":     _model.info() if _model else {},
             "sport":          "nba",
             # Chart.js poll interval (ms)

@@ -162,6 +162,93 @@ def get_today_scoreboard() -> list[dict]:
         return stale if stale is not None else []
 
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SECTION 1b — Fixtures Strip (Multi-day)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def get_nba_fixtures_strip() -> list[dict]:
+    """
+    Fetches games for yesterday, today, and tomorrow to populate the fixtures strip.
+    Uses ScoreboardV3 to allow date parameters.
+    """
+    key = "nba_fixtures_strip"
+    cached = _get(key)
+    if cached is not None:
+        return cached
+
+    try:
+        from nba_api.stats.endpoints import scoreboardv3
+        from datetime import datetime, timedelta
+
+        dates = [
+            datetime.now() - timedelta(days=1),
+            datetime.now(),
+            datetime.now() + timedelta(days=1)
+        ]
+
+        fixtures = []
+        for d in dates:
+            d_str = d.strftime('%Y-%m-%d')
+            try:
+                sb = scoreboardv3.ScoreboardV3(game_date=d_str, timeout=5)
+                data = sb.get_dict()
+                
+                # Parse ScoreboardV3
+                headers = []
+                linescores = []
+                for rs in data.get('resultSets', []):
+                    if rs['name'] == 'GameHeader':
+                        headers = [dict(zip(rs['headers'], row)) for row in rs['rowSet']]
+                    elif rs['name'] == 'LineScore':
+                        linescores = [dict(zip(rs['headers'], row)) for row in rs['rowSet']]
+                
+                # Group linescores by gameId
+                ls_by_game = {}
+                for ls in linescores:
+                    gid = ls['gameId']
+                    if gid not in ls_by_game:
+                        ls_by_game[gid] = []
+                    ls_by_game[gid].append(ls)
+                
+                for h in headers:
+                    gid = h['gameId']
+                    ls = ls_by_game.get(gid, [])
+                    if len(ls) >= 2:
+                        # Assuming 0 is away, 1 is home (standard NBA API behavior)
+                        away = ls[0]['teamTricode']
+                        home = ls[1]['teamTricode']
+                        away_score = ls[0].get('score') or 0
+                        home_score = ls[1].get('score') or 0
+                        
+                        status = h.get('gameStatusText', '')
+                        time_utc = h.get('gameTimeUTC', '')
+                        kickoff = status
+                        if "Final" not in status and "Live" not in status:
+                            kickoff = to_eat(time_utc)
+                            if not kickoff:
+                                kickoff = status
+                        
+                        if "Final" in status or h.get('gameStatus') == 3:
+                            kickoff = f"FT {away_score}-{home_score}"
+                        
+                        fixtures.append({
+                            "game_id": gid,
+                            "home": home,
+                            "away": away,
+                            "kickoff_eat": kickoff,
+                            "game_time_utc": time_utc
+                        })
+            except Exception as e:
+                log.warning(f"Failed to fetch {d_str} for fixtures strip: {e}")
+
+        _set(key, fixtures, TTL_STATIC)
+        return fixtures
+    except Exception as exc:
+        log.warning("Fixtures strip fetch failed: %s", exc)
+        stale = _get_stale(key)
+        return stale if stale is not None else []
+
 # ─────────────────────────────────────────────────────────────────────────────
 # SECTION 2 — Live game state (single game)
 # ─────────────────────────────────────────────────────────────────────────────

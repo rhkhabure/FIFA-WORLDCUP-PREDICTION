@@ -89,6 +89,33 @@
 
 <div style="display:flex;flex-direction:column;gap:16px;max-width:1280px;margin:0 auto">
 
+    
+    <!-- FIXTURES STRIP -->
+    {% if fixtures %}
+    <div class="fixture-strip-wrap border rounded-xl px-4 py-2.5 shadow-xl mb-4" style="background:var(--bg-panel); border-color:var(--border-color);">
+        <div class="fixture-strip-label text-[10px] font-mono uppercase tracking-widest mb-1.5" style="color:var(--text-muted)">
+            Fixtures · NBA · All times EAT (UTC+3)
+        </div>
+        <div class="fixtures-strip flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+            {% for f in fixtures %}
+            <a href="/nba/match?game_id={{ f.game_id }}"
+               class="flex-none rounded-lg px-3 py-1.5 text-center transition cursor-pointer"
+               style="min-width:110px; border:1.5px solid; text-decoration:none; 
+                      {% if f.game_id|string == game_id|string %}
+                          border-color: #14b8a6; background: rgba(20, 184, 166, 0.1); color: #14b8a6;
+                      {% else %}
+                          border-color: var(--border-color); background: rgba(255,255,255,0.02); color: var(--text-muted);
+                      {% endif %}">
+                <div class="text-[9px] font-mono mb-0.5">{{ f.kickoff_eat }}</div>
+                <div class="text-[11px] font-bold truncate">{{ f.home }}</div>
+                <div class="text-[9px]">vs</div>
+                <div class="text-[11px] font-bold truncate">{{ f.away }}</div>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
     <!-- ── Scoreboard header ─────────────────────────────────────── -->
     <div class="m-card" style="padding:18px 22px">
         <div style="display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:16px">
