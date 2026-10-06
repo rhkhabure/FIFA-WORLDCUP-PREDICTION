@@ -32,11 +32,9 @@
   .game-row:last-child{border-bottom:none}
 </style>
 
-{% set col = team.primary|default('#6b7280') %}
-{% set elo = team.elo|default(1500)|int %}
-{% set raw_elo_pct = ((elo - 1300) / 4) | float %}
-{% set bar_pct = [raw_elo_pct, 3] | max %}
-{% set bar_pct = [bar_pct, 100] | min %}
+{% set col = team.primary %}
+{% set elo = team.elo %}
+{% set bar_pct = [[(elo - 1300) / 4, 3]|max, 100]|min %}
 
 <div style="max-width:960px;margin:0 auto;display:flex;flex-direction:column;gap:16px">
 
@@ -146,14 +144,14 @@
         </div>
         {% else %}
         {% for r in recent %}
-        {% set hw = r.home_win_prob if r.home_win_prob else 0.5 %}
+        {% set hw = (r.home_win_prob if r.home_win_prob is not none else 0.5) %}
         {% set fav_home = hw >= 0.5 %}
         {% set fav_pct  = ((hw if fav_home else 1-hw)*100)|round(0)|int %}
         {% set fav_tri  = r.home_team if fav_home else r.away_team %}
         <div class="game-row">
           <div>
             <div style="font-size:12px;font-weight:700">
-              {{ r.away_team }} <span style="color:var(--text-muted,#64748b);font-weight:400">@</span> {{ r.home_team }}
+              {{ r.away_team or 'Away' }} <span style="color:var(--text-muted,#64748b);font-weight:400">@</span> {{ r.home_team or 'Home' }}
             </div>
             <div style="display:flex;align-items:center;gap:6px;margin-top:4px">
               <div class="prob-track" style="width:70px">
@@ -199,7 +197,7 @@
         {% set opp_tri = (g.away_tricode if is_home else g.home_tricode)|default('') %}
         {% set opp_col = (g.away_colour if is_home else g.home_colour)|default('#64748b') %}
         {% set hp = g.home_win_prob|default(0.5) %}
-        {% set our_prob = (((hp if is_home else 1-hp) * 100) | round(0) | int) %}
+        {% set our_prob = ((hp if is_home else 1-hp)*100)|round(0)|int %}
         <a href="/nba/match?game_id={{ g.game_id }}"
            style="display:block;padding:12px 14px;text-decoration:none;color:inherit">
           <div style="display:flex;justify-content:space-between;align-items:center">
@@ -209,7 +207,7 @@
                 <span style="color:{{ opp_col }}">{{ opp_tri }}</span>
               </span>
               <span style="font-size:11px;color:var(--text-muted,#64748b);margin-left:8px">
-                {{ g.tip_off_eat|default(g.status_text, true) if g.status == 'pre' else g.status_text|default('') }}
+                {{ g.tip_off_eat or g.status_text }}
               </span>
             </div>
             <div style="text-align:right">

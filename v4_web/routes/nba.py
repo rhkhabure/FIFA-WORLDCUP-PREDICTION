@@ -102,25 +102,45 @@ def _enrich_game(game: dict) -> dict:
     }
 
 
+def _normalise_nba_prediction_row(row: dict) -> dict:
+    """Normalise rows from the shared predictions table to the keys used by NBA templates."""
+    norm = dict(row)
+    norm["correct"] = (
+        row.get("correct")
+        if row.get("correct") is not None
+        else row.get("adj_correct")
+        if row.get("adj_correct") is not None
+        else row.get("pre_correct")
+    )
+    norm["home_score"] = row.get("actual_hg") if row.get("actual_hg") is not None else row.get("home_score")
+    norm["away_score"] = row.get("actual_ag") if row.get("actual_ag") is not None else row.get("away_score")
+    norm["created_at"] = (
+        row.get("result_logged_at")
+        or row.get("adj_logged_at")
+        or row.get("pre_logged_at")
+        or row.get("kickoff_utc")
+        or ""
+    )
+    return norm
+
+
 def _get_nba_history(limit: int = 50, conference: str = "all") -> list[dict]:
     """Pull recent NBA predictions from the shared predictions DB."""
     if _db is None:
         return []
     try:
         cur = _db.cursor()
-        if conference == "all":
-            cur.execute(
-                "SELECT * FROM predictions WHERE league='nba' "
-                "ORDER BY created_at DESC LIMIT ?", (limit,)
-            )
-        else:
-            cur.execute(
-                "SELECT * FROM predictions WHERE league='nba' "
-                "AND conference=? ORDER BY created_at DESC LIMIT ?",
-                (conference, limit)
-            )
+        query = "SELECT * FROM predictions WHERE league='nba'"
+        params: list[object] = []
+        if conference != "all":
+            # The shared predictions table does not store a conference column for NBA rows,
+            # so keep the query broad and let the UI gracefully render an empty view.
+            log.debug("Ignoring conference filter for NBA history: %s", conference)
+        query += " ORDER BY COALESCE(result_logged_at, adj_logged_at, pre_logged_at, kickoff_utc) DESC LIMIT ?"
+        params.append(limit)
+        cur.execute(query, params)
         cols = [d[0] for d in cur.description]
-        return [dict(zip(cols, row)) for row in cur.fetchall()]
+        return [_normalise_nba_prediction_row(dict(zip(cols, row))) for row in cur.fetchall()]
     except Exception as exc:
         log.warning("NBA history DB error: %s", exc)
         return []
@@ -286,12 +306,17 @@ async def nba_team_profile(request: Request, team_id: int):
             cur = _db.cursor()
             cur.execute(
                 "SELECT * FROM predictions WHERE league='nba' "
-                "AND (home_team_id=? OR away_team_id=?) "
-                "ORDER BY created_at DESC LIMIT 10",
-                (team_id, team_id)
+                "ORDER BY COALESCE(result_logged_at, adj_logged_at, pre_logged_at, kickoff_utc) DESC LIMIT 50"
             )
-            cols   = [d[0] for d in cur.description]
-            recent = [dict(zip(cols, row)) for row in cur.fetchall()]
+            cols = [d[0] for d in cur.description]
+            rows = [_normalise_nba_prediction_row(dict(zip(cols, row))) for row in cur.fetchall()]
+            team_name = f"{t.get('city', '')} {t.get('name', '')}".strip()
+            aliases = {team_name, t.get('name', ''), t.get('tricode', ''), str(team_id)}
+            recent = [
+                row for row in rows
+                if str(row.get('home_team', '')).strip() in aliases
+                or str(row.get('away_team', '')).strip() in aliases
+            ][:10]
         except Exception as exc:
             log.warning("Team history error: %s", exc)
 
