@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{#
+  nba_teams.html — /nba/teams
+  Context: conferences (NBA_CONFERENCES dict), team_cards (dict[team_id → team+elo]), sport
+  Anchor links: #East, #West, #Atlantic, #Central, #Southeast, #Northwest, #Pacific, #Southwest
+#}
+{% block content %}
+<style>
+  .t-section-head{display:flex;align-items:center;gap:12px;margin:20px 0 12px}
+  .t-section-head h2{font-size:16px;font-weight:900;margin:0}
+  .t-section-head .line{flex:1;height:1.5px;background:var(--border,#e2e8f0)}
+  .div-label{font-family:var(--font-mono);font-size:10px;font-weight:700;text-transform:uppercase;
+             letter-spacing:.12em;color:var(--text-muted,#64748b);margin:14px 0 8px}
+  .team-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
+  .team-card{background:var(--surface,#fff);border:1.5px solid var(--border,#e2e8f0);
+             border-radius:12px;padding:14px 12px;text-align:center;text-decoration:none;color:inherit;
+             display:block;transition:border-color .12s,transform .12s}
+  .team-card:hover{border-color:var(--team-col);transform:translateY(-2px)}
+  .team-logo{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;
+             justify-content:center;margin:0 auto 8px;position:relative;overflow:hidden}
+  .team-logo img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;
+                 background:#fff;padding:4px;z-index:1}
+  .team-logo span{font-family:var(--font-mono);font-size:10px;font-weight:800;color:#fff}
+  .elo-bar{height:4px;border-radius:99px;background:var(--border,#e2e8f0);margin-top:8px;overflow:hidden}
+  .elo-bar > div{height:100%;border-radius:99px;background:var(--team-col)}
+  .conf-pill{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:99px;
+             font-size:11px;font-weight:700;cursor:pointer;text-decoration:none;
+             border:1.5px solid var(--border,#e2e8f0);background:var(--surface,#fff);color:inherit}
+  .conf-pill.active{background:var(--league-primary);color:#fff;border-color:var(--league-primary)}
+</style>
+
+<div style="max-width:1200px;margin:0 auto">
+
+  <!-- quick jump pills -->
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px">
+    <a href="#East" class="conf-pill">
+      <span style="width:8px;height:8px;border-radius:50%;background:#1D428A"></span> Eastern
+    </a>
+    <a href="#West" class="conf-pill">
+      <span style="width:8px;height:8px;border-radius:50%;background:#C8102E"></span> Western
+    </a>
+    <span style="flex:1"></span>
+    <span style="font-size:11px;color:var(--text-muted,#64748b);align-self:center">
+      30 teams · Elo bars relative to league average (1500)
+    </span>
+  </div>
+
+  {% for conf_name, divisions in conferences.items() %}
+  <div id="{{ conf_name }}" style="margin-bottom:28px">
+    <div class="t-section-head">
+      <span style="width:10px;height:10px;border-radius:50%;
+            background:{{ '#1D428A' if conf_name == 'East' else '#C8102E' }}"></span>
+      <h2>{{ conf_name }}ern Conference</h2>
+      <div class="line"></div>
+    </div>
+
+    {% for div_name, team_ids in divisions.items() %}
+    <div id="{{ div_name }}" class="div-label">{{ div_name }} division</div>
+    <div class="team-grid">
+      {% for tid in team_ids %}
+      {% set tc = team_cards.get(tid, {}) %}
+      {% set elo = tc.get('elo', 1500) %}
+      {% set col = tc.get('primary', '#6b7280') %}
+      {# Elo bar width: 1300=0%, 1500=50%, 1700=100% — clamped #}
+      {% set bar_pct = [[(elo - 1300) / 4, 3]|max, 100]|min %}
+      <a href="/nba/team/{{ tid }}" class="team-card" style="--team-col:{{ col }}">
+        <div class="team-logo" style="background:{{ col }}">
+          <img src="https://cdn.nba.com/logos/nba/{{ tid }}/global/L/logo.svg"
+               alt="{{ tc.get('tricode','') }}" loading="lazy" onerror="this.remove()">
+          <span>{{ tc.get('tricode', '???') }}</span>
+        </div>
+        <div style="font-size:13px;font-weight:800;margin-bottom:2px">{{ tc.get('name', '—') }}</div>
+        <div style="font-size:11px;color:var(--text-muted,#64748b)">{{ tc.get('city', '') }}</div>
+        <div style="font-family:var(--font-mono);font-size:12px;font-weight:700;
+             color:{{ col }};margin-top:6px">{{ elo|int }}</div>
+        <div class="elo-bar">
+          <div style="width:{{ bar_pct }}%"></div>
+        </div>
+      </a>
+      {% endfor %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endfor %}
+
+  <div style="font-family:var(--font-mono);font-size:10px;color:var(--text-muted,#94a3b8);
+       text-align:center;margin-top:8px">
+    Elo ratings computed from game results 2018-19 → 2024-25 · Updated each season
+  </div>
+</div>
+{% endblock %}
