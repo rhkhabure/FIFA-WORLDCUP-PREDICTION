@@ -1,0 +1,240 @@
+{% extends "base.html" %}
+{#
+  nba_team.html — /nba/team/{team_id}
+  Context: team (dict with elo, team_id, name, city, tricode, primary, secondary,
+                       conference, division),
+           recent (list of prediction DB rows),
+           upcoming (list of enriched game dicts from today's scoreboard),
+           sport
+#}
+{% block content %}
+<style>
+  .tp-card{background:var(--surface,#fff);border:1.5px solid var(--border,#e2e8f0);
+           border-radius:12px;padding:14px 16px}
+  .tp-label{font-family:var(--font-mono);font-size:10px;font-weight:700;text-transform:uppercase;
+            letter-spacing:.12em;color:var(--text-muted,#64748b);margin-bottom:10px}
+  .nba-logo{border-radius:50%;display:inline-flex;align-items:center;justify-content:center;
+            position:relative;overflow:hidden;flex-shrink:0}
+  .nba-logo img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;
+                background:#fff;padding:5px;z-index:1}
+  .nba-logo span{font-family:var(--font-mono);font-size:11px;font-weight:800;color:#fff}
+  .elo-bar{height:5px;border-radius:99px;background:var(--border,#e2e8f0);overflow:hidden}
+  .elo-bar>div{height:100%;border-radius:99px}
+  .form-pip{width:22px;height:22px;border-radius:6px;display:inline-flex;align-items:center;
+            justify-content:center;font-size:10px;font-weight:800}
+  .form-w{background:#DCFCE7;color:#166534} .form-l{background:#FEE2E2;color:#991B1B}
+  .ok{color:#15803d;font-size:16px} .bad{color:#C8102E;font-size:16px}
+  .prob-track{display:flex;height:5px;border-radius:99px;overflow:hidden;
+              background:var(--border,#e2e8f0)}
+  .game-row{display:grid;grid-template-columns:1fr 90px 26px;
+            align-items:center;gap:10px;padding:8px 12px;
+            border-bottom:1px solid var(--border,#e2e8f0)}
+  .game-row:last-child{border-bottom:none}
+</style>
+
+{% set col = team.primary %}
+{% set elo = team.elo %}
+{% set bar_pct = [[(elo - 1300) / 4, 3]|max, 100]|min %}
+
+<div style="max-width:960px;margin:0 auto;display:flex;flex-direction:column;gap:16px">
+
+  <!-- ── Header ──────────────────────────────────────────────────── -->
+  <div class="tp-card" style="border-left:5px solid {{ col }}">
+    <div style="display:flex;align-items:center;gap:16px">
+      <div class="nba-logo" style="width:64px;height:64px;background:{{ col }}">
+        <img src="https://cdn.nba.com/logos/nba/{{ team.team_id }}/global/L/logo.svg"
+             alt="{{ team.tricode }}" loading="lazy" onerror="this.remove()">
+        <span>{{ team.tricode }}</span>
+      </div>
+      <div style="flex:1">
+        <div style="font-size:22px;font-weight:900;line-height:1.1">
+          {{ team.city }} {{ team.name }}
+        </div>
+        <div style="font-size:12px;color:var(--text-muted,#64748b);margin-top:4px">
+          {{ team.conference }}ern Conference · {{ team.division }} Division
+        </div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:32px;font-weight:900;color:{{ col }};font-family:var(--font-mono)">
+          {{ elo|int }}
+        </div>
+        <div style="font-size:11px;color:var(--text-muted,#64748b)">Elo rating</div>
+        <div class="elo-bar" style="width:120px;margin-top:6px">
+          <div style="width:{{ bar_pct }}%;background:{{ col }}"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Two-column body ─────────────────────────────────────────── -->
+  <div style="display:grid;grid-template-columns:260px minmax(0,1fr);gap:16px;align-items:start">
+
+    <!-- LEFT -->
+    <div style="display:flex;flex-direction:column;gap:12px">
+
+      <!-- Season record -->
+      {% if recent %}
+      {% set wins   = recent | selectattr('correct','equalto',1) | list | length %}
+      {% set played = recent | rejectattr('correct','none') | list | length %}
+      {% set losses = played - wins %}
+      <div class="tp-card">
+        <div class="tp-label">Season record (logged)</div>
+        <div style="font-size:36px;font-weight:900;line-height:1">
+          {{ wins }} – {{ losses }}
+        </div>
+        <div style="font-size:11px;color:var(--text-muted,#64748b);margin-top:4px">
+          {{ "%.0f"|format(wins/played*100) if played else 0 }}% win rate · {{ played }} games logged
+        </div>
+      </div>
+      {% else %}
+      <div class="tp-card" style="text-align:center;padding:24px">
+        <i class="ti ti-clock" style="font-size:24px;color:{{ col }}" aria-hidden="true"></i>
+        <div style="font-size:13px;font-weight:700;margin-top:8px">No games logged yet</div>
+        <div style="font-size:11px;color:var(--text-muted,#64748b);margin-top:4px">
+          Season results fill in automatically.
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- Recent form pips -->
+      {% if recent %}
+      <div class="tp-card">
+        <div class="tp-label">Recent form</div>
+        <div style="display:flex;gap:5px;flex-wrap:wrap">
+          {% for r in recent[:10] %}
+          {% set won = r.correct == 1 %}
+          <span class="form-pip {{ 'form-w' if won else 'form-l' }}"
+                title="{{ 'W' if won else 'L' }}">{{ 'W' if won else 'L' }}</span>
+          {% endfor %}
+        </div>
+        <div style="font-size:11px;color:var(--text-muted,#64748b);margin-top:8px">
+          Last {{ [recent|length, 10]|min }} logged games (left = most recent)
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- Elo context -->
+      <div class="tp-card">
+        <div class="tp-label">Elo context</div>
+        {% for label, ref_elo in [("League average", 1500), ("Our team", elo)] %}
+        <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">
+          <span>{{ label }}</span>
+          <span style="font-family:var(--font-mono);font-weight:700">{{ ref_elo|int }}</span>
+        </div>
+        {% endfor %}
+        <div style="font-size:11px;color:var(--text-muted,#64748b);margin-top:8px;line-height:1.5">
+          An Elo gap of +100 ≈ 64% win probability on a neutral court.
+          Home advantage adds another +100, so home games start at roughly
+          {{ "%.0f"|format((1/(1+10**((1500-(elo+100))/400)))*100) }}% if facing an average team.
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT -->
+    <div style="display:flex;flex-direction:column;gap:12px">
+
+      <!-- Recent predictions table -->
+      <div class="tp-card" style="padding:0;overflow:hidden">
+        <div style="padding:12px 14px;border-bottom:1.5px solid var(--border,#e2e8f0)">
+          <div class="tp-label" style="margin:0">Recent predictions</div>
+        </div>
+        {% if not recent %}
+        <div style="padding:20px;text-align:center;color:var(--text-muted,#64748b);font-size:12px">
+          No predictions on record yet for this team.
+        </div>
+        {% else %}
+        {% for r in recent %}
+        {% set hw = r.home_win_prob if r.home_win_prob else 0.5 %}
+        {% set fav_home = hw >= 0.5 %}
+        {% set fav_pct  = ((hw if fav_home else 1-hw)*100)|round(0)|int %}
+        {% set fav_tri  = r.home_team if fav_home else r.away_team %}
+        <div class="game-row">
+          <div>
+            <div style="font-size:12px;font-weight:700">
+              {{ r.away_team }} <span style="color:var(--text-muted,#64748b);font-weight:400">@</span> {{ r.home_team }}
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;margin-top:4px">
+              <div class="prob-track" style="width:70px">
+                <div style="width:{{ 100-fav_pct }}%;background:#94a3b8"></div>
+                <div style="width:{{ fav_pct }}%;background:{{ col }}"></div>
+              </div>
+              <span style="font-size:10px;font-family:var(--font-mono);color:var(--text-muted,#64748b)">
+                {{ fav_tri }} {{ fav_pct }}%
+              </span>
+            </div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-family:var(--font-mono);font-size:12px;font-weight:700">
+              {% if r.away_score is not none %}{{ r.away_score }}–{{ r.home_score }}{% else %}—{% endif %}
+            </div>
+            <div style="font-size:10px;color:var(--text-muted,#64748b)">
+              {{ r.created_at[:10] if r.created_at else '' }}
+            </div>
+          </div>
+          <div>
+            {% if r.correct == 1 %}
+              <i class="ti ti-circle-check ok" aria-label="Correct"></i>
+            {% elif r.correct == 0 %}
+              <i class="ti ti-circle-x bad" aria-label="Wrong"></i>
+            {% else %}
+              <span style="color:var(--text-muted,#64748b)">—</span>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+        {% endif %}
+      </div>
+
+      <!-- Upcoming games from today's scoreboard -->
+      {% if upcoming %}
+      <div class="tp-card" style="padding:0;overflow:hidden">
+        <div style="padding:12px 14px;border-bottom:1.5px solid var(--border,#e2e8f0)">
+          <div class="tp-label" style="margin:0">Today's game</div>
+        </div>
+        {% for g in upcoming %}
+        {% set is_home = g.home_team_id == team.team_id %}
+        {% set opp_tri = g.away_tricode if is_home else g.home_tricode %}
+        {% set opp_col = g.away_colour if is_home else g.home_colour %}
+        {% set hp = g.home_win_prob %}
+        {% set our_prob = ((hp if is_home else 1-hp)*100)|round(0)|int %}
+        <a href="/nba/match?game_id={{ g.game_id }}"
+           style="display:block;padding:12px 14px;text-decoration:none;color:inherit">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <span style="font-size:13px;font-weight:800">
+                {{ 'vs' if is_home else '@' }}
+                <span style="color:{{ opp_col }}">{{ opp_tri }}</span>
+              </span>
+              <span style="font-size:11px;color:var(--text-muted,#64748b);margin-left:8px">
+                {{ g.tip_off_eat if g.status == 'pre' else g.status_text }}
+              </span>
+            </div>
+            <div style="text-align:right">
+              <span style="font-size:14px;font-weight:900;color:{{ col }}">
+                {{ our_prob }}%
+              </span>
+              <div style="font-size:10px;color:var(--text-muted,#64748b)">our win prob</div>
+            </div>
+          </div>
+          <div class="prob-track" style="height:6px;margin-top:8px">
+            {% if is_home %}
+            <div style="width:{{ 100-our_prob }}%;background:{{ opp_col }}"></div>
+            <div style="width:{{ our_prob }}%;background:{{ col }}"></div>
+            {% else %}
+            <div style="width:{{ our_prob }}%;background:{{ col }}"></div>
+            <div style="width:{{ 100-our_prob }}%;background:{{ opp_col }}"></div>
+            {% endif %}
+          </div>
+        </a>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      <a href="/nba/teams" style="font-size:12px;font-weight:700;color:var(--league-primary);
+         text-decoration:none;display:flex;align-items:center;gap:5px">
+        <i class="ti ti-arrow-left" aria-hidden="true"></i> All teams
+      </a>
+    </div>
+  </div>
+</div>
+{% endblock %}
