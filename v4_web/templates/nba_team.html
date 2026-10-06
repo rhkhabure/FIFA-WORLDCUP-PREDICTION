@@ -39,7 +39,7 @@
 <div style="max-width:960px;margin:0 auto;display:flex;flex-direction:column;gap:16px">
 
   <!-- ── Header ──────────────────────────────────────────────────── -->
-  <div class="tp-card" style="border-left:5px solid {{ col }}">
+  <div class="tp-card" style="--team-accent: {{ col }}; border-left:5px solid var(--team-accent)">
     <div style="display:flex;align-items:center;gap:16px">
       <div class="nba-logo" style="width:64px;height:64px;background:{{ col }}">
         <img src="https://cdn.nba.com/logos/nba/{{ team.team_id }}/global/L/logo.svg"
@@ -234,7 +234,7 @@
       </div>
       {% endif %}
 
-      <a href="/nba/teams" style="font-size:12px;font-weight:700;color:{{ col }};
+      <a href="/nba/teams" style="font-size:12px;font-weight:700;color:var(--team-accent);
          text-decoration:none;display:flex;align-items:center;gap:5px">
         <i class="ti ti-arrow-left" aria-hidden="true"></i> All teams
       </a>
