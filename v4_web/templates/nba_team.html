@@ -199,7 +199,7 @@
         {% set is_home = g.home_team_id == team.team_id %}
         {% set opp_tri = g.away_tricode if is_home else g.home_tricode %}
         {% set opp_col = g.away_colour if is_home else g.home_colour %}
-        {% set hp = g.home_win_prob %}
+        {% set hp = g.home_win_prob if g.home_win_prob is not none else 0.5 %}
         {% set our_prob = ((hp if is_home else 1-hp)*100)|round(0)|int %}
         <a href="/nba/match?game_id={{ g.game_id }}"
            style="display:block;padding:12px 14px;text-decoration:none;color:inherit">
