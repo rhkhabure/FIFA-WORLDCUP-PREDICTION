@@ -38,6 +38,7 @@ from constants import (
 )
 from nba_api_client import (
     get_today_scoreboard,
+    get_tomorrow_scoreboard,
     get_live_game,
     get_live_pbp,
     build_live_snapshot,
@@ -138,25 +139,36 @@ async def nba_hub(request: Request):
     Shows live game strip + full day schedule with pregame win probabilities.
     """
     games_raw = get_today_scoreboard()
-    games     = [_enrich_game(g) for g in games_raw]
+    showing_tomorrow = False
 
-    live   = [g for g in games if g["status"] == "live"]
-    pre    = [g for g in games if g["status"] == "pre"]
-    final  = [g for g in games if g["status"] == "final"]
+    # Off-day fallback: show tomorrow's schedule so the hub is never empty
+    if not games_raw:
+        games_raw        = get_tomorrow_scoreboard()
+        showing_tomorrow = True
+
+    games = [_enrich_game(g) for g in games_raw]
+    live  = [g for g in games if g["status"] == "live"]
+    pre   = [g for g in games if g["status"] == "pre"]
+    final = [g for g in games if g["status"] == "final"]
+
+    from datetime import date, timedelta
+    hub_date  = (date.today() + timedelta(days=1)).strftime("%A %b %-d") if showing_tomorrow else "Today"
 
     return templates.TemplateResponse(
         request=request,
         name="nba_hub.html",
         context={
-            "live_games":     live,
-            "upcoming_games": pre,
-            "final_games":    final,
-            "all_games":      games,
-            "model_info":     _model.info() if _model else {},
-            "sport":          "nba",
-            "topbar_title":   "NBA · Today",
-            "live_count":     len(live),
-            "title":          "NBA Hub",
+            "live_games":        live,
+            "upcoming_games":    pre,
+            "final_games":       final,
+            "all_games":         games,
+            "model_info":        _model.info() if _model else {},
+            "sport":             "nba",
+            "topbar_title":      f"NBA · {hub_date}",
+            "live_count":        len(live),
+            "title":             "NBA Hub",
+            "showing_tomorrow":  showing_tomorrow,
+            "hub_date":          hub_date,
         },
     )
 

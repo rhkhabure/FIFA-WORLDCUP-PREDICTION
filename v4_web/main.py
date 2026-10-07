@@ -196,12 +196,35 @@ async def lifespan(app):
 
     # ── NBA model ──────────────────────────────────────────────────
     nba_model.setup()
-    # Pass the same predictions DB connection so NBA history
-    # lands in the same SQLite file under league='nba'
+    # Shared predictions DB — create table if it doesn't exist yet
     try:
         import sqlite3
         _nba_db = sqlite3.connect(str(ROOT / "predictions.db"), check_same_thread=False)
-    except Exception:
+        _nba_db.execute("""
+            CREATE TABLE IF NOT EXISTS predictions (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                league        TEXT    NOT NULL DEFAULT 'football',
+                game_id       TEXT,
+                home_team     TEXT,
+                away_team     TEXT,
+                home_team_id  INTEGER,
+                away_team_id  INTEGER,
+                conference    TEXT,
+                home_win_prob REAL,
+                away_win_prob REAL,
+                home_score    INTEGER,
+                away_score    INTEGER,
+                correct       INTEGER,
+                brier         REAL,
+                created_at    TEXT    DEFAULT (datetime('now'))
+            )
+        """)
+        _nba_db.execute("CREATE INDEX IF NOT EXISTS idx_pred_league ON predictions(league)")
+        _nba_db.execute("CREATE INDEX IF NOT EXISTS idx_pred_game   ON predictions(game_id)")
+        _nba_db.commit()
+        print("[startup] predictions.db ready")
+    except Exception as e:
+        print(f"[startup] predictions.db error: {e}")
         _nba_db = None
     nba_setup(nba_model, _nba_db)
     print(f"[startup] NBA model loaded: {nba_model.loaded}  "

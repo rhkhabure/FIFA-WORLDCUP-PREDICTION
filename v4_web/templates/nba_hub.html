@@ -172,14 +172,33 @@
 
     <!-- ── Full schedule ─────────────────────────────────────────── -->
     <section>
-        <div class="nba-section-label">Today's schedule · times EAT (UTC+3)</div>
+        {% if showing_tomorrow %}
+        <div style="background:#EFF6FF;border:1.5px solid #BFDBFE;border-radius:10px;
+                    padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px">
+            <i class="ti ti-calendar-event" style="font-size:18px;color:#1D428A" aria-hidden="true"></i>
+            <div>
+                <div style="font-size:12px;font-weight:700;color:#1D428A">No games today</div>
+                <div style="font-size:11px;color:#3B82F6">
+                    Showing tomorrow's schedule — {{ hub_date }} · tip-off times in EAT (UTC+3)
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        <div class="nba-section-label">
+            {{ hub_date }} schedule · times EAT (UTC+3)
+        </div>
 
         {% if not all_games %}
         <div class="nba-card" style="padding:32px;text-align:center">
             <i class="ti ti-ball-basketball" style="font-size:32px;color:var(--league-primary)" aria-hidden="true"></i>
-            <div style="font-size:14px;font-weight:700;margin-top:8px">No NBA games today</div>
+            <div style="font-size:14px;font-weight:700;margin-top:8px">No games scheduled</div>
             <div style="font-size:12px;color:var(--text-muted,#64748b);margin-top:4px">
-                The scoreboard refreshes every minute. Check back on the next game day.
+                {% if showing_tomorrow %}
+                    Neither today nor tomorrow has NBA games on schedule yet —
+                    normal during preseason off-days. Check back soon.
+                {% else %}
+                    The scoreboard refreshes every 2 minutes. Check back on the next game day.
+                {% endif %}
             </div>
         </div>
         {% else %}

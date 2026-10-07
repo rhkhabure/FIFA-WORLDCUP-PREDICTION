@@ -57,6 +57,26 @@ def _scoreboard():
     return sb.ScoreBoard()
 
 
+def _scoreboard_v2(game_date: str):
+    """ScoreboardV2 from stats endpoint — accepts any date string MM/DD/YYYY."""
+    from nba_api.stats.endpoints import scoreboardv2
+    return scoreboardv2.ScoreboardV2(game_date=game_date, league_id="00", day_offset=0)
+
+
+def _today_str() -> str:
+    """Today's date as MM/DD/YYYY for ScoreboardV2."""
+    from datetime import date
+    d = date.today()
+    return f"{d.month:02d}/{d.day:02d}/{d.year}"
+
+
+def _tomorrow_str() -> str:
+    """Tomorrow's date as MM/DD/YYYY for ScoreboardV2."""
+    from datetime import date, timedelta
+    d = date.today() + timedelta(days=1)
+    return f"{d.month:02d}/{d.day:02d}/{d.year}"
+
+
 def _playbyplay(game_id: str):
     from nba_api.live.nba.endpoints import playbyplay as pbp
     return pbp.PlayByPlay(game_id=game_id)
@@ -73,181 +93,166 @@ def _boxscore(game_id: str):
 
 def get_today_scoreboard() -> list[dict]:
     """
-    Returns a list of game dicts for today's NBA schedule.
-
-    Each dict contains:
-        game_id         str     e.g. "0022500042"
-        home_team_id    int
-        away_team_id    int
-        home_tricode    str     e.g. "BOS"
-        away_tricode    str     e.g. "LAL"
-        home_name       str     e.g. "Celtics"
-        away_name       str     e.g. "Lakers"
-        home_city       str
-        away_city       str
-        home_score      int
-        away_score      int
-        status          str     "pre" | "live" | "final"
-        status_text     str     e.g. "Q3 4:22" or "7:30 PM ET"
-        period          int     0 = pre, 1-4 = quarters, 5+ = OT
-        clock           str     e.g. "PT04M22.00S"
-        game_time_utc   str     ISO 8601
+    Returns today's NBA games.  Falls through to ScoreboardV2 (stats endpoint)
+    when the live endpoint returns empty JSON — which happens on off-days and
+    during the early preseason before the live feed is populated.
     """
     key = "scoreboard_today"
     cached = _get(key)
     if cached is not None:
         return cached
 
+    # Try live endpoint first (richer data, real-time scores)
+    games = []
     try:
-        board = _scoreboard()
+        board     = _scoreboard()
         raw_games = board.games.get_dict()
-        games = []
-
-        for g in raw_games:
-            period      = g.get("period", 0)
-            game_status = g.get("gameStatus", 1)  # 1=pre, 2=live, 3=final
-
-            if game_status == 1:
-                status = "pre"
-            elif game_status == 2:
-                status = "live"
-            else:
-                status = "final"
-
-            # Build a readable status text
-            clock = g.get("gameClock", "")
-            if status == "live":
-                period_label = f"OT{period - 4}" if period > 4 else f"Q{period}"
-                clock_display = _format_clock(clock)
-                status_text = f"{period_label} {clock_display}"
-            elif status == "pre":
-                status_text = g.get("gameStatusText", "")
-            else:
-                status_text = "Final"
-
-            ht = g.get("homeTeam", {})
-            at = g.get("awayTeam", {})
-
-            games.append({
-                "game_id":       g.get("gameId", ""),
-                "home_team_id":  ht.get("teamId"),
-                "away_team_id":  at.get("teamId"),
-                "home_tricode":  ht.get("teamTricode", ""),
-                "away_tricode":  at.get("teamTricode", ""),
-                "home_name":     ht.get("teamName", ""),
-                "away_name":     at.get("teamName", ""),
-                "home_city":     ht.get("teamCity", ""),
-                "away_city":     at.get("teamCity", ""),
-                "home_score":    int(ht.get("score", 0) or 0),
-                "away_score":    int(at.get("score", 0) or 0),
-                "status":        status,
-                "status_text":   status_text,
-                "period":        period,
-                "clock":         clock,
-                "game_time_utc": g.get("gameTimeUTC", ""),
-            })
-
-        # Sort: live first, then pre by tip-off time, then final
-        order = {"live": 0, "pre": 1, "final": 2}
-        games.sort(key=lambda g: (order[g["status"]], g["game_time_utc"]))
-
-        # Cache: shorter TTL if any game is live
-        ttl = TTL_LIVE if any(g["status"] == "live" for g in games) else TTL_PREGAME
-        _set(key, games, ttl)
-        return games
-
+        if raw_games:
+            games = _parse_live_scoreboard(raw_games)
     except Exception as exc:
-        log.warning("Scoreboard fetch failed: %s", exc)
+        log.warning("Live scoreboard failed (%s) — trying stats endpoint", exc)
+
+    # Fall through to ScoreboardV2 if live gave nothing
+    if not games:
+        try:
+            games = _parse_scoreboardv2(_scoreboard_v2(_today_str()))
+        except Exception as exc:
+            log.warning("ScoreboardV2 also failed: %s", exc)
+
+    if not games:
         stale = _get_stale(key)
-        return stale if stale is not None else []
+        if stale is not None:
+            log.info("Serving stale scoreboard (%d games)", len(stale))
+            return stale
+        return []
+
+    order = {"live": 0, "pre": 1, "final": 2}
+    games.sort(key=lambda g: (order[g["status"]], g["game_time_utc"]))
+    ttl = TTL_LIVE if any(g["status"] == "live" for g in games) else TTL_PREGAME
+    _set(key, games, ttl)
+    return games
 
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# SECTION 1b — Fixtures Strip (Multi-day)
-# ─────────────────────────────────────────────────────────────────────────────
-
-def get_nba_fixtures_strip() -> list[dict]:
+def get_scoreboard_by_date(date_str: str) -> list[dict]:
     """
-    Fetches games for yesterday, today, and tomorrow to populate the fixtures strip.
-    Uses ScoreboardV3 to allow date parameters.
+    Returns games for any date using ScoreboardV2 (stats endpoint).
+    date_str format: 'MM/DD/YYYY'  e.g. '10/08/2026'
+    Used by the hub to show tomorrow's schedule when today has no games.
     """
-    key = "nba_fixtures_strip"
+    key = f"scoreboard_{date_str}"
     cached = _get(key)
     if cached is not None:
         return cached
-
     try:
-        from nba_api.stats.endpoints import scoreboardv3
-        from datetime import datetime, timedelta
-
-        dates = [
-            datetime.now() - timedelta(days=1),
-            datetime.now(),
-            datetime.now() + timedelta(days=1)
-        ]
-
-        fixtures = []
-        for d in dates:
-            d_str = d.strftime('%Y-%m-%d')
-            try:
-                sb = scoreboardv3.ScoreboardV3(game_date=d_str, timeout=5)
-                data = sb.get_dict()
-                
-                # Parse ScoreboardV3
-                headers = []
-                linescores = []
-                for rs in data.get('resultSets', []):
-                    if rs['name'] == 'GameHeader':
-                        headers = [dict(zip(rs['headers'], row)) for row in rs['rowSet']]
-                    elif rs['name'] == 'LineScore':
-                        linescores = [dict(zip(rs['headers'], row)) for row in rs['rowSet']]
-                
-                # Group linescores by gameId
-                ls_by_game = {}
-                for ls in linescores:
-                    gid = ls['gameId']
-                    if gid not in ls_by_game:
-                        ls_by_game[gid] = []
-                    ls_by_game[gid].append(ls)
-                
-                for h in headers:
-                    gid = h['gameId']
-                    ls = ls_by_game.get(gid, [])
-                    if len(ls) >= 2:
-                        # Assuming 0 is away, 1 is home (standard NBA API behavior)
-                        away = ls[0]['teamTricode']
-                        home = ls[1]['teamTricode']
-                        away_score = ls[0].get('score') or 0
-                        home_score = ls[1].get('score') or 0
-                        
-                        status = h.get('gameStatusText', '')
-                        time_utc = h.get('gameTimeUTC', '')
-                        kickoff = status
-                        if "Final" not in status and "Live" not in status:
-                            kickoff = to_eat(time_utc)
-                            if not kickoff:
-                                kickoff = status
-                        
-                        if "Final" in status or h.get('gameStatus') == 3:
-                            kickoff = f"FT {away_score}-{home_score}"
-                        
-                        fixtures.append({
-                            "game_id": gid,
-                            "home": home,
-                            "away": away,
-                            "kickoff_eat": kickoff,
-                            "game_time_utc": time_utc
-                        })
-            except Exception as e:
-                log.warning(f"Failed to fetch {d_str} for fixtures strip: {e}")
-
-        _set(key, fixtures, TTL_STATIC)
-        return fixtures
+        games = _parse_scoreboardv2(_scoreboard_v2(date_str))
+        if games:
+            _set(key, games, TTL_STATIC)
+        return games
     except Exception as exc:
-        log.warning("Fixtures strip fetch failed: %s", exc)
-        stale = _get_stale(key)
-        return stale if stale is not None else []
+        log.warning("ScoreboardV2 for %s failed: %s", date_str, exc)
+        return _get_stale(key) or []
+
+
+def get_tomorrow_scoreboard() -> list[dict]:
+    """Convenience wrapper for tomorrow's games."""
+    return get_scoreboard_by_date(_tomorrow_str())
+
+
+# ── Scoreboard parsers ────────────────────────────────────────────────────────
+
+def _parse_live_scoreboard(raw_games: list) -> list[dict]:
+    """Parse the live endpoint game list into our standard game dict format."""
+    games = []
+    for g in raw_games:
+        period      = g.get("period", 0)
+        game_status = g.get("gameStatus", 1)
+        status      = {1: "pre", 2: "live", 3: "final"}.get(game_status, "pre")
+        clock       = g.get("gameClock", "")
+
+        if status == "live":
+            period_label = f"OT{period - 4}" if period > 4 else f"Q{period}"
+            status_text  = f"{period_label} {_format_clock(clock)}"
+        elif status == "final":
+            status_text = "Final"
+        else:
+            status_text = g.get("gameStatusText", "")
+
+        ht = g.get("homeTeam", {})
+        at = g.get("awayTeam", {})
+        games.append({
+            "game_id":       g.get("gameId", ""),
+            "home_team_id":  ht.get("teamId"),
+            "away_team_id":  at.get("teamId"),
+            "home_tricode":  ht.get("teamTricode", ""),
+            "away_tricode":  at.get("teamTricode", ""),
+            "home_name":     ht.get("teamName", ""),
+            "away_name":     at.get("teamName", ""),
+            "home_city":     ht.get("teamCity", ""),
+            "away_city":     at.get("teamCity", ""),
+            "home_score":    int(ht.get("score", 0) or 0),
+            "away_score":    int(at.get("score", 0) or 0),
+            "status":        status,
+            "status_text":   status_text,
+            "period":        period,
+            "clock":         clock,
+            "game_time_utc": g.get("gameTimeUTC", ""),
+        })
+    return games
+
+
+def _parse_scoreboardv2(board) -> list[dict]:
+    """
+    Parse a ScoreboardV2 response into our standard game dict format.
+    ScoreboardV2 returns separate DataFrames: GameHeader and LineScore.
+    """
+    try:
+        import pandas as pd
+        header    = board.game_header.get_data_frame()
+        linescore = board.line_score.get_data_frame()
+    except Exception as exc:
+        log.warning("ScoreboardV2 parse error: %s", exc)
+        return []
+
+    if header.empty:
+        return []
+
+    games = []
+    for _, row in header.iterrows():
+        gid    = str(row.get("GAME_ID", ""))
+        gstatus = int(row.get("GAME_STATUS_ID", 1))
+        status  = {1: "pre", 2: "live", 3: "final"}.get(gstatus, "pre")
+
+        # Pull team rows from linescore
+        teams  = linescore[linescore["GAME_ID"] == gid]
+        home_r = teams[teams["TEAM_ABBREVIATION"] == row.get("HOME_TEAM_ABBREVIATION","")].iloc[0] if len(teams) >= 2 else {}
+        away_r = teams[teams["TEAM_ABBREVIATION"] == row.get("VISITOR_TEAM_ABBREVIATION","")].iloc[0] if len(teams) >= 2 else {}
+
+        def safe(r, col, default=0):
+            try: return r[col] if r[col] == r[col] else default
+            except: return default
+
+        # ScoreboardV2 game_time is local ET; convert best-effort to UTC ISO
+        raw_time = str(row.get("GAME_DATE_EST", ""))
+        games.append({
+            "game_id":       gid,
+            "home_team_id":  int(safe(home_r, "TEAM_ID", 0)),
+            "away_team_id":  int(safe(away_r, "TEAM_ID", 0)),
+            "home_tricode":  str(row.get("HOME_TEAM_ABBREVIATION", "")),
+            "away_tricode":  str(row.get("VISITOR_TEAM_ABBREVIATION", "")),
+            "home_name":     str(safe(home_r, "TEAM_CITY_NAME", "")),
+            "away_name":     str(safe(away_r, "TEAM_CITY_NAME", "")),
+            "home_city":     str(safe(home_r, "TEAM_CITY_NAME", "")),
+            "away_city":     str(safe(away_r, "TEAM_CITY_NAME", "")),
+            "home_score":    int(safe(home_r, "PTS", 0)),
+            "away_score":    int(safe(away_r, "PTS", 0)),
+            "status":        status,
+            "status_text":   str(row.get("GAME_STATUS_TEXT", "")),
+            "period":        int(row.get("LIVE_PERIOD", 0) or 0),
+            "clock":         str(row.get("LIVE_PC_TIME", "") or ""),
+            "game_time_utc": raw_time,
+        })
+    return games
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # SECTION 2 — Live game state (single game)
