@@ -152,7 +152,11 @@ async def nba_hub(request: Request):
     final = [g for g in games if g["status"] == "final"]
 
     from datetime import date, timedelta
-    hub_date  = (date.today() + timedelta(days=1)).strftime("%A %b %-d") if showing_tomorrow else "Today"
+    if showing_tomorrow:
+        d = date.today() + timedelta(days=1)
+        hub_date = d.strftime("%A %b ") + str(d.day)   # avoids %-d (Linux-only)
+    else:
+        hub_date = "Today"
 
     return templates.TemplateResponse(
         request=request,

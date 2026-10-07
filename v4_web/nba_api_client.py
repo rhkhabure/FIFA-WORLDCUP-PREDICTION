@@ -216,35 +216,47 @@ def _parse_scoreboardv2(board) -> list[dict]:
     if header.empty:
         return []
 
+    def _row(df, col, val):
+        """Safely get first matching linescore row; returns empty dict on miss."""
+        try:
+            match = df[df[col] == val]
+            return match.iloc[0] if not match.empty else {}
+        except Exception:
+            return {}
+
+    def _safe(r, col, default=0):
+        """Get a value from a row dict or Series; return default on NaN/missing."""
+        try:
+            v = r[col]
+            return default if v != v else v   # NaN check
+        except Exception:
+            return default
+
     games = []
     for _, row in header.iterrows():
-        gid    = str(row.get("GAME_ID", ""))
-        gstatus = int(row.get("GAME_STATUS_ID", 1))
+        gid     = str(row.get("GAME_ID", ""))
+        gstatus = int(row.get("GAME_STATUS_ID", 1) or 1)
         status  = {1: "pre", 2: "live", 3: "final"}.get(gstatus, "pre")
 
-        # Pull team rows from linescore
-        teams  = linescore[linescore["GAME_ID"] == gid]
-        home_r = teams[teams["TEAM_ABBREVIATION"] == row.get("HOME_TEAM_ABBREVIATION","")].iloc[0] if len(teams) >= 2 else {}
-        away_r = teams[teams["TEAM_ABBREVIATION"] == row.get("VISITOR_TEAM_ABBREVIATION","")].iloc[0] if len(teams) >= 2 else {}
+        game_lines = linescore[linescore["GAME_ID"] == gid] if "GAME_ID" in linescore.columns else linescore.iloc[0:0]
+        home_tri   = str(row.get("HOME_TEAM_ABBREVIATION", ""))
+        away_tri   = str(row.get("VISITOR_TEAM_ABBREVIATION", ""))
+        home_r     = _row(game_lines, "TEAM_ABBREVIATION", home_tri)
+        away_r     = _row(game_lines, "TEAM_ABBREVIATION", away_tri)
 
-        def safe(r, col, default=0):
-            try: return r[col] if r[col] == r[col] else default
-            except: return default
-
-        # ScoreboardV2 game_time is local ET; convert best-effort to UTC ISO
         raw_time = str(row.get("GAME_DATE_EST", ""))
         games.append({
             "game_id":       gid,
-            "home_team_id":  int(safe(home_r, "TEAM_ID", 0)),
-            "away_team_id":  int(safe(away_r, "TEAM_ID", 0)),
-            "home_tricode":  str(row.get("HOME_TEAM_ABBREVIATION", "")),
-            "away_tricode":  str(row.get("VISITOR_TEAM_ABBREVIATION", "")),
-            "home_name":     str(safe(home_r, "TEAM_CITY_NAME", "")),
-            "away_name":     str(safe(away_r, "TEAM_CITY_NAME", "")),
-            "home_city":     str(safe(home_r, "TEAM_CITY_NAME", "")),
-            "away_city":     str(safe(away_r, "TEAM_CITY_NAME", "")),
-            "home_score":    int(safe(home_r, "PTS", 0)),
-            "away_score":    int(safe(away_r, "PTS", 0)),
+            "home_team_id":  int(_safe(home_r, "TEAM_ID", 0)),
+            "away_team_id":  int(_safe(away_r, "TEAM_ID", 0)),
+            "home_tricode":  home_tri,
+            "away_tricode":  away_tri,
+            "home_name":     str(_safe(home_r, "TEAM_CITY_NAME", home_tri)),
+            "away_name":     str(_safe(away_r, "TEAM_CITY_NAME", away_tri)),
+            "home_city":     str(_safe(home_r, "TEAM_CITY_NAME", "")),
+            "away_city":     str(_safe(away_r, "TEAM_CITY_NAME", "")),
+            "home_score":    int(_safe(home_r, "PTS", 0)),
+            "away_score":    int(_safe(away_r, "PTS", 0)),
             "status":        status,
             "status_text":   str(row.get("GAME_STATUS_TEXT", "")),
             "period":        int(row.get("LIVE_PERIOD", 0) or 0),
