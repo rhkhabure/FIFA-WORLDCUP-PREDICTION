@@ -57,10 +57,13 @@ def _scoreboard():
     return sb.ScoreBoard()
 
 
-def _scoreboard_v2(game_date: str):
-    """ScoreboardV2 from stats endpoint — accepts any date string MM/DD/YYYY."""
-    from nba_api.stats.endpoints import scoreboardv2
-    return scoreboardv2.ScoreboardV2(game_date=game_date, league_id="00", day_offset=0)
+def _scoreboard_v3(game_date: str):
+    """
+    ScoreboardV3 from stats endpoint — accepts any date string MM/DD/YYYY.
+    ScoreboardV2 has a known bug for the 2025-26 season; V3 is the replacement.
+    """
+    from nba_api.stats.endpoints import scoreboardv3
+    return scoreboardv3.ScoreboardV3(game_date=game_date, league_id="00")
 
 
 def _today_str() -> str:
@@ -112,12 +115,12 @@ def get_today_scoreboard() -> list[dict]:
     except Exception as exc:
         log.warning("Live scoreboard failed (%s) — trying stats endpoint", exc)
 
-    # Fall through to ScoreboardV2 if live gave nothing
+    # Fall through to ScoreboardV3 if live gave nothing
     if not games:
         try:
-            games = _parse_scoreboardv2(_scoreboard_v2(_today_str()))
+            games = _parse_scoreboardv3(_scoreboard_v3(_today_str()))
         except Exception as exc:
-            log.warning("ScoreboardV2 also failed: %s", exc)
+            log.warning("ScoreboardV3 also failed: %s", exc)
 
     if not games:
         stale = _get_stale(key)
@@ -144,12 +147,12 @@ def get_scoreboard_by_date(date_str: str) -> list[dict]:
     if cached is not None:
         return cached
     try:
-        games = _parse_scoreboardv2(_scoreboard_v2(date_str))
+        games = _parse_scoreboardv3(_scoreboard_v3(date_str))
         if games:
             _set(key, games, TTL_STATIC)
         return games
     except Exception as exc:
-        log.warning("ScoreboardV2 for %s failed: %s", date_str, exc)
+        log.warning("ScoreboardV3 for %s failed: %s", date_str, exc)
         return _get_stale(key) or []
 
 
@@ -200,68 +203,92 @@ def _parse_live_scoreboard(raw_games: list) -> list[dict]:
     return games
 
 
-def _parse_scoreboardv2(board) -> list[dict]:
+def _parse_scoreboardv3(board) -> list[dict]:
     """
-    Parse a ScoreboardV2 response into our standard game dict format.
-    ScoreboardV2 returns separate DataFrames: GameHeader and LineScore.
+    Parse a ScoreboardV3 response into our standard game dict format.
+
+    V3 column names (confirmed from live diagnostic):
+      GameHeader: gameId, gameCode, gameStatus, gameStatusText, period,
+                  gameClock, gameTimeUTC, gameEt, regulationPeriods, ...
+      LineScore:  gameId, teamId, teamCity, teamName, teamTricode,
+                  teamSlug, wins, losses, score, seed, timeoutsRemaining
+
+    Key structural difference from V2:
+      - GameHeader has NO home/away team columns.
+      - Team identity comes entirely from LineScore.
+      - In LineScore, away team is always the FIRST row for a game,
+        home team is always the SECOND row (confirmed from game code:
+        e.g. '20261008/BOSCLE' = BOS(away) @ CLE(home)).
     """
     try:
-        import pandas as pd
         header    = board.game_header.get_data_frame()
         linescore = board.line_score.get_data_frame()
     except Exception as exc:
-        log.warning("ScoreboardV2 parse error: %s", exc)
+        log.warning("ScoreboardV3 parse error: %s", exc)
         return []
 
     if header.empty:
         return []
 
-    def _row(df, col, val):
-        """Safely get first matching linescore row; returns empty dict on miss."""
+    def _safe(val, default=0):
         try:
-            match = df[df[col] == val]
-            return match.iloc[0] if not match.empty else {}
-        except Exception:
-            return {}
-
-    def _safe(r, col, default=0):
-        """Get a value from a row dict or Series; return default on NaN/missing."""
-        try:
-            v = r[col]
-            return default if v != v else v   # NaN check
+            return default if val != val else val   # NaN → default
         except Exception:
             return default
 
     games = []
     for _, row in header.iterrows():
-        gid     = str(row.get("GAME_ID", ""))
-        gstatus = int(row.get("GAME_STATUS_ID", 1) or 1)
+        gid     = str(row.get("gameId", ""))
+        gstatus = int(_safe(row.get("gameStatus"), 1))
         status  = {1: "pre", 2: "live", 3: "final"}.get(gstatus, "pre")
 
-        game_lines = linescore[linescore["GAME_ID"] == gid] if "GAME_ID" in linescore.columns else linescore.iloc[0:0]
-        home_tri   = str(row.get("HOME_TEAM_ABBREVIATION", ""))
-        away_tri   = str(row.get("VISITOR_TEAM_ABBREVIATION", ""))
-        home_r     = _row(game_lines, "TEAM_ABBREVIATION", home_tri)
-        away_r     = _row(game_lines, "TEAM_ABBREVIATION", away_tri)
+        # Pull the two team rows for this game — away first, home second
+        game_ls = linescore[linescore["gameId"] == gid]
+        if len(game_ls) >= 2:
+            away_r = game_ls.iloc[0]
+            home_r = game_ls.iloc[1]
+        elif len(game_ls) == 1:
+            away_r = game_ls.iloc[0]
+            home_r = {}
+        else:
+            away_r = home_r = {}
 
-        raw_time = str(row.get("GAME_DATE_EST", ""))
+        def get(r, col, default=""):
+            try:
+                v = r[col]
+                return default if v != v else v
+            except Exception:
+                return default
+
+        clock    = str(row.get("gameClock", "") or "")
+        period   = int(_safe(row.get("period"), 0))
+
+        if status == "live" and period > 0:
+            period_label = f"OT{period - 4}" if period > 4 else f"Q{period}"
+            status_text  = f"{period_label} {_format_clock(clock)}"
+        else:
+            status_text  = str(row.get("gameStatusText", "") or "")
+
+        home_score = int(_safe(get(home_r, "score", 0), 0))
+        away_score = int(_safe(get(away_r, "score", 0), 0))
+
         games.append({
             "game_id":       gid,
-            "home_team_id":  int(_safe(home_r, "TEAM_ID", 0)),
-            "away_team_id":  int(_safe(away_r, "TEAM_ID", 0)),
-            "home_tricode":  home_tri,
-            "away_tricode":  away_tri,
-            "home_name":     str(_safe(home_r, "TEAM_CITY_NAME", home_tri)),
-            "away_name":     str(_safe(away_r, "TEAM_CITY_NAME", away_tri)),
-            "home_city":     str(_safe(home_r, "TEAM_CITY_NAME", "")),
-            "away_city":     str(_safe(away_r, "TEAM_CITY_NAME", "")),
-            "home_score":    int(_safe(home_r, "PTS", 0)),
-            "away_score":    int(_safe(away_r, "PTS", 0)),
+            "home_team_id":  int(_safe(get(home_r, "teamId", 0), 0)),
+            "away_team_id":  int(_safe(get(away_r, "teamId", 0), 0)),
+            "home_tricode":  str(get(home_r, "teamTricode", "")),
+            "away_tricode":  str(get(away_r, "teamTricode", "")),
+            "home_name":     str(get(home_r, "teamName", "")),
+            "away_name":     str(get(away_r, "teamName", "")),
+            "home_city":     str(get(home_r, "teamCity", "")),
+            "away_city":     str(get(away_r, "teamCity", "")),
+            "home_score":    home_score,
+            "away_score":    away_score,
             "status":        status,
-            "status_text":   str(row.get("GAME_STATUS_TEXT", "")),
-            "period":        int(row.get("LIVE_PERIOD", 0) or 0),
-            "clock":         str(row.get("LIVE_PC_TIME", "") or ""),
-            "game_time_utc": raw_time,
+            "status_text":   status_text,
+            "period":        period,
+            "clock":         clock,
+            "game_time_utc": str(row.get("gameTimeUTC", "") or ""),
         })
     return games
 
