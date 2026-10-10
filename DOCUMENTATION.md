@@ -240,13 +240,13 @@ TheSportsDB (key "3", free)
 **Endpoints used:**
 | Endpoint | Purpose |
 |----------|---------|
-| `GET /competitions/PL/matches?status=FINISHED&season=2026` | PL finished scores for 2025/26 |
-| `GET /competitions/PL/standings?season=2026` | Current PL table (for season simulator) |
+| `GET /competitions/PL/matches?status=FINISHED&season={current}` | PL finished scores for the current season |
+| `GET /competitions/PL/standings?season={current}` | Current PL table (for season simulator) |
 | `GET /matches/{match_id}` | Single match detail (not reliable on free tier) |
 
 **Key facts:**
 - Free tier: 10 requests/minute, PL only
-- Uses end-year for season parameter: 2025/26 → `season=2026`
+- Uses the season start year: 2026/27 → `season=2026`; the client selects it dynamically
 - Returns team names with `FC` suffix (e.g. `"Arsenal FC"`) — stripped in `norm()` before matching
 - Score updates are delayed by several hours on the free tier
 
@@ -620,4 +620,3 @@ Neural net (live in-game, 2024/25 training set):
 | Constants deduplication | constants.py | Leave inline | LEAGUE_FILTERS was defined 4× across 2 files; single source eliminates drift |
 | Prediction storage | SQLite | JSON files, PostgreSQL | Lightweight, zero-config, queryable, sufficient for one-user use |
 | Player profiles | TheSportsDB (free, key 3) | FotMob, Transfermarkt scraping | Free with no rate limit; has photos, career history, covers all 5 leagues |
-

@@ -931,7 +931,7 @@ async def laliga_dashboard(request: Request):
     # Upcoming La Liga fixtures
     upcoming_raw = []
     try:
-        upcoming_raw = get_upcoming_fixtures_fd(PD_CODE, season=2025, max_fixtures=20)
+        upcoming_raw = get_upcoming_fixtures_fd(PD_CODE, max_fixtures=20)
     except Exception as e:
         print(f"[laliga] fixture fetch error: {e}")
 
@@ -970,4 +970,3 @@ async def laliga_dashboard(request: Request):
             "today"        : today,
         }
     )
-

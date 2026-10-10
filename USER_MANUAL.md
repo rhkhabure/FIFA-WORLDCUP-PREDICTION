@@ -194,6 +194,5 @@ At the start of each season (August):
 2. Open `train_v4_priors.ipynb` and run all cells — new `v4_priors.json` generated
 3. Run `v4_web/scripts/build_train_v4.py` to retrain the neural net on updated data
 4. Replace `v4_priors.json` and `football_v4.pth` in the project root
-5. Update `_current_season()` in `footballdata.py` if the fd.org season parameter has changed
+5. Confirm football-data.org still uses the season start year for its `season` parameter; the client selects the current year automatically
 6. Restart the dashboard
-

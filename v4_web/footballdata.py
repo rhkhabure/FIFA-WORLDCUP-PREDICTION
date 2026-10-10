@@ -20,6 +20,7 @@ import re
 import time as _time
 import urllib.request
 import urllib.error
+from datetime import datetime, timezone
 
 BASE_URL  = "https://api.football-data.org/v4"
 PL_CODE   = "PL"
@@ -79,15 +80,10 @@ _FINISHED_TTL = 300   # 5 minutes
 
 def _current_season() -> int:
     """
-    Return the fd.org season parameter for the current football season.
-
-    fd.org uses the END year of the season:
-      2024/25 → season=2025  (confirmed: returns 380 matches = full 2024/25 season)
-      2025/26 → season=2026  (confirmed: current season as of Sep 2026)
-
-    TODO: revisit in July 2027 — change to 2027 for the 2026/27 season.
+    Return the start year used by fd.org for the current football season.
     """
-    return 2026
+    now = datetime.now(timezone.utc)
+    return now.year if now.month >= 7 else now.year - 1
 
 
 def _populate_finished_cache(comp_code: str) -> dict:
@@ -168,7 +164,7 @@ def find_finished_match_by_teams(home_name: str, away_name: str,
 
 
 def get_upcoming_fixtures_fd(comp_code: str = PD_CODE,
-                              season: int = 2025,
+                              season: int | None = None,
                               max_fixtures: int = 20) -> list[dict]:
     """
     Upcoming (scheduled) fixtures for a competition from football-data.org.
@@ -179,6 +175,8 @@ def get_upcoming_fixtures_fd(comp_code: str = PD_CODE,
     from datetime import datetime, timezone, timedelta
     EAT = timezone(timedelta(hours=3))
 
+    if season is None:
+        season = _current_season()
     data = _fetch(f"competitions/{comp_code}/matches",
                   {"status": "SCHEDULED", "season": season})
     matches = data.get("matches", [])
