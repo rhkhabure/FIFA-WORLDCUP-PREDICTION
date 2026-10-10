@@ -34,6 +34,39 @@ LEAGUE_MAP = {
     "WC": "World Cup 2026",
 }
 
+MATCH_LEAGUES = {
+    "pl": {
+        "priors": "ENG-Premier League",
+        "comp": "PL",
+        "name": "Premier League",
+        "ctx_key": "pl",
+    },
+    "laliga": {
+        "priors": "ESP-La Liga",
+        "comp": "PD",
+        "name": "La Liga",
+        "ctx_key": "laliga",
+    },
+    "bundesliga": {
+        "priors": "GER-Bundesliga",
+        "comp": "BL1",
+        "name": "Bundesliga",
+        "ctx_key": "bundesliga",
+    },
+    "seriea": {
+        "priors": "ITA-Serie A",
+        "comp": "SA",
+        "name": "Serie A",
+        "ctx_key": "seriea",
+    },
+    "ligue1": {
+        "priors": "FRA-Ligue 1",
+        "comp": "FL1",
+        "name": "Ligue 1",
+        "ctx_key": "ligue1",
+    },
+}
+
 # ─────────────────────────────────────────────────────────────────────────────
 # NBA — 30 teams, all nba_api integer team IDs
 # primary  = main colour (prob bars, badges, chart lines)

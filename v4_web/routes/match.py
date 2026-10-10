@@ -37,7 +37,7 @@ from bbs import (
     get_upcoming_fixtures as bbs_get_upcoming_fixtures,
     has_key as bbs_ok,
 )
-from constants import EAT, DRAW_PROPENSITY, LEAGUE_FILTERS, LEAGUE_MAP
+from constants import EAT, DRAW_PROPENSITY, LEAGUE_FILTERS, MATCH_LEAGUES
 from footballdata import (
     get_live_match_data,
     get_finished_match,
@@ -429,8 +429,7 @@ async def match(request: Request):
     _league_param = request.query_params.get("league", "pl").lower()
 
     # Map URL param → priors key + competition code
-    # LEAGUE_MAP imported from constants.py
-    _lm = LEAGUE_MAP.get(_league_param, LEAGUE_MAP["pl"])
+    _lm = MATCH_LEAGUES.get(_league_param, MATCH_LEAGUES["pl"])
     active_league  = _lm["priors"]   # e.g. "ESP-La Liga"
     active_comp    = _lm["comp"]     # e.g. "PD"
     active_name    = _lm["name"]     # e.g. "La Liga"
