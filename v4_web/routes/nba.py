@@ -49,6 +49,7 @@ from nba_api_client import (
     _elapsed,
 )
 from nba_model import NBAModel
+import nba_predictions as pred_log
 
 log = logging.getLogger(__name__)
 
@@ -67,6 +68,7 @@ def nba_setup(model: NBAModel, db=None) -> None:
     global _model, _db
     _model = model
     _db    = db
+    pred_log.set_db(db)   # share the same connection
     log.info("NBA routes ready — model loaded: %s", model.loaded)
 
 
@@ -150,6 +152,13 @@ async def nba_hub(request: Request):
     live  = [g for g in games if g["status"] == "live"]
     pre   = [g for g in games if g["status"] == "pre"]
     final = [g for g in games if g["status"] == "final"]
+
+    # Log pregame predictions for any game not yet in the DB
+    if not showing_tomorrow:
+        probs = {g["game_id"]: g["home_win_prob"] for g in games}
+        n = pred_log.bulk_log_pregame(games, probs)
+        if n:
+            log.info("NBA: logged %d new pregame predictions", n)
 
     from datetime import date, timedelta
     if showing_tomorrow:
@@ -237,15 +246,13 @@ async def nba_history(request: Request, conference: str = "all"):
     """
     /nba/history — prediction accuracy tracker.
     """
-    rows = _get_nba_history(limit=100, conference=conference)
+    rows  = _get_nba_history(limit=100, conference=conference)
+    stats = pred_log.get_stats()
 
-    # Compute running accuracy stats
-    total    = len(rows)
-    correct  = sum(1 for r in rows if r.get("correct"))
-    accuracy = round(correct / total * 100, 1) if total else 0.0
-
-    briers = [r["brier"] for r in rows if r.get("brier") is not None]
-    avg_brier = round(sum(briers) / len(briers), 4) if briers else None
+    total     = stats["total"]
+    correct   = stats["correct"]
+    accuracy  = stats["accuracy"]
+    avg_brier = stats["avg_brier"]
 
     return templates.TemplateResponse(
         request=request,
@@ -401,11 +408,19 @@ async def nba_live_poll(game_id: str):
             "elo_prior_weight": 1.0, "confidence": "low", "source": "fallback",
         }
 
+    home_score = game.get("home_score", 0)
+    away_score = game.get("away_score", 0)
+    game_status = game.get("status", "pre")
+
+    # When a game goes final, fill in the result
+    if game_status == "final":
+        pred_log.log_result(game_id, home_score, away_score)
+
     return JSONResponse({
         # Scoreboard state
-        "home_score":       game.get("home_score", 0),
-        "away_score":       game.get("away_score", 0),
-        "status":           game.get("status", "pre"),
+        "home_score":       home_score,
+        "away_score":       away_score,
+        "status":           game_status,
         "status_text":      game.get("status_text", ""),
         "period":           game.get("period", 0),
         "clock":            game.get("clock", ""),
@@ -421,7 +436,7 @@ async def nba_live_poll(game_id: str):
         "source":           pred.get("source", "unknown"),
         # Seconds since tip-off — x-axis position for the chart (0 before tip)
         "elapsed_sec":      (_elapsed(game.get("period") or 1, _parse_clock(game.get("clock", "")))
-                             if status != "pre" else 0),
+                             if game_status != "pre" else 0),
     })
 
 
