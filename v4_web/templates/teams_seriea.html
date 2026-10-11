@@ -9,7 +9,7 @@
 .map-card{background:linear-gradient(145deg,#dcecf2,#eef5f7)}
 .map-toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
 .map-controls{display:flex;gap:5px}
-.map-controls button{width:30px;height:28px;border:1px solid #9cb4c0;border-radius:7px;background:#fff;color:#1b3340;font-weight:800;cursor:pointer}
+.map-controls button{min-width:30px;height:28px;padding:0 8px;border:1px solid #9cb4c0;border-radius:7px;background:#fff;color:#1b3340;font-weight:800;cursor:pointer;white-space:nowrap}
 .map-controls button:hover{background:#e4edf2}
 .map-viewport{overflow:hidden;border-radius:10px}
 .italy-map{width:100%;height:auto;display:block;max-height:710px;touch-action:pan-y}
@@ -19,6 +19,9 @@
 .map-pin .pin-leader{stroke:#405b68;stroke-width:1.2;opacity:.75}
 .map-pin .pin-halo{fill:#fff;opacity:.9}
 .map-pin .pin-dot{stroke:#fff;stroke-width:1.8;filter:drop-shadow(0 1px 2px #29404a)}
+.map-pin .pin-fallback{fill:#fff;stroke:#9aabb0;stroke-width:1}
+.map-pin .pin-fallback-text{font:700 7px var(--font-mono);fill:#213846;text-anchor:middle;dominant-baseline:central}
+.map-pin image{pointer-events:none}
 .map-pin text{font:700 7px var(--font-mono);fill:#fff;text-anchor:middle;dominant-baseline:central;pointer-events:none}
 .map-pin.is-highlighted .pin-dot{stroke:#102a3a;stroke-width:3}
 .map-pin.is-highlighted .pin-halo{fill:#ffdf75;opacity:1}
@@ -28,6 +31,8 @@
 .team-link{display:flex;align-items:center;gap:9px;padding:8px;border-radius:8px;text-decoration:none;color:var(--text-primary);font-size:11px;font-weight:700}
 .team-link:hover{background:var(--league-tint);color:var(--league-primary)}
 .team-dot{width:9px;height:9px;border-radius:50%;flex:none}
+.team-crest{width:23px;height:23px;object-fit:contain;flex:none;background:#fff;border-radius:50%;padding:2px;box-shadow:0 0 0 1px var(--border)}
+.team-crest-fallback{width:23px;height:23px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;flex:none;background:var(--team-colour);color:#fff;font-size:8px;font-weight:800}
 .team-index{font:700 9px var(--font-mono);color:var(--text-muted);width:19px;flex:none}
 .directory h2{font-size:11px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--text-muted)}
 .map-note{margin-top:12px;line-height:1.5}
@@ -70,9 +75,14 @@
               x2="{{ team.point.pin_x }}" y2="{{ team.point.pin_y }}"/>
         <circle class="pin-halo" cx="{{ team.point.x }}" cy="{{ team.point.y }}" r="3"/>
         {% endif %}
-        <circle class="pin-halo" cx="{{ team.point.pin_x }}" cy="{{ team.point.pin_y }}" r="12"/>
-        <circle class="pin-dot" cx="{{ team.point.pin_x }}" cy="{{ team.point.pin_y }}" r="9" fill="{{ team.colour }}"/>
-        <text x="{{ team.point.pin_x }}" y="{{ team.point.pin_y }}">{{ team.index }}</text>
+        <circle class="pin-halo" cx="{{ team.point.pin_x }}" cy="{{ team.point.pin_y }}" r="13"/>
+        <circle class="pin-fallback" cx="{{ team.point.pin_x }}" cy="{{ team.point.pin_y }}" r="10"/>
+        <text class="pin-fallback-text" x="{{ team.point.pin_x }}" y="{{ team.point.pin_y }}">{{ team.index }}</text>
+        {% if team.crest %}
+        <image class="pin-dot" href="{{ team.crest }}" x="{{ team.point.pin_x - 10 }}"
+               y="{{ team.point.pin_y - 10 }}" width="20" height="20"
+               preserveAspectRatio="xMidYMid meet"/>
+        {% endif %}
       </a>
       {% endfor %}
       </g>
@@ -87,7 +97,17 @@
       {% for team in teams %}
       <a class="team-link" data-map-key="{{ team.map_key }}" href="{{ team.href }}">
         <span class="team-index">{{ "%02d"|format(team.index) }}</span>
-        <span class="team-dot" style="background:{{ team.colour }}"></span>
+        {% if team.crest %}
+        <img class="team-crest" src="{{ team.crest }}" alt="" loading="lazy"
+             onerror="this.hidden=true;this.nextElementSibling.hidden=false">
+        <span class="team-crest-fallback" style="--team-colour:{{ team.colour }}" hidden>
+          {{ team.name[:2]|upper }}
+        </span>
+        {% else %}
+        <span class="team-crest-fallback" style="--team-colour:{{ team.colour }}">
+          {{ team.name[:2]|upper }}
+        </span>
+        {% endif %}
         <span>{{ team.name }}</span>
         {% if not team.point %}<span class="map-note">location pending</span>{% endif %}
       </a>

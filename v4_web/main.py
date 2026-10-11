@@ -439,6 +439,21 @@ async def teams_seriea(request: Request):
     }
     priors = priors_db.get(MATCH_LEAGUES["seriea"]["priors"], {}).get("teams", {})
     team_names = set(priors)
+    team_crests = {}
+    now = datetime.now(timezone.utc)
+    current_season = now.year if now.month >= 7 else now.year - 1
+    try:
+        season_teams = get_competition_teams_fd("SA", current_season)
+        team_crests = {
+            team["name"]: team.get("crest", "")
+            for team in season_teams
+            if team.get("name") and team.get("crest")
+        }
+        if len(season_teams) >= 18:
+            team_names = {team["name"] for team in season_teams}
+            _set_current_league_roster("seriea", team_names)
+    except Exception as e:
+        print(f"[seriea map] team crest fetch error: {e}")
     try:
         fixtures = get_upcoming_fixtures_fd("SA", max_fixtures=50)
         current_names = {
@@ -475,6 +490,7 @@ async def teams_seriea(request: Request):
             "index": index,
             "point": point,
             "map_key": f"club-{index}",
+            "crest": team_crests.get(name) or get_crest_url(name),
             "colour": get_theme_for_team(name).get("primary", "#2563EB"),
             "href": f"/league-team?league=seriea&team={quote(name)}",
         })
