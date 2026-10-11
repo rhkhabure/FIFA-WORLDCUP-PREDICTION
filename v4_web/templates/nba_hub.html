@@ -290,7 +290,7 @@
 </div>
 
 <script>
-// ── Live card polling — /nba/live/{game_id} every 30s ──────────────
+// ── Live card polling — /nba/live/{game_id} every 10s ──────────────
 (function () {
     const cards = document.querySelectorAll('.live-card[data-game-id]');
     if (!cards.length) {
@@ -330,7 +330,7 @@
         cards.forEach(c => { if (!c.dataset.done) pollCard(c); });
     }
     pollAll();
-    setInterval(pollAll, 30000);
+    setInterval(pollAll, 10000);
 })();
 </script>
 {% endblock %}

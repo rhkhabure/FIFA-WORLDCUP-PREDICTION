@@ -243,8 +243,8 @@ async def nba_match(request: Request, game_id: str = ""):
             "away_form":      away_form,
             "model_info":     _model.info() if _model else {},
             "sport":          "nba",
-            # Chart.js poll interval (ms)
-            "poll_interval":  30000,
+            # Chart.js score and game-clock poll interval (ms)
+            "poll_interval":  10000,
             "topbar_title":   f"{enriched['away_tricode']} @ {enriched['home_tricode']}",
             "live_count":     sum(1 for g in games if g["status"] == "live"),
             "title":          f"{enriched['away_tricode']} @ {enriched['home_tricode']}",

@@ -26,7 +26,8 @@ from typing import Any
 log = logging.getLogger(__name__)
 
 # ── TTL constants (seconds) ───────────────────────────────────────────────────
-TTL_LIVE    = 25    # scoreboard + PBP during live games
+TTL_LIVE    = 25    # play-by-play during live games
+TTL_SCOREBOARD_LIVE = 10  # live score and game clock
 TTL_STATIC  = 300   # team metadata, box score halftime etc.
 TTL_PREGAME = 60    # scoreboard before tip-off
 
@@ -157,7 +158,11 @@ def get_today_scoreboard() -> list[dict]:
 
     order = {"live": 0, "pre": 1, "final": 2}
     games.sort(key=lambda g: (order[g["status"]], g["game_time_utc"]))
-    ttl = TTL_LIVE if any(g["status"] == "live" for g in games) else TTL_PREGAME
+    ttl = (
+        TTL_SCOREBOARD_LIVE
+        if any(g["status"] == "live" for g in games)
+        else TTL_PREGAME
+    )
     _set(key, games, ttl)
     return games
 
