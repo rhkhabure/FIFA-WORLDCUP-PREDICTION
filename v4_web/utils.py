@@ -17,7 +17,9 @@ DEFAULT_FORMATIONS: each team's most commonly used shape this season.
 """
 
 import hashlib
+from html import escape
 import json
+from urllib.parse import quote
 
 # ── League team lists ─────────────────────────────────────────────────────────
 LEAGUE_TEAMS = {
@@ -405,7 +407,8 @@ def get_formation_for_team(team_name: str) -> str:
 # ── SVG pitch generators ──────────────────────────────────────────────────────
 
 def generate_pitch_svg_vertical(formation="4-3-3", team_color="#14b8a6",
-                                players=None, team_name="Default"):
+                                players=None, team_name="Default",
+                                league="pl", team_id=None):
     """
     Attacking half-pitch for the Team Profile page.
     Shows GK → halfway line only (top half of pitch).
@@ -490,15 +493,27 @@ def generate_pitch_svg_vertical(formation="4-3-3", team_color="#14b8a6",
                     p_idx += 1
                     continue
                 name = players[p_idx]
+                name_parts = name.split()
+                label = name_parts[-1] if name_parts else name
+                if len(label) > 6:
+                    label = label[:5] + "…"
+                player_query = (
+                    f"name={quote(name, safe='')}"
+                    f"&team={quote(team_name, safe='')}"
+                    f"&league={quote(league, safe='')}"
+                )
+                if team_id:
+                    player_query += f"&team_id={quote(str(team_id), safe='')}"
                 svg += (
-                    f'<a href="/player?name={name}&team={team_name}"'
+                    f'<a href="/player?{escape(player_query, quote=True)}"'
                     f' style="cursor:pointer;">'
+                    f'<title>{escape(name)}</title>'
                     f'<circle cx="{x:.1f}" cy="{y:.1f}" r="7"'
                     f' fill="{team_color}" stroke="white" stroke-width="1.5"/>'
                     f'<text x="{x:.1f}" y="{y + 13:.1f}" fill="white"'
                     f' font-family="\'JetBrains Mono\',monospace"'
-                    f' font-size="6px" text-anchor="middle"'
-                    f' style="text-shadow:0 0 3px rgba(0,0,0,0.9)">{name}</text>'
+                    f' font-size="5px" text-anchor="middle"'
+                    f' style="text-shadow:0 0 3px rgba(0,0,0,0.9)">{escape(label)}</text>'
                     f'</a>'
                 )
                 p_idx += 1

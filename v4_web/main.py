@@ -595,6 +595,8 @@ async def league_team_page(
                 team_color=get_theme_for_team(team_key)["primary"],
                 players=pitch_players[:11],
                 team_name=team_key,
+                league=league_key,
+                team_id=team_info["id"],
             )
             profile = {
                 **team_info,
@@ -753,6 +755,8 @@ async def team_profile(request: Request, team_id: int, season: int = 2025):
         team_color=team_colour,
         players=players,
         team_name=team_name,
+        league="pl",
+        team_id=team_id,
     )
 
     # DC ratings
@@ -943,6 +947,8 @@ async def player_page(request: Request):
     name    = request.query_params.get("name", "").strip()
     team    = request.query_params.get("team", "").strip()
     league  = request.query_params.get("league", "pl").lower()
+    if league not in LEAGUE_CONTEXTS or league not in MATCH_LEAGUES:
+        league = "pl"
 
     # Resolve team_id for crest proxy
     team_id = request.query_params.get("team_id", "")
@@ -960,7 +966,7 @@ async def player_page(request: Request):
         print(f"[player] TheSportsDB error: {e}")
 
     # ── DC priors for this player's team ──────────────────────────────────
-    priors_key = "ESP-La Liga" if league == "laliga" else "ENG-Premier League"
+    priors_key = MATCH_LEAGUES[league]["priors"]
     team_priors = {}
     try:
         league_data = priors_db.get(priors_key, {})
@@ -1036,7 +1042,7 @@ async def player_page(request: Request):
     except Exception:
         kit = {"fill": "#14b8a6", "stroke": "#fff", "abbr": team[:3].upper() if team else "---"}
 
-    league_display = "La Liga" if league == "laliga" else "Premier League"
+    league_display = MATCH_LEAGUES[league]["name"]
 
     return templates.TemplateResponse(
         request=request, name="player.html",
