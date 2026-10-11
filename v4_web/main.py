@@ -61,6 +61,7 @@ from footballdata import (
     get_upcoming_fixtures_fd,
     get_fixtures_by_date_fd,
     get_competition_teams_fd,
+    get_team_details_fd,
     get_team_matches_fd,
     get_competition_standings_fd,
     _populate_finished_cache,
@@ -95,6 +96,7 @@ from teamdata import (
     get_next_fixture,
     get_last_n_results,
     get_standings,
+    _flag_img,
 )
 from thesportsdb import search_player, get_career_history
 from timeline import build_match_timeline_svg
@@ -534,10 +536,70 @@ async def league_team_page(
             None,
         )
         if team_info:
+            if not team_info.get("squad"):
+                details = get_team_details_fd(team_info["id"])
+                team_info.update({
+                    key: value for key, value in details.items()
+                    if value
+                })
+            squad_by_position: dict[str, list[dict]] = {
+                "Goalkeeper": [],
+                "Defender": [],
+                "Midfielder": [],
+                "Forward": [],
+            }
+            pitch_players = []
+            for player in team_info.get("squad", []):
+                raw_position = (player.get("position") or "").lower()
+                position = (
+                    "Goalkeeper" if "goal" in raw_position
+                    else "Defender" if any(
+                        term in raw_position for term in ("def", "back")
+                    )
+                    else "Midfielder" if any(
+                        term in raw_position for term in ("mid", "wing")
+                    )
+                    else "Forward" if any(
+                        term in raw_position for term in ("forward", "attack", "striker")
+                    )
+                    else None
+                )
+                if not position:
+                    continue
+                nationality = player.get("nationality", "")
+                age = ""
+                date_of_birth = player.get("dateOfBirth", "")
+                if date_of_birth:
+                    try:
+                        born = datetime.fromisoformat(date_of_birth).date()
+                        age = str((datetime.now(timezone.utc).date() - born).days // 365)
+                    except (TypeError, ValueError):
+                        pass
+                player_name = player.get("name", "")
+                squad_by_position[position].append({
+                    "id": player.get("id"),
+                    "name": player_name,
+                    "nationality": nationality,
+                    "flag": _flag_img(nationality),
+                    "age": age,
+                    "position": position,
+                })
+            for position in ("Goalkeeper", "Defender", "Midfielder", "Forward"):
+                pitch_players.extend(
+                    player["name"] for player in squad_by_position[position]
+                    if player["name"]
+                )
+            formation = get_formation_for_team(team_key)
+            pitch_svg = generate_pitch_svg_vertical(
+                formation=formation,
+                team_color=get_theme_for_team(team_key)["primary"],
+                players=pitch_players[:11],
+                team_name=team_key,
+            )
             profile = {
                 **team_info,
                 "name": team_key,
-                "squad": {},
+                "squad": squad_by_position,
             }
             theme = get_theme_for_team(team_key)
             matches = get_team_matches_fd(
@@ -574,8 +636,9 @@ async def league_team_page(
                 "coach": profile.get("coach") or "Not available",
                 "team_colour": theme["primary"],
                 "crest_url": crest_url,
-                "formation": None,
-                "pitch_svg": None,
+                "formation": formation,
+                "pitch_svg": pitch_svg,
+                "pitch_player_count": min(len(pitch_players), 11),
                 "dc_alpha": params["alpha"],
                 "dc_beta": params["beta"],
                 "xg_proj": round(params["alpha"] * mean_defence * gamma, 2),

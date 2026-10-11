@@ -411,7 +411,7 @@ def generate_pitch_svg_vertical(formation="4-3-3", team_color="#14b8a6",
     Shows GK → halfway line only (top half of pitch).
     Green turf, white markings, faded crest watermark.
     """
-    if players is None or len(players) == 0:
+    if players is None:
         players = get_squad_for_team(team_name)
 
     def parse_formation(fmt_str):
@@ -486,7 +486,10 @@ def generate_pitch_svg_vertical(formation="4-3-3", team_color="#14b8a6",
             y = 20 + ((H - 34) / max(1, y_steps - 1)) * row_idx
             for col_idx in range(num_players):
                 x = 14 + ((W - 28) / (num_players + 1)) * (col_idx + 1)
-                name = players[p_idx] if p_idx < len(players) else f"P{p_idx+1}"
+                if p_idx >= len(players):
+                    p_idx += 1
+                    continue
+                name = players[p_idx]
                 svg += (
                     f'<a href="/player?name={name}&team={team_name}"'
                     f' style="cursor:pointer;">'

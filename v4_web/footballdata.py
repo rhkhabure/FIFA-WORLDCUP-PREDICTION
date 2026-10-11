@@ -80,6 +80,7 @@ _competition_teams_cache: dict[tuple[str, int], tuple[list[dict], float]] = {}
 _TEAM_TTL = 3600
 _team_matches_cache: dict[tuple[int, str, int], tuple[list[dict], float]] = {}
 _competition_standings_cache: dict[tuple[str, int], tuple[list[dict], float]] = {}
+_team_detail_cache: dict[int, tuple[dict, float]] = {}
 
 
 def _current_season() -> int:
@@ -168,6 +169,20 @@ def get_competition_teams_fd(
             teams.append(team)
     _competition_teams_cache[cache_key] = (teams, _time.time())
     return teams
+
+
+def get_team_details_fd(team_id: int) -> dict:
+    """Fetch cached detailed club metadata, including the provider squad."""
+    cached = _team_detail_cache.get(team_id)
+    if cached and _time.time() - cached[1] < _TEAM_TTL:
+        return cached[0]
+    data = _fetch(f"teams/{team_id}")
+    details = {
+        "coach": (data.get("coach") or {}).get("name", ""),
+        "squad": data.get("squad", []) or [],
+    }
+    _team_detail_cache[team_id] = (details, _time.time())
+    return details
 
 
 def get_team_matches_fd(
