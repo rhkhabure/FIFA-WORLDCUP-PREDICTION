@@ -293,6 +293,24 @@ async def run_prediction_job(priors_db: dict, league_key: str):
                         continue
                     result = "H" if hg > ag else ("D" if hg == ag else "A")
                     log_result(mid, result, int(hg), int(ag))
+                    try:
+                        from predictions import save_match_snapshot
+                        from utils import get_theme_for_team
+                        save_match_snapshot(
+                            match_id=mid,
+                            home_team=home, away_team=away,
+                            kickoff_utc=p["kickoff_utc"],
+                            h_score=int(hg), a_score=int(ag),
+                            status="Finished", minute=90,
+                            home_colour=get_theme_for_team(home).get(
+                                "primary", "#14b8a6"
+                            ),
+                            away_colour=get_theme_for_team(away).get(
+                                "primary", "#f43f5e"
+                            ),
+                        )
+                    except Exception as snap_e:
+                        print(f"[prediction_job] snapshot error: {snap_e}")
                     print(f"[prediction_job] LL result: {home} {hg}-{ag} {away} → {result}")
                     checked += 1
                     continue

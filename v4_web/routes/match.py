@@ -571,15 +571,45 @@ async def match(request: Request):
             all_upcoming = get_upcoming_fixtures(max_fixtures=50)
         except Exception:
             pass
+    recorded_prediction = next(
+        (p for p in get_all_predictions()
+         if str(p["match_id"]) == str(match_id)
+         and p.get("actual_result")
+         and p.get("actual_hg") is not None
+         and p.get("actual_ag") is not None),
+        None,
+    ) if match_id else None
     fpl_match = next(
         (f for f in all_upcoming if str(f.get("match_id")) == str(match_id)),
         None
     )
+    if recorded_prediction:
+        fpl_match = None
 
     # For matches not in upcoming list, try snapshot first
     # This makes finished games display correctly without any API calls
     if not fpl_match and match_id:
         snap = get_match_snapshot(match_id)
+        if not snap and recorded_prediction:
+            home_name = recorded_prediction["home_team"]
+            away_name = recorded_prediction["away_team"]
+            snap = {
+                "home_team": home_name,
+                "away_team": away_name,
+                "h_score": recorded_prediction["actual_hg"],
+                "a_score": recorded_prediction["actual_ag"],
+                "status": "Finished",
+                "minute": 90,
+                "home_colour": "",
+                "away_colour": "",
+                "home_players": [],
+                "away_players": [],
+                "home_formation": "",
+                "away_formation": "",
+                "fotmob_id": "",
+                "absent_home": [],
+                "absent_away": [],
+            }
         if snap and snap.get("status") in ("Finished", "In Play", "Half Time"):
             home_name   = snap["home_team"]
             away_name   = snap["away_team"]
@@ -600,7 +630,7 @@ async def match(request: Request):
                 "minute"    : minute,    "status"   : status,
                 "h_score"   : h_score,   "a_score"  : a_score,
                 "h_xg"      : 0.0,       "a_xg"     : 0.0,
-                "fixture_id": int(match_id),
+                "fixture_id": int(match_id) if str(match_id).isdigit() else 0,
                 "fotmob_id" : fotmob_id,
             }
             prior = dc_pregame(home_name, away_name, active_league)
@@ -1360,6 +1390,43 @@ async def match(request: Request):
                     })
             except Exception as e:
                 print(f"[match] fixture strip fd.org fallback error: {e}")
+
+    # Include completed predictions in the same strip as live and upcoming
+    # fixtures, so a result recorded in history is immediately navigable here.
+    recent_results = []
+    try:
+        now_utc = datetime.now(timezone.utc)
+        season = now_utc.year if now_utc.month >= 8 else now_utc.year - 1
+        league_predictions = [
+            p for p in get_all_predictions(season)
+            if p.get("league", "pl") == active_ctx_key
+            and p.get("actual_result")
+            and p.get("actual_hg") is not None
+            and p.get("actual_ag") is not None
+        ]
+        seen_teams = {
+            (str(f.get("home", "")).casefold(), str(f.get("away", "")).casefold())
+            for f in fixtures
+        }
+        for p in league_predictions:
+            teams = (
+                str(p.get("home_team", "")).casefold(),
+                str(p.get("away_team", "")).casefold(),
+            )
+            if teams in seen_teams:
+                continue
+            seen_teams.add(teams)
+            recent_results.append({
+                "match_id": p["match_id"],
+                "home": p["home_team"],
+                "away": p["away_team"],
+                "kickoff_eat": f"FT {p['actual_hg']}-{p['actual_ag']}",
+            })
+            if len(recent_results) == 10:
+                break
+    except Exception as e:
+        print(f"[match] completed prediction lookup error: {e}")
+    fixtures = recent_results + fixtures
 
     ctx = {
         "request"          : request,
