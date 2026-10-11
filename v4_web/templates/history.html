@@ -58,16 +58,17 @@
             Prediction History
         </h1>
         <p style="font-size:11px;color:var(--text-muted)">
-            Dixon-Coles model · 2025/26 season ·
+            Dixon-Coles model · {{ season }}/{{ ((season + 1)|string)[-2:] }} season ·
             {% if league_filter == "all" %}All leagues
             {% elif league_filter == "pl" %}Premier League only
-            {% else %}La Liga only{% endif %}
+            {% elif league_filter == "laliga" %}La Liga only
+            {% else %}Serie A only{% endif %}
         </p>
     </div>
     <!-- League tabs -->
     <div style="display:flex;gap:6px;align-items:center">
         <a href="/history" class="tab-btn {% if league_filter == 'all' %}active{% endif %}">
-            All ({{ (pl_count or 0) + (ll_count or 0) }})
+            All ({{ (pl_count or 0) + (ll_count or 0) + (sa_count or 0) }})
         </a>
         <a href="/history?league=pl" class="tab-btn {% if league_filter == 'pl' %}active{% endif %}">
             🏴󠁧󠁢󠁥󠁮󠁧󠁿 PL ({{ pl_count or 0 }})
@@ -75,12 +76,15 @@
         <a href="/history?league=laliga" class="tab-btn {% if league_filter == 'laliga' %}active{% endif %}">
             🇪🇸 La Liga ({{ ll_count or 0 }})
         </a>
+        <a href="/history?league=seriea" class="tab-btn {% if league_filter == 'seriea' %}active{% endif %}">
+            🇮🇹 Serie A ({{ sa_count or 0 }})
+        </a>
     </div>
 </div>
 
 <!-- Per-league mini summary (only when showing All) -->
-{% if league_filter == "all" and pl_stats and ll_stats %}
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">
+{% if league_filter == "all" and pl_stats and ll_stats and sa_stats %}
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:20px">
     <div class="league-mini-card">
         <div style="width:10px;height:10px;border-radius:50%;background:#3D185A;flex-shrink:0"></div>
         <div style="flex:1">
@@ -108,6 +112,21 @@
             </div>
         </div>
         <a href="/history?league=laliga" style="font-size:10px;color:var(--text-muted);text-decoration:none">View →</a>
+    </div>
+    <div class="league-mini-card">
+        <div style="width:10px;height:10px;border-radius:50%;background:#2563EB;flex-shrink:0"></div>
+        <div style="flex:1">
+            <div style="font-size:11px;font-weight:800;color:#1A3A6B;margin-bottom:2px">Serie A</div>
+            <div style="font-size:10px;color:var(--text-muted)">
+                {{ sa_stats.total_finished }} results ·
+                {% if sa_stats.total_finished > 0 %}
+                <strong style="color:{% if sa_stats.pre_accuracy >= 55 %}#10b981{% elif sa_stats.pre_accuracy >= 40 %}#f59e0b{% else %}#ef4444{% endif %}">
+                    {{ sa_stats.pre_accuracy }}%
+                </strong> accuracy
+                {% else %}<span>No results yet</span>{% endif %}
+            </div>
+        </div>
+        <a href="/history?league=seriea" style="font-size:10px;color:var(--text-muted);text-decoration:none">View →</a>
     </div>
 </div>
 {% endif %}
@@ -211,7 +230,7 @@
             <tbody>
                 {% for p in finished %}
                 {% set p_league = p.get("league", "pl") if p.get else "pl" %}
-                {% set match_url = "/match?match_id=" ~ p.match_id ~ ("&league=laliga" if p_league == "laliga" else "&league=pl") %}
+                {% set match_url = "/match?match_id=" ~ p.match_id ~ "&league=" ~ p_league %}
                 <tr>
                     <td>
                         <a href="{{ match_url }}" style="color:var(--league-primary);text-decoration:none;font-weight:600">
@@ -220,9 +239,9 @@
                     </td>
                     <td>
                         <span style="font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;
-                            background:{% if p_league == 'laliga' %}#FFF0EE{% else %}#F0EBF8{% endif %};
-                            color:{% if p_league == 'laliga' %}#8B0000{% else %}#3D185A{% endif %}">
-                            {{ "La Liga" if p_league == "laliga" else "PL" }}
+                            background:{% if p_league == 'laliga' %}#FFF0EE{% elif p_league == 'seriea' %}#F0F5FF{% else %}#F0EBF8{% endif %};
+                            color:{% if p_league == 'laliga' %}#8B0000{% elif p_league == 'seriea' %}#1A3A6B{% else %}#3D185A{% endif %}">
+                            {{ "La Liga" if p_league == "laliga" else "Serie A" if p_league == "seriea" else "PL" }}
                         </span>
                     </td>
                     <td style="color:var(--text-muted)">{{ p.kickoff_utc[:10] if p.kickoff_utc else "—" }}</td>
@@ -284,7 +303,7 @@
                 {% set dc_pred = p.pre_pred %}
                 {% set conf = [p.pre_dc_home or 0, p.pre_dc_draw or 0, p.pre_dc_away or 0]|max %}
                 {% set p_league = p.get("league", "pl") if p.get else "pl" %}
-                {% set match_url = "/match?match_id=" ~ p.match_id ~ ("&league=laliga" if p_league == "laliga" else "&league=pl") %}
+                {% set match_url = "/match?match_id=" ~ p.match_id ~ "&league=" ~ p_league %}
                 <tr>
                     <td>
                         <a href="{{ match_url }}" style="color:var(--league-primary);text-decoration:none;font-weight:600">
@@ -293,9 +312,9 @@
                     </td>
                     <td>
                         <span style="font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;
-                            background:{% if p_league == 'laliga' %}#FFF0EE{% else %}#F0EBF8{% endif %};
-                            color:{% if p_league == 'laliga' %}#8B0000{% else %}#3D185A{% endif %}">
-                            {{ "La Liga" if p_league == "laliga" else "PL" }}
+                            background:{% if p_league == 'laliga' %}#FFF0EE{% elif p_league == 'seriea' %}#F0F5FF{% else %}#F0EBF8{% endif %};
+                            color:{% if p_league == 'laliga' %}#8B0000{% elif p_league == 'seriea' %}#1A3A6B{% else %}#3D185A{% endif %}">
+                            {{ "La Liga" if p_league == "laliga" else "Serie A" if p_league == "seriea" else "PL" }}
                         </span>
                     </td>
                     <td style="color:var(--text-muted)">{{ p.kickoff_utc[:10] if p.kickoff_utc else "—" }}</td>

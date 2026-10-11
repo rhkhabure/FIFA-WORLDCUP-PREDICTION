@@ -36,6 +36,10 @@
   <div class="stat"><strong>{{ home_advantage }}</strong><span>Historical home advantage</span></div>
 </div>
 
+<a href="/history?league=seriea" style="display:inline-flex;margin:0 0 18px;padding:8px 12px;border:1px solid var(--league-light);border-radius:8px;color:var(--league-primary);font-size:11px;font-weight:800;text-decoration:none">
+  View Serie A prediction history →
+</a>
+
 {% if fallback_fixture_count %}
 <div class="notice">
   Some fixtures include teams absent from the historical priors ({{ fallback_fixture_count }} fixture{{ 's' if fallback_fixture_count != 1 else '' }}).

@@ -27,6 +27,7 @@ import urllib.request as _urllib_req
 from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
+from urllib.parse import quote
 
 # ── Third-party ───────────────────────────────────────────────────────────────
 import numpy as np
@@ -255,7 +256,40 @@ LEAGUE_CONTEXTS = {
 
 def league_ctx(league_key: str = "pl") -> dict:
     """Returns template context dict for the given league."""
-    return LEAGUE_CONTEXTS.get(league_key, LEAGUE_CONTEXTS["pl"])
+    context = LEAGUE_CONTEXTS.get(league_key, LEAGUE_CONTEXTS["pl"])
+    return context
+
+
+def _team_navigation(
+    league_key: str, team_names: set[str] | None = None
+) -> tuple[list[dict], list[dict]]:
+    league_cfg = MATCH_LEAGUES.get(league_key)
+    if not league_cfg:
+        return [], []
+    teams = priors_db.get(league_cfg["priors"], {}).get("teams", {})
+    names = team_names if team_names is not None else set(teams)
+    ranked = sorted(
+        ((name, teams.get(name, {})) for name in names),
+        key=lambda item: (-item[1].get("alpha", 0), item[0]),
+    )
+    quick_names = {name for name, _ in ranked[:6]}
+
+    def item(name: str) -> dict:
+        return {
+            "name": name,
+            "colour": get_theme_for_team(name).get("primary", "#64748b"),
+            "href": f"/league-team?league={league_key}&team={quote(name)}",
+        }
+
+    quick = [item(name) for name, _ in ranked[:6]]
+    remaining = [item(name) for name in sorted(names - quick_names)]
+    return quick, remaining
+
+
+for _league_key, _context in LEAGUE_CONTEXTS.items():
+    _quick, _all = _team_navigation(_league_key)
+    _context["team_nav_quick"] = _quick
+    _context["team_nav_all"] = _all
 
 
 # ── DC pre-game ───────────────────────────────────────────────────────────────
@@ -303,6 +337,53 @@ async def teams_laliga(request: Request):
             "request": request,
             **league_ctx("laliga"),
         }
+    )
+
+
+@app.get("/league-team", response_class=HTMLResponse)
+async def league_team_page(request: Request, league: str, team: str):
+    """League-specific prior profile for clubs outside the FPL team directory."""
+    league_key = league.lower()
+    league_cfg = MATCH_LEAGUES.get(league_key)
+    if not league_cfg:
+        return HTMLResponse("Unknown league", status_code=404)
+
+    teams = priors_db.get(league_cfg["priors"], {}).get("teams", {})
+    team_key = TEAM_NAME_ALIASES.get(team, team)
+    params = teams.get(team_key)
+    if not teams:
+        return HTMLResponse("Team not found in this league's priors", status_code=404)
+
+    league_data = priors_db[league_cfg["priors"]]
+    team_estimated = params is None
+    if team_estimated:
+        params = {
+            "alpha": float(np.percentile(
+                [values["alpha"] for values in teams.values()], 25
+            )),
+            "beta": float(np.percentile(
+                [values["beta"] for values in teams.values()], 75
+            )),
+        }
+    mean_defence = float(np.mean([values["beta"] for values in teams.values()]))
+    gamma = get_effective_gamma(
+        league_data.get("meta", {}).get("gamma_home_advantage", 1.25)
+    )
+    return templates.TemplateResponse(
+        request=request,
+        name="league_team.html",
+        context={
+            "request": request,
+            **league_ctx(league_key),
+            "team_name": team_key,
+            "team_alpha": round(params["alpha"], 3),
+            "team_beta": round(params["beta"], 3),
+            "home_xg": round(params["alpha"] * mean_defence * gamma, 2),
+            "team_estimated": team_estimated,
+            "trained_seasons": ", ".join(
+                league_data.get("meta", {}).get("trained_on_seasons", [])
+            ),
+        },
     )
 
 
@@ -684,8 +765,10 @@ async def tournament_page(request: Request):
 async def history_page(request: Request):
     """Prediction history — model accuracy tracker, filterable by league."""
 
-    # League filter from query param: ?league=pl / ?league=laliga / (all)
+    # League filter from query param: ?league=pl|laliga|seriea / (all)
     league_filter = request.query_params.get("league", "all").lower()
+    if league_filter not in ("all", "pl", "laliga", "seriea"):
+        league_filter = "all"
 
     try:
         season   = datetime.now(timezone.utc).year
@@ -719,6 +802,8 @@ async def history_page(request: Request):
             all_pred = [p for p in all_pred if p.get("league","pl") == "pl"]
         elif league_filter == "laliga":
             all_pred = [p for p in all_pred if p.get("league","pl") == "laliga"]
+        elif league_filter == "seriea":
+            all_pred = [p for p in all_pred if p.get("league","pl") == "seriea"]
 
         finished = [p for p in all_pred if p["actual_result"]]
         upcoming = [p for p in all_pred if not p["actual_result"]]
@@ -727,6 +812,7 @@ async def history_page(request: Request):
         all_preds_all = get_all_predictions(season)
         pl_count  = sum(1 for p in all_preds_all if p.get("league","pl") == "pl")
         ll_count  = sum(1 for p in all_preds_all if p.get("league","pl") == "laliga")
+        sa_count  = sum(1 for p in all_preds_all if p.get("league","pl") == "seriea")
 
         # Accuracy stats
         def _stats(preds):
@@ -755,8 +841,10 @@ async def history_page(request: Request):
         # Per-league stats for tab badges
         pl_preds  = [p for p in all_preds_all if p.get("league","pl") == "pl"]
         ll_preds  = [p for p in all_preds_all if p.get("league","pl") == "laliga"]
+        sa_preds  = [p for p in all_preds_all if p.get("league","pl") == "seriea"]
         pl_stats  = _stats(pl_preds)
         ll_stats  = _stats(ll_preds)
+        sa_stats  = _stats(sa_preds)
 
         # Confidence band breakdown
         bands = {
@@ -794,11 +882,11 @@ async def history_page(request: Request):
 
     except Exception as e:
         print(f"[history] error: {e}")
-        stats = pl_stats = ll_stats = None
+        stats = pl_stats = ll_stats = sa_stats = None
         finished = upcoming = []
         band_stats = {}
         draws_actual = draws_predicted = 0
-        pl_count = ll_count = 0
+        pl_count = ll_count = sa_count = 0
         league_filter = "all"
 
     return templates.TemplateResponse(
@@ -808,8 +896,10 @@ async def history_page(request: Request):
             "stats"           : stats,
             "pl_stats"        : pl_stats,
             "ll_stats"        : ll_stats,
+            "sa_stats"        : sa_stats,
             "pl_count"        : pl_count,
             "ll_count"        : ll_count,
+            "sa_count"        : sa_count,
             "league_filter"   : league_filter,
             "finished"        : finished,
             "upcoming"        : upcoming[:10],
@@ -817,7 +907,7 @@ async def history_page(request: Request):
             "draws_actual"    : draws_actual,
             "draws_predicted" : draws_predicted,
             "season"          : season,
-            **league_ctx("pl"),
+            **league_ctx(league_filter if league_filter in LEAGUE_CONTEXTS else "pl"),
         }
     )
 
@@ -1039,10 +1129,21 @@ async def seriea_dashboard(request: Request):
     upcoming_raw = []
     try:
         upcoming_raw = get_upcoming_fixtures_fd(
-            league_cfg["comp"], max_fixtures=20
+            league_cfg["comp"], max_fixtures=50
         )
     except Exception as e:
         print(f"[seriea] upcoming fixture fetch error: {e}")
+
+    current_team_names = {
+        TEAM_NAME_ALIASES.get(fixture[side], fixture[side])
+        for fixture in upcoming_raw
+        for side in ("home", "away")
+        if fixture.get(side)
+    }
+    if len(current_team_names) >= 18:
+        quick, all_teams = _team_navigation(league_key, current_team_names)
+        LEAGUE_CONTEXTS[league_key]["team_nav_quick"] = quick
+        LEAGUE_CONTEXTS[league_key]["team_nav_all"] = all_teams
 
     def enrich_fixture(fixture):
         dc = dc_pregame(fixture["home"], fixture["away"], league_cfg["priors"])

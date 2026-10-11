@@ -224,24 +224,18 @@
         {% endfor %}
 
         <div class="nav-section-label">Quick Teams</div>
-        {% for name,tid,col in [("Arsenal",57,"#EF0107"),("Liverpool",64,"#C8102E"),
-            ("Manchester City",65,"#6CABDD"),("Manchester United",66,"#8B0000"),
-            ("Chelsea",61,"#034694"),("Tottenham",73,"#3355AA")] %}
-        <a href="/team/{{ tid }}" class="nav-item" data-page="team-{{ tid }}">
-            <span class="nav-icon"><img src="/crest/{{ name }}" style="width:16px;height:16px;object-fit:contain" onerror="this.style.display='none'"/></span>
-            <span class="nav-label">{{ name }}</span>
+        {% for team in team_nav_quick|default([]) %}
+        <a href="{{ team.href }}" class="nav-item" data-page="team-{{ team.name|lower|replace(' ','-') }}">
+            <span class="nav-icon"><img src="/crest/{{ team.name }}" style="width:16px;height:16px;object-fit:contain" onerror="this.style.display='none'"/></span>
+            <span class="nav-label">{{ team.name }}</span>
         </a>
         {% endfor %}
 
         <div class="nav-section-label">All Teams</div>
-        {% for name,tid in [("Aston Villa",58),("Bournemouth",1044),("Brentford",402),
-            ("Brighton",397),("Crystal Palace",354),("Everton",62),("Fulham",63),
-            ("Ipswich",610),("Leeds",341),("Newcastle United",67),
-            ("Nottingham Forest",351),("Sunderland",71),("West Ham",563),
-            ("Wolverhampton Wanderers",76)] %}
-        <a href="/team/{{ tid }}" class="nav-item" data-page="team-{{ tid }}">
-            <span class="nav-icon"><img src="/crest/{{ name }}" style="width:16px;height:16px;object-fit:contain" onerror="this.style.display='none'"/></span>
-            <span class="nav-label">{{ name }}</span>
+        {% for team in team_nav_all|default([]) %}
+        <a href="{{ team.href }}" class="nav-item" data-page="team-{{ team.name|lower|replace(' ','-') }}">
+            <span class="nav-icon"><img src="/crest/{{ team.name }}" style="width:16px;height:16px;object-fit:contain" onerror="this.style.display='none'"/></span>
+            <span class="nav-label">{{ team.name }}</span>
         </a>
         {% endfor %}
     {% endif %}

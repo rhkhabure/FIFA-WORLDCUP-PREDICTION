@@ -6,16 +6,18 @@ Background prediction logging job.
 Called on FastAPI startup and every 30 minutes via asyncio.
 
 What it does each cycle:
-  1. Fetch all upcoming PL fixtures from FPL API
+  1. Fetch upcoming PL, La Liga, and Serie A fixtures
   2. For each fixture:
        a. If not yet in DB → compute DC prior → log snapshot 1
        b. If snapshot 1 exists but not snapshot 2 → try FotMob lineup
           → if lineup confirmed → compute adjusted odds → log snapshot 2
-  3. Fetch recent finished PL matches → fill in actual results
+  3. Fetch recent finished matches → fill in actual results
 
 Runs in the background — never blocks the web server.
 Credits used: get_matches_by_date (3) once per day, cached.
               get_match_lineup (1) per new confirmed lineup only.
+Serie A history currently records pre-match priors and final results; lineup
+adjustments remain disabled until that league's lineup path is verified.
 """
 
 import asyncio
@@ -46,6 +48,7 @@ def _dc_probs(home_name: str, away_name: str, priors_db: dict,
     Returns (home%, draw%, away%, lam, mu) or None if teams not in priors.
     """
     from v4_backend.feature_builder import TEAM_NAME_ALIASES
+    from routes.match import get_effective_gamma
     from scipy.stats import poisson
 
     league_data = priors_db.get(league_key, {})
@@ -68,7 +71,7 @@ def _dc_probs(home_name: str, away_name: str, priors_db: dict,
     a_alpha = a.get("alpha", q25a)
     a_beta  = a.get("beta",  q75b)
 
-    gamma = meta.get("gamma_home_advantage", 1.25)
+    gamma = get_effective_gamma(meta.get("gamma_home_advantage", 1.25))
     rho   = meta.get("rho_draw_correction",  0.0)
     dp    = 0.10   # draw propensity
 
@@ -191,6 +194,47 @@ async def run_prediction_job(priors_db: dict, league_key: str):
     except Exception as e:
         print(f"[prediction_job] BBS fixtures error: {e}")
 
+    # ── Step 1c: Serie A scheduled fixtures → snapshot 1 ──────────────────
+    try:
+        from constants import MATCH_LEAGUES
+        from footballdata import get_upcoming_fixtures_fd
+
+        seriea_cfg = MATCH_LEAGUES["seriea"]
+        seriea_upcoming = get_upcoming_fixtures_fd(
+            seriea_cfg["comp"], max_fixtures=50
+        )
+        seriea_logged = 0
+        for fixture in seriea_upcoming:
+            match_id = str(fixture.get("match_id", ""))
+            home = fixture.get("home", "")
+            away = fixture.get("away", "")
+            kickoff = fixture.get("kickoff_utc", "")
+            if not match_id or not home or not away or not kickoff:
+                continue
+            try:
+                result = _dc_probs(home, away, priors_db, seriea_cfg["priors"])
+            except Exception as e:
+                print(f"[prediction_job] Serie A DC error {home} v {away}: {e}")
+                continue
+            if not result:
+                continue
+            ph, pd, pa, lam, mu = result
+            try:
+                log_pre_lineup(
+                    match_id=match_id, home_team=home, away_team=away,
+                    kickoff_utc=str(kickoff), season=season,
+                    dc_home=ph, dc_draw=pd, dc_away=pa,
+                    dc_lam=lam, dc_mu=mu,
+                    league="seriea",
+                )
+                seriea_logged += 1
+            except Exception as e:
+                print(f"[prediction_job] log_pre Serie A error {match_id}: {e}")
+        if seriea_logged:
+            print(f"[prediction_job] Serie A: {seriea_logged} fixtures logged")
+    except Exception as e:
+        print(f"[prediction_job] Serie A fixtures error: {e}")
+
     # ── Step 2: Check for confirmed lineups → snapshot 2 ───────────────────
     if fotmob_ok():
         existing = get_all_predictions(season)
@@ -198,6 +242,7 @@ async def run_prediction_job(priors_db: dict, league_key: str):
             p for p in existing
             if p["pre_logged_at"] and not p["adj_logged_at"]
             and not p["actual_result"]  # not finished yet
+            and p.get("league", "pl") != "seriea"
         ]
 
         # Pre-warm FotMob date cache ONCE before the loop.
@@ -255,13 +300,25 @@ async def run_prediction_job(priors_db: dict, league_key: str):
     existing   = get_all_predictions(season)
     # Only check matches that kicked off at least 2 hours ago
     # (90 min game + ~30 min for fd.org to update scores on free tier)
-    cutoff_utc = (now_utc - timedelta(hours=2)).isoformat()
+    cutoff_utc = now_utc - timedelta(hours=2)
+
+    def kicked_off_before_cutoff(kickoff_utc: str) -> bool:
+        try:
+            kickoff = datetime.fromisoformat(
+                kickoff_utc.replace("Z", "+00:00")
+            )
+            if kickoff.tzinfo is None:
+                kickoff = kickoff.replace(tzinfo=timezone.utc)
+            return kickoff < cutoff_utc
+        except (AttributeError, TypeError, ValueError):
+            return False
+
     unresolved = sorted(
         [
             p for p in existing
             if p["pre_logged_at"] and not p["actual_result"]
             and p["kickoff_utc"]
-            and p["kickoff_utc"] < cutoff_utc
+            and kicked_off_before_cutoff(p["kickoff_utc"])
         ],
         key=lambda x: x["kickoff_utc"]   # oldest first so backlog clears in order
     )
@@ -318,8 +375,11 @@ async def run_prediction_job(priors_db: dict, league_key: str):
                     print(f"[prediction_job] BBS result error {mid}: {e}")
                     continue
 
-            # PL: use fd.org finished cache
-            match_data = find_finished_match_by_teams(home, away)
+            # football-data.org finished cache, scoped to the prediction's league.
+            comp_code = {"pl": "PL", "seriea": "SA"}.get(league, "PL")
+            match_data = find_finished_match_by_teams(
+                home, away, comp_code=comp_code
+            )
             if not match_data or match_data.get("status") != "Finished":
                 continue
 
@@ -330,7 +390,10 @@ async def run_prediction_job(priors_db: dict, league_key: str):
 
             result = "H" if hg > ag else ("D" if hg == ag else "A")
             log_result(mid, result, int(hg), int(ag))
-            print(f"[prediction_job] PL result: {home} {hg}-{ag} {away} → {result}")
+            print(
+                f"[prediction_job] {league} result: "
+                f"{home} {hg}-{ag} {away} -> {result}"
+            )
 
             try:
                 from predictions import save_match_snapshot

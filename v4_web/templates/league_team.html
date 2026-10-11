@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="max-width:760px;margin:0 auto">
+  <a href="/league/{{ league }}" style="font-size:11px;color:var(--league-vivid);text-decoration:none">
+    ← {{ league_name }}
+  </a>
+  <h1 style="font-size:24px;font-weight:900;color:var(--league-primary);margin:14px 0 4px">
+    {{ team_name }}
+  </h1>
+  <p style="font-size:11px;color:var(--text-muted)">
+    {% if team_estimated %}Estimated prior for a team not in historical training data{% else %}Historical Dixon-Coles team prior · trained on {{ trained_seasons }}{% endif %}
+  </p>
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin:22px 0">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px">
+      <div style="font-size:9px;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px">Attack strength (α)</div>
+      <div style="font:800 24px var(--font-mono);color:var(--league-primary);margin-top:6px">{{ team_alpha }}</div>
+    </div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px">
+      <div style="font-size:9px;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px">Defence factor (β)</div>
+      <div style="font:800 24px var(--font-mono);color:var(--league-primary);margin-top:6px">{{ team_beta }}</div>
+    </div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px">
+      <div style="font-size:9px;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px">Estimated home goals</div>
+      <div style="font:800 24px var(--font-mono);color:var(--league-primary);margin-top:6px">{{ home_xg }}</div>
+    </div>
+  </div>
+
+  <div style="background:var(--league-tint);border-radius:10px;padding:13px 15px;font-size:11px;color:var(--text-secondary);line-height:1.6">
+    {% if team_estimated %}Attack and defence values use the league's bottom-quartile fallback because this team is not in the historical priors.{% else %}This league-specific profile currently shows historical model strengths only.{% endif %}
+    Squad, season form, and team maps are not yet available for this league.
+  </div>
+  <a href="/match?league={{ league }}" style="display:inline-block;margin-top:18px;padding:9px 14px;border-radius:8px;background:var(--league-primary);color:var(--league-gold);font-size:11px;font-weight:800;text-decoration:none">
+    Open {{ league_name }} match dashboard →
+  </a>
+</div>
+{% endblock %}
