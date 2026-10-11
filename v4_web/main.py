@@ -60,6 +60,9 @@ from footballdata import (
     find_finished_match_by_teams,
     get_upcoming_fixtures_fd,
     get_fixtures_by_date_fd,
+    get_competition_teams_fd,
+    get_team_matches_fd,
+    get_competition_standings_fd,
     _populate_finished_cache,
     PL_CODE,
     PD_CODE,
@@ -297,8 +300,14 @@ def _team_navigation(
             }
 
         return (
-            [pl_item(name, team_id) for name, team_id in quick_teams],
-            [pl_item(name, team_id) for name, team_id in all_teams],
+            [
+                pl_item(name, team_id)
+                for name, team_id in sorted(quick_teams, key=lambda team: team[0].casefold())
+            ],
+            [
+                pl_item(name, team_id)
+                for name, team_id in sorted(all_teams, key=lambda team: team[0].casefold())
+            ],
         )
 
     league_cfg = MATCH_LEAGUES.get(league_key)
@@ -319,8 +328,8 @@ def _team_navigation(
             "href": f"/league-team?league={league_key}&team={quote(name)}",
         }
 
-    quick = [item(name) for name, _ in ranked[:6]]
-    remaining = [item(name) for name in sorted(names - quick_names)]
+    quick = [item(name) for name in sorted(quick_names, key=str.casefold)]
+    remaining = [item(name) for name in sorted(names - quick_names, key=str.casefold)]
     return quick, remaining
 
 
@@ -328,6 +337,19 @@ for _league_key, _context in LEAGUE_CONTEXTS.items():
     _quick, _all = _team_navigation(_league_key)
     _context["team_nav_quick"] = _quick
     _context["team_nav_all"] = _all
+    _context["team_map_href"] = (
+        "/teams/laliga" if _league_key == "laliga"
+        else "/teams/seriea" if _league_key == "seriea"
+        else "/teams"
+    )
+
+
+def _set_current_league_roster(league_key: str, team_names: set[str]) -> None:
+    if len(team_names) < 18:
+        return
+    quick, all_teams = _team_navigation(league_key, team_names)
+    LEAGUE_CONTEXTS[league_key]["team_nav_quick"] = quick
+    LEAGUE_CONTEXTS[league_key]["team_nav_all"] = all_teams
 
 
 # ── DC pre-game ───────────────────────────────────────────────────────────────
@@ -378,9 +400,101 @@ async def teams_laliga(request: Request):
     )
 
 
+@app.get("/teams/seriea", response_class=HTMLResponse)
+async def teams_seriea(request: Request):
+    """Approximate Italy club map and alphabetical club directory."""
+    locations = {
+        "AC Milan": ("Milan", 45.4781, 9.1240),
+        "Atalanta": ("Bergamo", 45.7091, 9.6808),
+        "Bologna": ("Bologna", 44.4925, 11.3096),
+        "Cagliari": ("Cagliari", 39.1994, 9.1367),
+        "Como": ("Como", 45.8080, 9.0852),
+        "Cremonese": ("Cremona", 45.1362, 10.0320),
+        "Empoli": ("Empoli", 43.7262, 10.9470),
+        "Fiorentina": ("Florence", 43.7808, 11.2820),
+        "Frosinone": ("Frosinone", 41.6459, 13.3480),
+        "Genoa": ("Genoa", 44.4162, 8.9524),
+        "Inter": ("Milan", 45.4781, 9.1240),
+        "Juventus": ("Turin", 45.1096, 7.6413),
+        "Lazio": ("Rome", 41.9339, 12.4547),
+        "Lecce": ("Lecce", 40.3515, 18.2084),
+        "Monza": ("Monza", 45.5869, 9.2012),
+        "Napoli": ("Naples", 40.8279, 14.1930),
+        "Parma Calcio 1913": ("Parma", 44.7832, 10.3390),
+        "Pisa": ("Pisa", 43.7270, 10.3950),
+        "Roma": ("Rome", 41.9340, 12.4547),
+        "Salernitana": ("Salerno", 40.6242, 14.8290),
+        "Sampdoria": ("Genoa", 44.4162, 8.9524),
+        "Sassuolo": ("Reggio Emilia", 44.7157, 10.6500),
+        "Spezia": ("La Spezia", 44.1080, 9.8600),
+        "Torino": ("Turin", 45.1096, 7.6413),
+        "Udinese": ("Udine", 46.0819, 13.1990),
+        "Venezia": ("Venice", 45.4340, 12.3388),
+        "Verona": ("Verona", 45.4352, 10.9686),
+    }
+    priors = priors_db.get(MATCH_LEAGUES["seriea"]["priors"], {}).get("teams", {})
+    team_names = set(priors)
+    offsets = {
+        "AC Milan": (-9, 0),
+        "Inter": (9, 0),
+        "Lazio": (-9, 0),
+        "Roma": (9, 0),
+        "Sampdoria": (-9, 0),
+        "Genoa": (9, 0),
+        "Juventus": (-9, 0),
+        "Torino": (9, 0),
+    }
+    try:
+        fixtures = get_upcoming_fixtures_fd("SA", max_fixtures=50)
+        current_names = {
+            TEAM_NAME_ALIASES.get(fixture[side], fixture[side])
+            for fixture in fixtures
+            for side in ("home", "away")
+            if fixture.get(side)
+        }
+        if len(current_names) >= 18:
+            team_names = current_names
+            _set_current_league_roster("seriea", current_names)
+    except Exception as e:
+        print(f"[seriea map] current team fetch error: {e}")
+
+    team_list = []
+    for index, name in enumerate(sorted(team_names, key=str.casefold), start=1):
+        location = locations.get(name)
+        point = None
+        if location:
+            city, latitude, longitude = location
+            offset_x, offset_y = offsets.get(name, (0, 0))
+            point = {
+                "x": round(28 + (longitude - 6.5) / (19.0 - 6.5) * 444 + offset_x, 1),
+                "y": round(24 + (47.2 - latitude) / (47.2 - 35.5) * 560 + offset_y, 1),
+                "city": city,
+            }
+        team_list.append({
+            "name": name,
+            "index": index,
+            "point": point,
+            "colour": get_theme_for_team(name).get("primary", "#2563EB"),
+            "href": f"/league-team?league=seriea&team={quote(name)}",
+        })
+
+    return templates.TemplateResponse(
+        request=request,
+        name="teams_seriea.html",
+        context={
+            "request": request,
+            **league_ctx("seriea"),
+            "teams": team_list,
+            "mapped_count": sum(team["point"] is not None for team in team_list),
+        },
+    )
+
+
 @app.get("/league-team", response_class=HTMLResponse)
-async def league_team_page(request: Request, league: str, team: str):
-    """League-specific prior profile for clubs outside the FPL team directory."""
+async def league_team_page(
+    request: Request, league: str, team: str, season: int | None = None
+):
+    """League-specific team profile for clubs outside the FPL team directory."""
     league_key = league.lower()
     league_cfg = MATCH_LEAGUES.get(league_key)
     if not league_cfg:
@@ -407,6 +521,129 @@ async def league_team_page(request: Request, league: str, team: str):
     gamma = get_effective_gamma(
         league_data.get("meta", {}).get("gamma_home_advantage", 1.25)
     )
+    if league_key == "seriea":
+        now = datetime.now(timezone.utc)
+        season = season or (now.year if now.month >= 7 else now.year - 1)
+        season_teams = get_competition_teams_fd(league_cfg["comp"], season)
+        team_info = next(
+            (
+                candidate for candidate in season_teams
+                if candidate["name"] == team_key
+                or TEAM_NAME_ALIASES.get(candidate["name"], candidate["name"]) == team_key
+            ),
+            None,
+        )
+        if team_info:
+            profile = {
+                **team_info,
+                "name": team_key,
+                "squad": {},
+            }
+            theme = get_theme_for_team(team_key)
+            matches = get_team_matches_fd(
+                team_info["id"], league_cfg["comp"], season
+            )
+            last_5 = [match for match in matches if match["result"]][:5]
+            next_fixture = next(
+                (
+                    match for match in reversed(matches)
+                    if match["status"] in ("SCHEDULED", "TIMED")
+                ),
+                None,
+            )
+            fixtures = [
+                {
+                    **match,
+                    "match_id": str(match["match_id"]),
+                }
+                for match in matches
+                if match["status"] in ("SCHEDULED", "TIMED", "IN_PLAY", "PAUSED")
+            ]
+            fixtures.sort(key=lambda match: match["utc_date"])
+            standings = get_competition_standings_fd(league_cfg["comp"], season)
+            for row in standings:
+                row["is_current"] = row["team_id"] == team_info["id"]
+                row["team_href"] = (
+                    f"/league-team?league={league_key}&team={quote(row['team_name'])}"
+                )
+            crest_url = team_info.get("crest") or get_crest_proxy_url(team_key)
+            ctx = {
+                "request": request,
+                **league_ctx(league_key),
+                "profile": profile,
+                "coach": profile.get("coach") or "Not available",
+                "team_colour": theme["primary"],
+                "crest_url": crest_url,
+                "formation": None,
+                "pitch_svg": None,
+                "dc_alpha": params["alpha"],
+                "dc_beta": params["beta"],
+                "xg_proj": round(params["alpha"] * mean_defence * gamma, 2),
+                "dc_estimated": team_estimated,
+                "all_results": matches,
+                "last_5": last_5,
+                "next_fixture": next_fixture,
+                "standings": standings,
+                "team_id": team_info["id"],
+                "current_season": season,
+                "team_fixtures": fixtures[:5],
+                "league_key": league_key,
+                "season_options": [season, season - 1, season - 2],
+                "team_estimated": team_estimated,
+                "trained_seasons": ", ".join(
+                    league_data.get("meta", {}).get("trained_on_seasons", [])
+                ),
+                "team_page_league": league_key,
+                "match_data_available": True,
+            }
+            return templates.TemplateResponse(
+                request=request, name="team.html", context=ctx
+            )
+        profile = {
+            "id": None,
+            "name": team_key,
+            "short_name": "",
+            "tla": "",
+            "crest": "",
+            "venue": "",
+            "founded": None,
+            "colours": "",
+            "squad": {},
+        }
+        return templates.TemplateResponse(
+            request=request,
+            name="team.html",
+            context={
+                "request": request,
+                **league_ctx(league_key),
+                "profile": profile,
+                "coach": "Not available",
+                "team_colour": get_theme_for_team(team_key)["primary"],
+                "crest_url": get_crest_proxy_url(team_key),
+                "formation": None,
+                "pitch_svg": None,
+                "dc_alpha": params["alpha"],
+                "dc_beta": params["beta"],
+                "xg_proj": round(params["alpha"] * mean_defence * gamma, 2),
+                "dc_estimated": team_estimated,
+                "all_results": [],
+                "last_5": [],
+                "next_fixture": None,
+                "standings": [],
+                "team_id": None,
+                "current_season": season,
+                "team_fixtures": [],
+                "league_key": league_key,
+                "season_options": [season, season - 1, season - 2],
+                "team_estimated": team_estimated,
+                "trained_seasons": ", ".join(
+                    league_data.get("meta", {}).get("trained_on_seasons", [])
+                ),
+                "team_page_league": league_key,
+                "match_data_available": False,
+            },
+        )
+
     return templates.TemplateResponse(
         request=request,
         name="league_team.html",
@@ -1178,10 +1415,7 @@ async def seriea_dashboard(request: Request):
         for side in ("home", "away")
         if fixture.get(side)
     }
-    if len(current_team_names) >= 18:
-        quick, all_teams = _team_navigation(league_key, current_team_names)
-        LEAGUE_CONTEXTS[league_key]["team_nav_quick"] = quick
-        LEAGUE_CONTEXTS[league_key]["team_nav_all"] = all_teams
+    _set_current_league_roster(league_key, current_team_names)
 
     def enrich_fixture(fixture):
         dc = dc_pregame(fixture["home"], fixture["away"], league_cfg["priors"])

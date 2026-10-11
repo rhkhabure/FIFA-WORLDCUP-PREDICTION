@@ -20,7 +20,7 @@ import re
 import time as _time
 import urllib.request
 import urllib.error
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 BASE_URL  = "https://api.football-data.org/v4"
 PL_CODE   = "PL"
@@ -76,6 +76,10 @@ def _fetch(endpoint: str, params: dict | None = None) -> dict:
 # _finished_cache[comp_code] = (dict of parsed matches, timestamp)
 _finished_cache: dict[str, tuple[dict, float]] = {}
 _FINISHED_TTL = 300   # 5 minutes
+_competition_teams_cache: dict[tuple[str, int], tuple[list[dict], float]] = {}
+_TEAM_TTL = 3600
+_team_matches_cache: dict[tuple[int, str, int], tuple[list[dict], float]] = {}
+_competition_standings_cache: dict[tuple[str, int], tuple[list[dict], float]] = {}
 
 
 def _current_season() -> int:
@@ -126,6 +130,157 @@ def get_finished_match(match_id: int | str,
     """
     cache = _populate_finished_cache(comp_code)
     return cache.get(str(match_id), _empty_match())
+
+
+def get_competition_teams_fd(
+    comp_code: str, season: int | None = None
+) -> list[dict]:
+    """Return cached club metadata for a competition season."""
+    if season is None:
+        season = _current_season()
+    cache_key = (comp_code, season)
+    cached = _competition_teams_cache.get(cache_key)
+    if cached and _time.time() - cached[1] < _TEAM_TTL:
+        return cached[0]
+
+    data = _fetch(
+        f"competitions/{comp_code}/teams",
+        {"season": season},
+    )
+    from v4_backend.feature_builder import TEAM_NAME_ALIASES
+
+    teams = []
+    for raw in data.get("teams", []):
+        source_name = _clean_name(raw.get("name", ""))
+        team = {
+            "id": raw.get("id"),
+            "name": TEAM_NAME_ALIASES.get(source_name, source_name),
+            "short_name": raw.get("shortName", ""),
+            "tla": raw.get("tla", ""),
+            "crest": raw.get("crest", ""),
+            "venue": raw.get("venue", ""),
+            "founded": raw.get("founded"),
+            "colours": raw.get("clubColors", ""),
+            "coach": (raw.get("coach") or {}).get("name", ""),
+            "squad": raw.get("squad", []),
+        }
+        if team["id"] and team["name"]:
+            teams.append(team)
+    _competition_teams_cache[cache_key] = (teams, _time.time())
+    return teams
+
+
+def get_team_matches_fd(
+    team_id: int, comp_code: str, season: int | None = None
+) -> list[dict]:
+    """Return cached season matches for a club in a competition."""
+    if season is None:
+        season = _current_season()
+    cache_key = (team_id, comp_code, season)
+    cached = _team_matches_cache.get(cache_key)
+    if cached and _time.time() - cached[1] < _TEAM_TTL:
+        return cached[0]
+
+    data = _fetch(
+        f"teams/{team_id}/matches",
+        {"competitions": comp_code, "season": season, "limit": 100},
+    )
+    from v4_backend.feature_builder import TEAM_NAME_ALIASES
+
+    EAT = timezone(timedelta(hours=3))
+    matches = []
+    for raw in data.get("matches", []):
+        home_raw = _clean_name(raw.get("homeTeam", {}).get("name", "Unknown"))
+        away_raw = _clean_name(raw.get("awayTeam", {}).get("name", "Unknown"))
+        home = TEAM_NAME_ALIASES.get(home_raw, home_raw)
+        away = TEAM_NAME_ALIASES.get(away_raw, away_raw)
+        is_home = raw.get("homeTeam", {}).get("id") == team_id
+        kickoff = raw.get("utcDate", "")
+        try:
+            local_kickoff = datetime.fromisoformat(
+                kickoff.replace("Z", "+00:00")
+            ).astimezone(EAT)
+            date = local_kickoff.strftime("%d %b %Y")
+            kickoff_eat = local_kickoff.strftime("%a %d %b · %H:%M")
+        except ValueError:
+            date = kickoff[:10]
+            kickoff_eat = date
+
+        score = (raw.get("score", {}) or {}).get("fullTime", {}) or {}
+        home_score = score.get("home")
+        away_score = score.get("away")
+        status = raw.get("status", "")
+        result = ""
+        if status == "FINISHED" and home_score is not None and away_score is not None:
+            team_score = home_score if is_home else away_score
+            opponent_score = away_score if is_home else home_score
+            result = (
+                "W" if team_score > opponent_score
+                else "D" if team_score == opponent_score
+                else "L"
+            )
+        matches.append({
+            "match_id": raw.get("id"),
+            "date": date,
+            "utc_date": kickoff,
+            "kickoff_eat": kickoff_eat,
+            "matchday": raw.get("matchday"),
+            "home": home,
+            "away": away,
+            "opponent": away if is_home else home,
+            "home_away": "H" if is_home else "A",
+            "is_home": is_home,
+            "h_score": home_score,
+            "a_score": away_score,
+            "result": result,
+            "status": status,
+        })
+    matches.sort(key=lambda match: match["utc_date"], reverse=True)
+    _team_matches_cache[cache_key] = (matches, _time.time())
+    return matches
+
+
+def get_competition_standings_fd(
+    comp_code: str, season: int | None = None
+) -> list[dict]:
+    """Return the competition table in the shape expected by team pages."""
+    if season is None:
+        season = _current_season()
+    cache_key = (comp_code, season)
+    cached = _competition_standings_cache.get(cache_key)
+    if cached and _time.time() - cached[1] < _TEAM_TTL:
+        return cached[0]
+    data = _fetch(
+        f"competitions/{comp_code}/standings",
+        {"season": season},
+    )
+    from v4_backend.feature_builder import TEAM_NAME_ALIASES
+
+    try:
+        table = data["standings"][0]["table"]
+    except (KeyError, IndexError):
+        table = []
+    standings = []
+    for row in table:
+        team = row.get("team", {})
+        source_name = _clean_name(team.get("name", ""))
+        standings.append({
+            "position": row.get("position"),
+            "team_id": team.get("id"),
+            "team_name": TEAM_NAME_ALIASES.get(source_name, source_name),
+            "crest": team.get("crest", ""),
+            "played": row.get("playedGames", 0),
+            "won": row.get("won", 0),
+            "draw": row.get("draw", 0),
+            "lost": row.get("lost", 0),
+            "gf": row.get("goalsFor", 0),
+            "ga": row.get("goalsAgainst", 0),
+            "gd": row.get("goalDifference", 0),
+            "points": row.get("points", 0),
+            "form": row.get("form", ""),
+        })
+    _competition_standings_cache[cache_key] = (standings, _time.time())
+    return standings
 
 
 def get_last_completed_pl_match() -> int | None:

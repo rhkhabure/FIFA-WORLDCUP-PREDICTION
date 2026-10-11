@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+.map-heading{display:flex;align-items:end;justify-content:space-between;gap:12px;margin-bottom:16px}
+.map-heading h1{font-size:22px;font-weight:900;color:var(--league-primary);margin-bottom:4px}
+.map-heading p,.map-note{font-size:11px;color:var(--text-muted)}
+.map-layout{display:grid;grid-template-columns:minmax(300px,1fr) minmax(280px,.8fr);gap:16px;align-items:start}
+.map-card,.directory{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px}
+.map-card{background:#eaf4fa}
+.italy-map{width:100%;height:auto;display:block;max-height:690px}
+.map-land{fill:#f4f0e4;stroke:#d4c9ac;stroke-width:3;stroke-linejoin:round}
+.map-island{fill:#f4f0e4;stroke:#d4c9ac;stroke-width:2}
+.map-pin circle{stroke:#fff;stroke-width:2}
+.map-pin text{font:700 8px var(--font-mono);fill:#fff;text-anchor:middle;dominant-baseline:central}
+.team-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:5px;margin-top:10px}
+.team-link{display:flex;align-items:center;gap:9px;padding:8px;border-radius:8px;text-decoration:none;color:var(--text-primary);font-size:11px;font-weight:700}
+.team-link:hover{background:var(--league-tint);color:var(--league-primary)}
+.team-dot{width:9px;height:9px;border-radius:50%;flex:none}
+.team-index{font:700 9px var(--font-mono);color:var(--text-muted);width:19px;flex:none}
+.directory h2{font-size:11px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--text-muted)}
+.map-note{margin-top:12px;line-height:1.5}
+@media(max-width:760px){.map-layout{grid-template-columns:1fr}.map-heading{align-items:flex-start;flex-direction:column}}
+</style>
+
+<header class="map-heading">
+  <div>
+    <h1>Serie A · Italy</h1>
+    <p>{{ teams|length }} clubs · {{ mapped_count }} approximate city/stadium locations · select a club for its model profile</p>
+  </div>
+  <a href="/league/seriea" style="font-size:11px;font-weight:800;color:var(--league-vivid);text-decoration:none">← Serie A dashboard</a>
+</header>
+
+<div class="map-layout">
+  <section class="map-card" aria-label="Approximate Serie A club map">
+    <svg class="italy-map" viewBox="0 0 500 610" role="img" aria-label="Map of Italy with Serie A club markers">
+      <path class="map-land" d="M55 49 L91 34 L124 42 L151 36 L181 48 L208 44 L229 59 L253 58 L270 76 L290 76 L310 92 L326 95 L343 114 L363 120 L376 137 L395 145 L407 164 L422 179 L424 197 L412 211 L400 223 L407 239 L401 255 L387 266 L373 265 L365 278 L372 293 L385 306 L389 322 L378 335 L366 346 L358 362 L365 377 L377 390 L390 400 L391 414 L379 424 L365 417 L355 402 L346 388 L335 379 L326 386 L330 403 L340 419 L350 437 L348 454 L338 467 L328 463 L323 449 L317 433 L307 420 L296 406 L283 389 L272 370 L261 351 L250 333 L239 315 L228 296 L217 277 L206 258 L195 239 L184 219 L171 201 L157 184 L143 168 L130 152 L116 137 L100 123 L84 108 L68 91 L55 75 Z"/>
+      <path class="map-island" d="M126 406 L143 397 L161 402 L170 418 L164 438 L151 450 L135 443 L126 427 Z"/>
+      <path class="map-island" d="M300 523 L323 512 L347 518 L363 535 L359 557 L343 571 L319 568 L304 551 Z"/>
+      <text x="98" y="390" fill="#8da3b0" font-size="11" font-weight="700">TYRRHENIAN SEA</text>
+      <text x="388" y="288" fill="#8da3b0" font-size="10" font-weight="700" transform="rotate(82 388 288)">ADRIATIC SEA</text>
+      {% for team in teams if team.point %}
+      <a class="map-pin" href="{{ team.href }}" aria-label="{{ team.name }} · {{ team.point.city }}">
+        <title>{{ team.name }} · {{ team.point.city }}</title>
+        <circle cx="{{ team.point.x }}" cy="{{ team.point.y }}" r="10" fill="{{ team.colour }}"/>
+        <text x="{{ team.point.x }}" y="{{ team.point.y }}">{{ team.index }}</text>
+      </a>
+      {% endfor %}
+    </svg>
+    <p class="map-note">The coastline is a simplified illustration; markers indicate approximate club city/stadium locations. Numbered markers match the alphabetical directory.</p>
+  </section>
+
+  <section class="directory">
+    <h2>All clubs · A–Z</h2>
+    <div class="team-list">
+      {% for team in teams %}
+      <a class="team-link" href="{{ team.href }}">
+        <span class="team-index">{{ "%02d"|format(team.index) }}</span>
+        <span class="team-dot" style="background:{{ team.colour }}"></span>
+        <span>{{ team.name }}</span>
+        {% if not team.point %}<span class="map-note">location pending</span>{% endif %}
+      </a>
+      {% endfor %}
+    </div>
+  </section>
+</div>
+{% endblock %}

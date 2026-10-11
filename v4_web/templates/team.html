@@ -12,27 +12,37 @@
             <div>
                 <h1 class="text-xl font-bold text-white tracking-wide">{{ profile.name }}</h1>
                 <div class="text-xs font-mono text-slate-500">
-                    {{ profile.venue }}
+                    {{ profile.venue or "Club details unavailable" }}
                     {% if profile.founded %} · Est. {{ profile.founded }}{% endif %}
                 </div>
             </div>
         </div>
         <div class="flex items-center gap-3">
+            {% set available_seasons = season_options if season_options is defined else [2025,2024,2023,2022,2021,2020,2019,2018,2017,2016,2015,2014] %}
             <select id="season-select"
                     class="bg-[#0f172a] border border-slate-700 text-slate-300
                            text-sm font-mono rounded-lg px-3 py-1.5 cursor-pointer
                            focus:outline-none focus:border-cyan-700">
-                {% for yr in [2025,2024,2023,2022,2021,2020,2019,2018,2017,2016,2015,2014] %}
+                {% for yr in available_seasons %}
                 {% set display = yr|string + "/" + ((yr + 1)|string)[-2:] %}
                 <option value="{{ yr }}" {% if yr == current_season %}selected{% endif %}>
-                    {{ display }}{% if yr < 2023 %} ◦{% endif %}
+                    {{ display }}{% if yr < 2023 and season_options is not defined %} ◦{% endif %}
                 </option>
                 {% endfor %}
             </select>
-            <a href="/" class="text-xs font-mono text-slate-500 hover:text-slate-300
+            <a href="{{ '/league/' ~ team_page_league if team_page_league is defined else '/' }}"
+               class="text-xs font-mono text-slate-500 hover:text-slate-300
                                border border-slate-700 px-2 py-1 rounded transition">← Home</a>
         </div>
     </div>
+
+    {% if team_page_league is defined and not match_data_available %}
+    <div class="bg-amber-950/30 border border-amber-900/60 rounded-xl px-4 py-3
+                text-xs font-mono text-amber-200/80">
+        Club metadata and season results are currently unavailable from the Serie A feed.
+        Model ratings are shown below where historical priors exist.
+    </div>
+    {% endif %}
 
     <!-- UPCOMING FIXTURES STRIP -->
     {% if team_fixtures %}
@@ -45,7 +55,7 @@
             {% for f in team_fixtures %}
             {% set is_home = (f.home == profile.name or
                               f.home in [profile.short_name, profile.tla]) %}
-            <a href="/match?match_id={{ f.match_id }}"
+            <a href="/match?match_id={{ f.match_id }}{% if team_page_league is defined %}&league={{ team_page_league }}{% endif %}"
                class="flex-none border rounded-lg px-3 py-1.5 text-center
                       min-w-[115px] transition cursor-pointer
                       border-slate-700 bg-slate-900/40 text-slate-300
@@ -136,11 +146,11 @@
                 <div class="space-y-2 text-xs font-mono">
                     <div class="flex justify-between">
                         <span class="text-slate-500">Manager</span>
-                        <span class="text-slate-200 font-bold">{{ coach }}</span>
+                        <span class="text-slate-200 font-bold">{{ coach or "Not available" }}</span>
                     </div>
                     <div class="flex justify-between">
                         <span class="text-slate-500">Stadium</span>
-                        <span class="text-slate-300">{{ profile.venue }}</span>
+                        <span class="text-slate-300">{{ profile.venue or "Not available" }}</span>
                     </div>
                     {% if profile.founded %}
                     <div class="flex justify-between">
@@ -151,7 +161,7 @@
                     {% if profile.colours %}
                     <div class="flex justify-between">
                         <span class="text-slate-500">Colours</span>
-                        <span class="text-slate-300">{{ profile.colours }}</span>
+                        <span class="text-slate-300">{{ profile.colours or "Not available" }}</span>
                     </div>
                     {% endif %}
                 </div>
@@ -167,11 +177,13 @@
                     {% for row in standings %}
                     {% set is_current = (row.team_id == team_id) %}
                     {% if row.position <= 4 %}{% set zone = "#1d4ed8" %}
-                    {% elif row.position <= 6 %}{% set zone = "#d97706" %}
-                    {% elif row.position == 7 %}{% set zone = "#15803d" %}
+                    {% elif team_page_league is defined and row.position == 5 %}{% set zone = "#d97706" %}
+                    {% elif team_page_league is defined and row.position == 6 %}{% set zone = "#15803d" %}
+                    {% elif team_page_league is not defined and row.position <= 6 %}{% set zone = "#d97706" %}
+                    {% elif team_page_league is not defined and row.position == 7 %}{% set zone = "#15803d" %}
                     {% elif row.position >= 18 %}{% set zone = "#991b1b" %}
                     {% else %}{% set zone = "transparent" %}{% endif %}
-                    <a href="/team/{{ row.team_id }}"
+                    <a href="{{ row.team_href if row.team_href is defined else '/team/' ~ row.team_id }}"
                        class="flex items-center gap-1.5 px-1 py-1 rounded text-xs font-mono
                               hover:bg-slate-800/40 transition"
                        style="{% if is_current %}background:rgba(255,255,255,0.06);outline:1px solid {{ team_colour }};{% endif %}">
@@ -182,7 +194,7 @@
                             {{ row.position }}
                         </span>
                         <!-- Use CDN crest directly with team_id to avoid name mismatch -->
-                        <img src="https://crests.football-data.org/{{ row.team_id }}.png"
+                        <img src="{{ row.crest or ('https://crests.football-data.org/' ~ row.team_id ~ '.png') }}"
                              class="w-4 h-4 object-contain flex-none"
                              onerror="this.style.display='none'"/>
                         <span class="flex-1 truncate
@@ -195,7 +207,7 @@
                             {{ row.points }}
                         </span>
                     </a>
-                    {% if row.position in [4, 6, 7, 17] %}
+                    {% if row.position in ([4, 5, 6, 17] if team_page_league is defined else [4, 6, 7, 17]) %}
                     <div class="border-t border-slate-800/50 my-0.5"></div>
                     {% endif %}
                     {% endfor %}
@@ -218,7 +230,7 @@
 
             <!-- Next fixture -->
             {% if next_fixture %}
-            <a href="/match?match_id={{ next_fixture.match_id }}"
+            <a href="/match?match_id={{ next_fixture.match_id }}{% if team_page_league is defined %}&league={{ team_page_league }}{% endif %}"
                class="block bg-[#0f172a] border border-cyan-800 rounded-xl p-4 shadow-xl
                       hover:border-cyan-600 transition">
                 <div class="text-xs font-mono text-cyan-400/70 uppercase tracking-widest mb-2">
@@ -253,6 +265,15 @@
                     </span>
                 </div>
                 {{ pitch_svg | safe }}
+            </div>
+            {% elif team_page_league is defined %}
+            <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl">
+                <div class="text-xs font-mono text-slate-400 uppercase tracking-widest mb-2">
+                    Typical Starting XI
+                </div>
+                <p class="text-xs font-mono text-slate-500">
+                    A verified Serie A squad and formation are not currently available.
+                </p>
             </div>
             {% endif %}
 
@@ -310,6 +331,15 @@
                         </div>
                     </div>
                     {% endfor %}
+                </div>
+                {% elif team_page_league is defined %}
+                <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl">
+                    <div class="text-xs font-mono text-slate-400 uppercase tracking-widest mb-2">
+                        Squad
+                    </div>
+                    <p class="text-xs font-mono text-slate-500">
+                        Player roster data is not currently available from the league feed.
+                    </p>
                 </div>
                 {% endif %}
                 {% endfor %}
@@ -395,7 +425,7 @@
                         <td class="py-1.5 pr-3 text-slate-500">{{ r.date }}</td>
                         <td class="py-1.5 pr-6">
                             {% if r.match_id %}
-                            <a href="/match?match_id={{ r.match_id }}"
+                            <a href="/match?match_id={{ r.match_id }}{% if team_page_league is defined %}&league={{ team_page_league }}{% endif %}"
                                class="text-slate-300 hover:text-white transition">
                                 {{ r.opponent }}
                             </a>
@@ -430,7 +460,11 @@
 
 <script>
 document.getElementById('season-select').addEventListener('change', function() {
+    {% if team_page_league is defined %}
+    window.location.href = `/league-team?league={{ team_page_league }}&team={{ profile.name | urlencode }}&season=${this.value}`;
+    {% else %}
     window.location.href = `/team/{{ team_id }}?season=${this.value}`;
+    {% endif %}
 });
 </script>
 {% endblock %}
