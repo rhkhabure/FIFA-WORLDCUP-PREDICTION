@@ -210,8 +210,6 @@
             </thead>
             <tbody>
                 {% for p in finished %}
-                {% set dc_pred = "H" if p.pre_dc_home > p.pre_dc_draw and p.pre_dc_home > p.pre_dc_away
-                                 else ("D" if p.pre_dc_draw > p.pre_dc_away else "A") %}
                 {% set p_league = p.get("league", "pl") if p.get else "pl" %}
                 {% set match_url = "/match?match_id=" ~ p.match_id ~ ("&league=laliga" if p_league == "laliga" else "&league=pl") %}
                 <tr>
@@ -239,7 +237,7 @@
                         {% else %}—{% endif %}
                     </td>
                     <td>
-                        <span class="badge-{{ dc_pred|lower }}">{{ dc_pred }}</span>
+                        <span class="badge-{{ p.pre_pred|lower }}">{{ p.pre_pred }}</span>
                     </td>
                     <td style="font-weight:800">{{ p.actual_hg }}–{{ p.actual_ag }}</td>
                     <td>
@@ -283,8 +281,7 @@
             </thead>
             <tbody>
                 {% for p in upcoming %}
-                {% set dc_pred = "H" if p.pre_dc_home and p.pre_dc_home > p.pre_dc_draw and p.pre_dc_home > p.pre_dc_away
-                                 else ("D" if p.pre_dc_home and p.pre_dc_draw > p.pre_dc_away else "A") %}
+                {% set dc_pred = p.pre_pred %}
                 {% set conf = [p.pre_dc_home or 0, p.pre_dc_draw or 0, p.pre_dc_away or 0]|max %}
                 {% set p_league = p.get("league", "pl") if p.get else "pl" %}
                 {% set match_url = "/match?match_id=" ~ p.match_id ~ ("&league=laliga" if p_league == "laliga" else "&league=pl") %}

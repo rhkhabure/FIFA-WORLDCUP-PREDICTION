@@ -82,7 +82,7 @@ from fpl import (
 )
 from lineup_adjustment import compute_lineup_adjusted_odds, get_absent_key_players
 from prediction_job import run_prediction_job
-from predictions import get_all_predictions, get_accuracy_stats
+from predictions import get_all_predictions, get_accuracy_stats, predicted_outcome
 from scoreline_matrix import build_scoreline_svg
 from simulate import simulate_cl_tournament, simulate_pl_season
 from teamdata import (
@@ -693,6 +693,26 @@ async def history_page(request: Request):
             season -= 1
 
         all_pred = get_all_predictions(season)
+        for prediction in all_pred:
+            prediction["pre_pred"] = predicted_outcome(
+                prediction.get("pre_dc_home"),
+                prediction.get("pre_dc_draw"),
+                prediction.get("pre_dc_away"),
+            )
+            prediction["adj_pred"] = predicted_outcome(
+                prediction.get("adj_home"),
+                prediction.get("adj_draw"),
+                prediction.get("adj_away"),
+            )
+            if prediction.get("actual_result"):
+                prediction["pre_correct"] = (
+                    int(prediction["pre_pred"] == prediction["actual_result"])
+                    if prediction["pre_pred"] else None
+                )
+                prediction["adj_correct"] = (
+                    int(prediction["adj_pred"] == prediction["actual_result"])
+                    if prediction["adj_pred"] else None
+                )
 
         # Apply league filter
         if league_filter == "pl":

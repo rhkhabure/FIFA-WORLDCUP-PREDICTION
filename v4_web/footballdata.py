@@ -145,14 +145,25 @@ def find_finished_match_by_teams(home_name: str, away_name: str,
     cache = _populate_finished_cache(comp_code)
 
     def norm(s: str) -> str:
-        s = _clean_name(s).lower()
-        # Strip common suffixes fd.org appends
-        s = re.sub(r'\s+(fc|afc|cf|sc|ac|bc|bv|sv|if|fk|sk|mk|rfc)$', '', s)
-        for w in ["hotspur", "wanderers", "& hove albion",
-                  "city", "united", "town", "forest",
-                  "club", "sporting", "deportivo", "real"]:
-            s = s.replace(w, "").strip()
-        return s.strip()
+        s = _clean_name(s).casefold()
+        s = re.sub(r"\b(?:fc|afc|cf|sad|sc|ac|bc|bv|sv|if|fk|sk|mk|rfc)\b", "", s)
+        s = re.sub(r"[^a-z0-9]+", " ", s).strip()
+        aliases = {
+            "man city": "manchester city",
+            "man utd": "manchester united",
+            "man united": "manchester united",
+            "nott m forest": "nottingham forest",
+            "notts forest": "nottingham forest",
+            "spurs": "tottenham hotspur",
+            "tottenham": "tottenham hotspur",
+            "newcastle": "newcastle united",
+            "leeds": "leeds united",
+            "wolves": "wolverhampton wanderers",
+            "brighton": "brighton hove albion",
+            "west ham": "west ham united",
+            "bournemouth": "bournemouth",
+        }
+        return aliases.get(s, s)
 
     h_n, a_n = norm(home_name), norm(away_name)
 

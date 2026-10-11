@@ -62,6 +62,16 @@ DB_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH = DB_DIR / "predictions.db"
 
 
+def predicted_outcome(home_pct, draw_pct, away_pct) -> str | None:
+    """Return the most likely H/D/A outcome using stable H, D, A tie-breaking."""
+    if home_pct is None or draw_pct is None or away_pct is None:
+        return None
+    return max(
+        (("H", home_pct), ("D", draw_pct), ("A", away_pct)),
+        key=lambda outcome: outcome[1],
+    )[0]
+
+
 # ── Database setup ─────────────────────────────────────────────────────────────
 
 def _conn() -> sqlite3.Connection:
@@ -241,12 +251,6 @@ def log_result(
             return  # not found or already logged
 
         # Which outcome did each model predict?
-        def predicted_outcome(home_pct, draw_pct, away_pct) -> str | None:
-            if home_pct is None:
-                return None
-            probs = {"H": home_pct, "D": draw_pct, "A": away_pct}
-            return max(probs, key=probs.get)
-
         pre_pred = predicted_outcome(
             row["pre_dc_home"], row["pre_dc_draw"], row["pre_dc_away"]
         )
