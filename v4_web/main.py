@@ -263,6 +263,44 @@ def league_ctx(league_key: str = "pl") -> dict:
 def _team_navigation(
     league_key: str, team_names: set[str] | None = None
 ) -> tuple[list[dict], list[dict]]:
+    if league_key == "pl":
+        quick_teams = [
+            ("Arsenal", 57),
+            ("Liverpool", 64),
+            ("Manchester City", 65),
+            ("Manchester United", 66),
+            ("Chelsea", 61),
+            ("Tottenham", 73),
+        ]
+        all_teams = [
+            ("Aston Villa", 58),
+            ("Bournemouth", 1044),
+            ("Brentford", 402),
+            ("Brighton", 397),
+            ("Crystal Palace", 354),
+            ("Everton", 62),
+            ("Fulham", 63),
+            ("Ipswich", 610),
+            ("Leeds", 341),
+            ("Newcastle United", 67),
+            ("Nottingham Forest", 351),
+            ("Sunderland", 71),
+            ("West Ham", 563),
+            ("Wolverhampton Wanderers", 76),
+        ]
+
+        def pl_item(name: str, team_id: int) -> dict:
+            return {
+                "name": name,
+                "colour": get_theme_for_team(name).get("primary", "#64748b"),
+                "href": f"/team/{team_id}",
+            }
+
+        return (
+            [pl_item(name, team_id) for name, team_id in quick_teams],
+            [pl_item(name, team_id) for name, team_id in all_teams],
+        )
+
     league_cfg = MATCH_LEAGUES.get(league_key)
     if not league_cfg:
         return [], []
