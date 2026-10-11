@@ -332,7 +332,9 @@
         <img src="/static/logos/laliga.svg" alt="La Liga"
              onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'LL',style:'color:#FFD700;font-weight:900;font-size:14px'}))"/>
       </div>
-      <div class="lc-status today">3 Today</div>
+      <div class="lc-status today">
+        {% if today_count_laliga %}{{ today_count_laliga }} Today{% else %}No games today{% endif %}
+      </div>
     </div>
     <div class="lc-name">La Liga</div>
     <div class="lc-country">Spain · Season 2025/26</div>
@@ -443,51 +445,38 @@
 
   <!-- Fixtures -->
   <div>
-    <div class="section-head">Today across all leagues</div>
+    <div class="section-head">Today's fixtures and weekend results · {{ today }}</div>
     <div class="matches-list">
       {% if today_matches %}
         {% for m in today_matches %}
-        <a href="/match?match_id={{ m.match_id }}" class="match-row">
+        <a href="/match?match_id={{ m.match_id }}&league={{ m.league }}" class="match-row">
           <div class="match-pip" style="background:{{ m.league_colour }}"></div>
           <div style="flex:1;min-width:0">
             <div class="match-name">{{ m.home }} vs {{ m.away }}</div>
-            <div class="match-sub">{{ m.league_name }}</div>
+            <div class="match-sub">
+              {{ m.league_name }} ·
+              {% if m.local_date == today %}Today{% else %}Weekend · {{ m.local_date }}{% endif %}
+            </div>
           </div>
-          {% if m.dc_home %}
-          <div class="match-odds">
-            <span class="odd-pill"
-                  style="background:var(--league-tint);color:var(--league-primary)">
-              H {{ m.dc_home }}%
-            </span>
-            <span class="odd-pill" style="background:#F3F4F6;color:#555">
-              D {{ m.dc_draw }}%
-            </span>
-            <span class="odd-pill" style="background:#FFF7ED;color:#9A3412">
-              A {{ m.dc_away }}%
-            </span>
+          <div class="match-time {% if m.is_live %}live{% endif %}" style="min-width:100px">
+            {% if m.status == "In Play" %}
+              LIVE · {{ m.home_score }}–{{ m.away_score }}
+            {% elif m.status == "Half Time" %}
+              HT · {{ m.home_score }}–{{ m.away_score }}
+            {% elif m.status == "Finished" %}
+              FT · {{ m.home_score }}–{{ m.away_score }}
+            {% elif m.status in ("Postponed", "Cancelled") %}
+              {{ m.status|upper }}
+            {% else %}
+              {{ m.kickoff_eat }}
+            {% endif %}
           </div>
-          {% endif %}
-          <div class="match-time {% if m.is_live %}live{% endif %}">
-            {% if m.is_live %}LIVE {{ m.minute }}'
-            {% else %}{{ m.kickoff_eat }}{% endif %}
-          </div>
-        </a>
-        {% endfor %}
-      {% elif upcoming_fixtures %}
-        {% for f in upcoming_fixtures[:8] %}
-        <a href="/match?match_id={{ f.match_id }}" class="match-row">
-          <div class="match-pip" style="background:#9B59B6"></div>
-          <div style="flex:1;min-width:0">
-            <div class="match-name">{{ f.home }} vs {{ f.away }}</div>
-            <div class="match-sub">Premier League</div>
-          </div>
-          <div class="match-time">{{ f.kickoff_eat }}</div>
         </a>
         {% endfor %}
       {% else %}
         <div class="match-row" style="justify-content:center;padding:20px">
           <span style="font-size:12px;color:var(--text-muted);font-weight:500">
-            No fixtures today — check back on matchday
+            No fixtures today or completed matches from this weekend
           </span>
         </div>
       {% endif %}

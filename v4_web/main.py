@@ -110,7 +110,7 @@ from v4_backend.feature_builder import DCStrengthLookup, TEAM_NAME_ALIASES
 from routes.match import router as match_router, setup as match_setup, dc_pregame, get_effective_gamma
 from routes.nba import router as nba_router, nba_setup
 from nba_model import nba_model
-from constants import EAT, DRAW_PROPENSITY, LEAGUE_FILTERS, LEAGUE_MAP
+from constants import EAT, DRAW_PROPENSITY, LEAGUE_FILTERS, LEAGUE_MAP, MATCH_LEAGUES
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 # DRAW_PROPENSITY, EAT, LEAGUE_FILTERS, LEAGUE_MAP imported from constants.py
@@ -825,44 +825,76 @@ async def history_page(request: Request):
 @app.get("/", response_class=HTMLResponse)
 async def hub(request: Request):
 
-    now_eat = datetime.now(timezone(timedelta(hours=3)))
-    today   = now_eat.date().isoformat()
+    today_date = datetime.now(EAT).date()
+    today = today_date.isoformat()
 
     # PL stats from predictions DB
     try:
-        pl_stats = get_accuracy_stats(season=2025)
+        season = today_date.year if today_date.month >= 7 else today_date.year - 1
+        pl_stats = get_accuracy_stats(season=season)
     except Exception:
         pl_stats = None
 
-    # Upcoming PL fixtures for today strip fallback
-    try:
-        upcoming = fpl_get_upcoming_fixtures(max_fixtures=10)
-    except Exception:
-        upcoming = []
+    # Include today's games plus completed matches from the current/most recent
+    # weekend so results remain visible after the final whistle.
+    weekend_start = (
+        today_date - timedelta(days=today_date.weekday() - 5)
+        if today_date.weekday() >= 5
+        else today_date - timedelta(days=today_date.weekday() + 2)
+    )
+    weekend_end = weekend_start + timedelta(days=1)
+    date_from = weekend_start.isoformat()
+    date_to = max(today_date, weekend_end).isoformat()
+    leagues = {
+        "pl": {"colour": "#9B59B6"},
+        "laliga": {"colour": "#E74C3C"},
+        "bundesliga": {"colour": "#C0392B"},
+        "seriea": {"colour": "#2563EB"},
+        "ligue1": {"colour": "#00A3E0"},
+    }
+    fixtures_by_league = {}
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(leagues)) as pool:
+        requests = {
+            pool.submit(
+                get_fixtures_by_date_fd,
+                MATCH_LEAGUES[league]["comp"],
+                date_from,
+                date_to,
+            ): league
+            for league in leagues
+        }
+        for future in concurrent.futures.as_completed(requests):
+            league = requests[future]
+            try:
+                fixtures_by_league[league] = future.result()
+            except Exception as e:
+                print(f"[hub] {league} fixture fetch error: {e}")
+                fixtures_by_league[league] = []
 
-    # Today's matches across all leagues (PL only for now — expand as leagues added)
     today_matches = []
-    try:
-        for f in upcoming:
-            ko = f.get("kickoff_utc", "")
-            if ko and ko[:10] == today:
-                # Compute DC odds
-                dc = dc_pregame(f["home"], f["away"], "ENG-Premier League")
-                today_matches.append({
-                    "match_id"     : f["match_id"],
-                    "home"         : f["home"],
-                    "away"         : f["away"],
-                    "kickoff_eat"  : f.get("kickoff_eat", ""),
-                    "league_name"  : "Premier League",
-                    "league_colour": "#9B59B6",
-                    "is_live"      : False,
-                    "minute"       : None,
-                    "dc_home"      : dc[0] if dc else None,
-                    "dc_draw"      : dc[1] if dc else None,
-                    "dc_away"      : dc[2] if dc else None,
-                })
-    except Exception:
-        pass
+    for league, league_data in leagues.items():
+        for fixture in fixtures_by_league.get(league, []):
+            fixture_date = fixture.get("local_date", "")
+            if fixture_date == today:
+                pass
+            elif weekend_start.isoformat() <= fixture_date <= weekend_end.isoformat():
+                if fixture["status"] != "Finished":
+                    continue
+            else:
+                continue
+
+            today_matches.append({
+                **fixture,
+                "league": league,
+                "league_name": MATCH_LEAGUES[league]["name"],
+                "league_colour": league_data["colour"],
+                "is_live": fixture["status"] in ("In Play", "Half Time"),
+            })
+    today_matches.sort(key=lambda fixture: fixture["kickoff_utc"])
+    today_count_laliga = sum(
+        1 for fixture in today_matches
+        if fixture["league"] == "laliga" and fixture["local_date"] == today
+    )
 
     return templates.TemplateResponse(
         request=request, name="index.html",
@@ -872,7 +904,8 @@ async def hub(request: Request):
             "league_code"     : "PL",
             "pl_stats"        : pl_stats,
             "today_matches"   : today_matches,
-            "upcoming_fixtures": upcoming,
+            "today"           : today,
+            "today_count_laliga": today_count_laliga,
             "live_count"      : 0,
             "live_count_pl"   : 0,
         }
