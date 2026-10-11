@@ -62,6 +62,28 @@ TEAM_NAME_ALIASES = {
     "Nott'm Forest"  : "Nottingham Forest",   # FPL abbreviation
     "Ipswich Town"   : "Ipswich",             # FPL full name  
      "Newcastle"      : "Newcastle United",    # FPL short name
+    # football-data.org Serie A names -> keys in the Serie A priors
+    "AC Monza"                    : "Monza",
+    "ACF Fiorentina"              : "Fiorentina",
+    "AS Roma"                     : "Roma",
+    "Atalanta BC"                 : "Atalanta",
+    "Bologna FC 1909"             : "Bologna",
+    "Cagliari Calcio"             : "Cagliari",
+    "Como 1907"                   : "Como",
+    "FC Internazionale Milano"    : "Inter",
+    "Frosinone Calcio"            : "Frosinone",
+    "Genoa CFC"                   : "Genoa",
+    "Hellas Verona FC"            : "Verona",
+    "Parma Calcio 1913"           : "Parma Calcio 1913",
+    "SS Lazio"                    : "Lazio",
+    "SSC Napoli"                  : "Napoli",
+    "Torino FC"                   : "Torino",
+    "US Cremonese"                : "Cremonese",
+    "US Lecce"                    : "Lecce",
+    "US Sassuolo Calcio"          : "Sassuolo",
+    "Udinese Calcio"              : "Udinese",
+    "FC Internazionale"           : "Inter",
+    "Hellas Verona"               : "Verona",
 }
 
 

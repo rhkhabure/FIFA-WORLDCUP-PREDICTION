@@ -967,6 +967,7 @@ async def league_page(request: Request, league_key: str):
     League dashboard router.
     PL      → redirects to /match (fully built).
     La Liga → live dashboard with DC odds and upcoming fixtures.
+    Serie A → fixtures, scores and pre-match probabilities.
     Others  → under-construction page.
     """
 
@@ -979,20 +980,15 @@ async def league_page(request: Request, league_key: str):
     if league_key == "laliga":
         return RedirectResponse(url="/match?league=laliga")
 
+    if league_key == "seriea":
+        return await seriea_dashboard(request)
+
     # All other leagues — under construction
     LEAGUE_FEATURES = {
         "bundesliga": [
             ("DC prior odds (18 teams)",          90),
             ("Live match scores via FotMob",      60),
             ("Germany team map",                  15),
-            ("Lineup-adjusted predictions",       10),
-            ("Prediction history logging",        10),
-            ("Neural net live model",             10),
-        ],
-        "seriea": [
-            ("DC prior odds (20 teams)",          90),
-            ("Live match scores via FotMob",      60),
-            ("Italy team map",                    10),
             ("Lineup-adjusted predictions",       10),
             ("Prediction history logging",        10),
             ("Neural net live model",             10),
@@ -1017,6 +1013,104 @@ async def league_page(request: Request, league_key: str):
             "league_name": ctx["league_name"],
             "features"   : LEAGUE_FEATURES.get(league_key, []),
         }
+    )
+
+
+async def seriea_dashboard(request: Request):
+    """Initial Serie A overview with live results and pre-match probabilities."""
+    league_key = "seriea"
+    league_cfg = MATCH_LEAGUES[league_key]
+    priors = priors_db.get(league_cfg["priors"], {})
+    teams = priors.get("teams", {})
+    meta = priors.get("meta", {})
+    today_date = datetime.now(EAT).date()
+    yesterday_date = today_date - timedelta(days=1)
+
+    recent_matches = []
+    try:
+        recent_matches = get_fixtures_by_date_fd(
+            league_cfg["comp"],
+            date_from=yesterday_date.isoformat(),
+            date_to=today_date.isoformat(),
+        )
+    except Exception as e:
+        print(f"[seriea] recent fixture fetch error: {e}")
+
+    upcoming_raw = []
+    try:
+        upcoming_raw = get_upcoming_fixtures_fd(
+            league_cfg["comp"], max_fixtures=20
+        )
+    except Exception as e:
+        print(f"[seriea] upcoming fixture fetch error: {e}")
+
+    def enrich_fixture(fixture):
+        dc = dc_pregame(fixture["home"], fixture["away"], league_cfg["priors"])
+        home_key = TEAM_NAME_ALIASES.get(fixture["home"], fixture["home"])
+        away_key = TEAM_NAME_ALIASES.get(fixture["away"], fixture["away"])
+        return {
+            **fixture,
+            "status": fixture.get("status", "Not Started"),
+            "home_score": fixture.get("home_score"),
+            "away_score": fixture.get("away_score"),
+            "dc_home": dc[0] if dc else None,
+            "dc_draw": dc[1] if dc else None,
+            "dc_away": dc[2] if dc else None,
+            "pred": (
+                "H" if dc and dc[0] >= dc[1] and dc[0] >= dc[2]
+                else "D" if dc and dc[1] >= dc[2]
+                else "A"
+            ) if dc else None,
+            "home_has_prior": home_key in teams,
+            "away_has_prior": away_key in teams,
+        }
+
+    yesterday_matches = [
+        enrich_fixture(match) for match in recent_matches
+        if match["local_date"] == yesterday_date.isoformat()
+    ]
+    today_by_id = {
+        match["match_id"]: enrich_fixture(match)
+        for match in recent_matches
+        if match["local_date"] == today_date.isoformat()
+    }
+    for fixture in upcoming_raw:
+        if (
+            fixture.get("local_date") == today_date.isoformat()
+            and fixture["match_id"] not in today_by_id
+        ):
+            today_by_id[fixture["match_id"]] = enrich_fixture(fixture)
+
+    today_matches = sorted(
+        today_by_id.values(), key=lambda fixture: fixture.get("kickoff_utc", "")
+    )
+    upcoming = [
+        enrich_fixture(fixture) for fixture in upcoming_raw
+        if fixture.get("local_date", "") > today_date.isoformat()
+    ][:15]
+    trained_seasons = meta.get("trained_on_seasons", [])
+
+    return templates.TemplateResponse(
+        request=request,
+        name="league_dashboard.html",
+        context={
+            "request": request,
+            **league_ctx(league_key),
+            "league_key": league_key,
+            "title": league_cfg["name"],
+            "today": today_date.isoformat(),
+            "yesterday": yesterday_date.isoformat(),
+            "today_matches": today_matches,
+            "yesterday_matches": yesterday_matches,
+            "upcoming": upcoming,
+            "team_count": len(teams),
+            "home_advantage": round(meta.get("gamma_home_advantage", 1.0), 3),
+            "trained_seasons": ", ".join(trained_seasons),
+            "fallback_fixture_count": sum(
+                not (fixture["home_has_prior"] and fixture["away_has_prior"])
+                for fixture in today_matches + yesterday_matches + upcoming
+            ),
+        },
     )
 
 

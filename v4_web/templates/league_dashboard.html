@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+.league-heading{margin-bottom:20px}
+.league-heading h1{font-size:23px;font-weight:900;color:var(--league-primary);margin-bottom:4px}
+.league-heading p,.muted{font-size:11px;color:var(--text-muted)}
+.stat-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:24px}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:13px 15px}
+.stat strong{display:block;font:800 20px var(--font-mono);color:var(--league-primary)}
+.stat span{font-size:10px;color:var(--text-secondary)}
+.section-title{font-size:10px;font-weight:800;letter-spacing:1.3px;text-transform:uppercase;color:var(--text-muted);margin:20px 0 9px}
+.fixture-list{display:grid;gap:8px;margin-bottom:20px}
+.fixture{display:flex;align-items:center;gap:14px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:13px 15px;text-decoration:none;color:inherit;transition:border-color .15s}
+.fixture:hover{border-color:var(--league-vivid)}
+.fixture-main{flex:1;min-width:0}
+.teams{font-size:13px;font-weight:800;color:var(--league-primary)}
+.fixture-meta{font-size:10px;color:var(--text-muted);margin-top:4px}
+.score{font:800 16px var(--font-mono);color:var(--league-primary);white-space:nowrap}
+.odds{display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end}
+.odd{font:700 10px var(--font-mono);padding:4px 7px;border-radius:6px;background:var(--league-tint);color:var(--league-primary);white-space:nowrap}
+.empty{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;color:var(--text-muted);font-size:12px}
+.notice{padding:10px 13px;margin:0 0 18px;border-radius:9px;background:var(--league-tint);font-size:11px;color:var(--text-secondary)}
+.live{color:#c0392b;font-weight:800}
+@media(max-width:640px){.fixture{align-items:flex-start;flex-wrap:wrap}.odds{width:100%;justify-content:flex-start}}
+</style>
+
+<header class="league-heading">
+  <h1>{{ title }}</h1>
+  <p>Serie A fixtures, scores and Dixon-Coles pre-match probabilities</p>
+</header>
+
+<div class="stat-row">
+  <div class="stat"><strong>{{ team_count }}</strong><span>Teams in priors · seasons {{ trained_seasons }}</span></div>
+  <div class="stat"><strong>{{ upcoming|length }}</strong><span>Upcoming fixtures loaded</span></div>
+  <div class="stat"><strong>{{ today_matches|length }}</strong><span>Today's fixtures · {{ today }}</span></div>
+  <div class="stat"><strong>{{ home_advantage }}</strong><span>Historical home advantage</span></div>
+</div>
+
+{% if fallback_fixture_count %}
+<div class="notice">
+  Some fixtures include teams absent from the historical priors ({{ fallback_fixture_count }} fixture{{ 's' if fallback_fixture_count != 1 else '' }}).
+  Their probabilities use the model's bottom-quartile fallback rather than team-specific strengths.
+</div>
+{% endif %}
+
+{% for heading, matches in [("Yesterday · " ~ yesterday, yesterday_matches), ("Today · " ~ today, today_matches), ("Upcoming fixtures", upcoming)] %}
+<h2 class="section-title">{{ heading }}</h2>
+{% if matches %}
+<div class="fixture-list">
+  {% for f in matches %}
+  <a class="fixture" href="/match?match_id={{ f.match_id }}&amp;league=seriea">
+    <div class="fixture-main">
+      <div class="teams">{{ f.home }} <span class="muted">vs</span> {{ f.away }}</div>
+      <div class="fixture-meta">
+        {{ f.kickoff_eat }}{% if f.status %} · <span class="{{ 'live' if f.status in ('In Play', 'Half Time') else '' }}">{{ f.status }}</span>{% endif %}{% if f.gameweek %} · Matchday {{ f.gameweek }}{% endif %}
+      </div>
+    </div>
+    {% if f.home_score is not none and f.away_score is not none %}
+    <strong class="score">{{ f.home_score }} – {{ f.away_score }}</strong>
+    {% elif f.dc_home is not none %}
+    <div class="odds">
+      <span class="odd">Home {{ f.dc_home }}%</span>
+      <span class="odd">Draw {{ f.dc_draw }}%</span>
+      <span class="odd">Away {{ f.dc_away }}%</span>
+    </div>
+    {% endif %}
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty">No fixtures available for this period.</div>
+{% endif %}
+{% endfor %}
+{% endblock %}

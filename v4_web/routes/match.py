@@ -861,7 +861,7 @@ async def match(request: Request):
         home_formation = None
         away_formation = None
 
-        if active_ctx_key == "laliga" and str(match_id).isdigit():
+        if active_ctx_key in ("laliga", "seriea") and str(match_id).isdigit():
             try:
                 match_data = get_live_match_data(match_id)
                 if match_data and match_data.get("home_team") != "Unknown Home":
@@ -869,7 +869,7 @@ async def match(request: Request):
                     fd_home = match_data.get("home_team", "")
                     fd_away = match_data.get("away_team", "")
             except Exception as e:
-                print(f"[match] La Liga match detail error: {e}")
+                print(f"[match] {active_name} match detail error: {e}")
 
         # Step 0a: BBS ID (bbs_UUID) — La Liga live matches
         if str(match_id).startswith("bbs_"):
