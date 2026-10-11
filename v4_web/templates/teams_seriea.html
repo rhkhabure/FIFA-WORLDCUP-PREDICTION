@@ -6,12 +6,24 @@
 .map-heading p,.map-note{font-size:11px;color:var(--text-muted)}
 .map-layout{display:grid;grid-template-columns:minmax(300px,1fr) minmax(280px,.8fr);gap:16px;align-items:start}
 .map-card,.directory{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px}
-.map-card{background:#eaf4fa}
-.italy-map{width:100%;height:auto;display:block;max-height:690px}
-.map-land{fill:#f4f0e4;stroke:#d4c9ac;stroke-width:3;stroke-linejoin:round}
-.map-island{fill:#f4f0e4;stroke:#d4c9ac;stroke-width:2}
-.map-pin circle{stroke:#fff;stroke-width:2}
-.map-pin text{font:700 8px var(--font-mono);fill:#fff;text-anchor:middle;dominant-baseline:central}
+.map-card{background:linear-gradient(145deg,#dcecf2,#eef5f7)}
+.map-toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.map-controls{display:flex;gap:5px}
+.map-controls button{width:30px;height:28px;border:1px solid #9cb4c0;border-radius:7px;background:#fff;color:#1b3340;font-weight:800;cursor:pointer}
+.map-controls button:hover{background:#e4edf2}
+.map-viewport{overflow:hidden;border-radius:10px}
+.italy-map{width:100%;height:auto;display:block;max-height:710px;touch-action:pan-y}
+.map-land{fill:#f9f6ed;stroke:#9aabb0;stroke-width:1.5;stroke-linejoin:round}
+.map-grid{stroke:#a7c1ca;stroke-width:.7;stroke-dasharray:3 6}
+.map-pin{cursor:pointer;outline:none}
+.map-pin .pin-leader{stroke:#405b68;stroke-width:1.2;opacity:.75}
+.map-pin .pin-halo{fill:#fff;opacity:.9}
+.map-pin .pin-dot{stroke:#fff;stroke-width:1.8;filter:drop-shadow(0 1px 2px #29404a)}
+.map-pin text{font:700 7px var(--font-mono);fill:#fff;text-anchor:middle;dominant-baseline:central;pointer-events:none}
+.map-pin.is-highlighted .pin-dot{stroke:#102a3a;stroke-width:3}
+.map-pin.is-highlighted .pin-halo{fill:#ffdf75;opacity:1}
+.team-link.is-highlighted{background:var(--league-tint);outline:2px solid var(--league-vivid);color:var(--league-primary)}
+.team-link.is-highlighted .team-index{color:var(--league-primary)}
 .team-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:5px;margin-top:10px}
 .team-link{display:flex;align-items:center;gap:9px;padding:8px;border-radius:8px;text-decoration:none;color:var(--text-primary);font-size:11px;font-weight:700}
 .team-link:hover{background:var(--league-tint);color:var(--league-primary)}
@@ -25,35 +37,55 @@
 <header class="map-heading">
   <div>
     <h1>Serie A · Italy</h1>
-    <p>{{ teams|length }} clubs · {{ mapped_count }} approximate city/stadium locations · select a club for its model profile</p>
+    <p>{{ teams|length }} clubs · {{ mapped_count }} stadium locations · select a club for its model profile</p>
   </div>
   <a href="/league/seriea" style="font-size:11px;font-weight:800;color:var(--league-vivid);text-decoration:none">← Serie A dashboard</a>
 </header>
 
 <div class="map-layout">
-  <section class="map-card" aria-label="Approximate Serie A club map">
-    <svg class="italy-map" viewBox="0 0 500 610" role="img" aria-label="Map of Italy with Serie A club markers">
-      <path class="map-land" d="M55 49 L91 34 L124 42 L151 36 L181 48 L208 44 L229 59 L253 58 L270 76 L290 76 L310 92 L326 95 L343 114 L363 120 L376 137 L395 145 L407 164 L422 179 L424 197 L412 211 L400 223 L407 239 L401 255 L387 266 L373 265 L365 278 L372 293 L385 306 L389 322 L378 335 L366 346 L358 362 L365 377 L377 390 L390 400 L391 414 L379 424 L365 417 L355 402 L346 388 L335 379 L326 386 L330 403 L340 419 L350 437 L348 454 L338 467 L328 463 L323 449 L317 433 L307 420 L296 406 L283 389 L272 370 L261 351 L250 333 L239 315 L228 296 L217 277 L206 258 L195 239 L184 219 L171 201 L157 184 L143 168 L130 152 L116 137 L100 123 L84 108 L68 91 L55 75 Z"/>
-      <path class="map-island" d="M126 406 L143 397 L161 402 L170 418 L164 438 L151 450 L135 443 L126 427 Z"/>
-      <path class="map-island" d="M300 523 L323 512 L347 518 L363 535 L359 557 L343 571 L319 568 L304 551 Z"/>
-      <text x="98" y="390" fill="#8da3b0" font-size="11" font-weight="700">TYRRHENIAN SEA</text>
-      <text x="388" y="288" fill="#8da3b0" font-size="10" font-weight="700" transform="rotate(82 388 288)">ADRIATIC SEA</text>
+  <section class="map-card" aria-label="Serie A stadium map">
+    <div class="map-toolbar">
+      <strong style="font-size:10px;letter-spacing:.08em;color:#3d5a68">ITALY · STADIUM LOCATIONS</strong>
+      <div class="map-controls" aria-label="Map zoom controls">
+        <button type="button" data-zoom="in" aria-label="Zoom in">+</button>
+        <button type="button" data-zoom="out" aria-label="Zoom out">−</button>
+        <button type="button" data-zoom="reset" aria-label="Reset map zoom">Reset</button>
+      </div>
+    </div>
+    <div class="map-viewport">
+    <svg id="seriea-map" class="italy-map" viewBox="0 0 560 660" role="img" aria-label="Geographic map of Italy with clickable Serie A stadium markers">
+      <path class="map-grid" d="M40 180H520 M40 340H520 M40 500H520 M160 20V640 M320 20V640 M480 20V640"/>
+      <path class="map-land" d="M203.3 73.9 L226.9 81.6 L231.4 71.4 L270 62 L278.7 80.8 L334.5 94.7 L330.2 121.3 L339.6 144.3 L308.5 136.4 L276.8 155.6 L279 182.4 L274.2 197.8 L287 225.3 L323.5 252.5 L343.2 297.1 L386.6 340.6 L417.1 340.3 L426.6 352.2 L415.7 363 L479.2 398.8 L512.7 427 L516.7 437.1 L509.4 456.4 L487.8 431.2 L453.9 422.3 L437.5 457.2 L465.7 477.3 L461.1 505.4 L444.8 508.6 L423.9 555 L407.7 559.1 L407.8 542.6 L415.8 513.6 L424.3 502.1 L397.1 443.6 L380.9 436.9 L369.4 413.6 L344.4 403.7 L327.5 382 L298.6 378.5 L268.2 354.2 L232.5 319 L206 287.9 L193.8 234.5 L174.4 228.2 L142.7 210.4 L124.7 217.7 L102.2 242.8 L86 246.7 L90.4 223.3 L69.3 216.4 L59.2 174.7 L72.8 158.2 L61.3 137.9 L62.9 122.7 L79.7 134.2 L98.5 131.7 L120.3 113.4 L127.1 121.9 L145.7 120.2 L154.1 98.4 L183 105.2 L200.2 96.1 Z"/>
+      <path class="map-land" d="M371.7 546.4 L401.3 541.7 L387.2 584.2 L393.1 601 L384.9 628.7 L355.1 608.4 L335.2 602.6 L280.8 575.1 L286.3 547.4 L331.9 552.3 Z"/>
+      <path class="map-land" d="M135.7 397.6 L155.2 380.9 L178.6 419.2 L173.1 490.6 L155.4 487.2 L139.5 505.2 L124.7 490.9 L123.1 425.8 L114.2 394.9 Z"/>
+      <text x="354" y="324" fill="#7895a0" font-size="10" font-weight="700" transform="rotate(62 354 324)">ADRIATIC SEA</text>
+      <text x="82" y="345" fill="#7895a0" font-size="10" font-weight="700">TYRRHENIAN SEA</text>
+      <g id="stadium-markers">
       {% for team in teams if team.point %}
-      <a class="map-pin" href="{{ team.href }}" aria-label="{{ team.name }} · {{ team.point.city }}">
-        <title>{{ team.name }} · {{ team.point.city }}</title>
-        <circle cx="{{ team.point.x }}" cy="{{ team.point.y }}" r="10" fill="{{ team.colour }}"/>
-        <text x="{{ team.point.x }}" y="{{ team.point.y }}">{{ team.index }}</text>
+      <a class="map-pin" data-map-key="{{ team.map_key }}" href="{{ team.href }}"
+         aria-label="{{ team.name }} · {{ team.point.stadium }}, {{ team.point.city }}">
+        <title>{{ team.name }} — {{ team.point.stadium }}, {{ team.point.city }}</title>
+        {% if team.point.leader %}
+        <line class="pin-leader" x1="{{ team.point.x }}" y1="{{ team.point.y }}"
+              x2="{{ team.point.pin_x }}" y2="{{ team.point.pin_y }}"/>
+        <circle class="pin-halo" cx="{{ team.point.x }}" cy="{{ team.point.y }}" r="3"/>
+        {% endif %}
+        <circle class="pin-halo" cx="{{ team.point.pin_x }}" cy="{{ team.point.pin_y }}" r="12"/>
+        <circle class="pin-dot" cx="{{ team.point.pin_x }}" cy="{{ team.point.pin_y }}" r="9" fill="{{ team.colour }}"/>
+        <text x="{{ team.point.pin_x }}" y="{{ team.point.pin_y }}">{{ team.index }}</text>
       </a>
       {% endfor %}
+      </g>
     </svg>
-    <p class="map-note">The coastline is a simplified illustration; markers indicate approximate club city/stadium locations. Numbered markers match the alphabetical directory.</p>
+    </div>
+    <p class="map-note">Markers use stadium coordinates; pins sharing a ground are offset and connected to their location. Hover or focus a marker or club in the directory to highlight its match. Geography: Natural Earth 1:110m, public domain; simplified for display. Stadium coordinates are approximate.</p>
   </section>
 
   <section class="directory">
     <h2>All clubs · A–Z</h2>
     <div class="team-list">
       {% for team in teams %}
-      <a class="team-link" href="{{ team.href }}">
+      <a class="team-link" data-map-key="{{ team.map_key }}" href="{{ team.href }}">
         <span class="team-index">{{ "%02d"|format(team.index) }}</span>
         <span class="team-dot" style="background:{{ team.colour }}"></span>
         <span>{{ team.name }}</span>
@@ -63,4 +95,36 @@
     </div>
   </section>
 </div>
+<script>
+(() => {
+  const map = document.getElementById("seriea-map");
+  if (!map) return;
+  const pins = [...map.querySelectorAll(".map-pin")];
+  const entries = [...document.querySelectorAll(".team-link[data-map-key]")];
+  const elements = [...pins, ...entries];
+  const base = { x: 0, y: 0, width: 560, height: 660 };
+  let scale = 1;
+  const drawZoom = () => {
+    const width = base.width / scale;
+    const height = base.height / scale;
+    map.setAttribute("viewBox", `${(base.width - width) / 2} ${(base.height - height) / 2} ${width} ${height}`);
+  };
+  document.querySelectorAll("[data-zoom]").forEach(button => {
+    button.addEventListener("click", () => {
+      const action = button.dataset.zoom;
+      scale = action === "reset" ? 1 : Math.max(1, Math.min(3, scale * (action === "in" ? 1.25 : 0.8)));
+      drawZoom();
+    });
+  });
+  const highlight = key => {
+    elements.forEach(element => element.classList.toggle("is-highlighted", element.dataset.mapKey === key));
+  };
+  elements.forEach(element => {
+    element.addEventListener("mouseenter", () => highlight(element.dataset.mapKey));
+    element.addEventListener("mouseleave", () => highlight(""));
+    element.addEventListener("focus", () => highlight(element.dataset.mapKey));
+    element.addEventListener("blur", () => highlight(""));
+  });
+})();
+</script>
 {% endblock %}

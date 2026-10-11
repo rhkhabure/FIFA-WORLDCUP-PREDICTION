@@ -404,48 +404,41 @@ async def teams_laliga(request: Request):
 
 @app.get("/teams/seriea", response_class=HTMLResponse)
 async def teams_seriea(request: Request):
-    """Approximate Italy club map and alphabetical club directory."""
+    """Stadium-location map and alphabetical Serie A club directory."""
     locations = {
-        "AC Milan": ("Milan", 45.4781, 9.1240),
-        "Atalanta": ("Bergamo", 45.7091, 9.6808),
-        "Bologna": ("Bologna", 44.4925, 11.3096),
-        "Cagliari": ("Cagliari", 39.1994, 9.1367),
-        "Como": ("Como", 45.8080, 9.0852),
-        "Cremonese": ("Cremona", 45.1362, 10.0320),
-        "Empoli": ("Empoli", 43.7262, 10.9470),
-        "Fiorentina": ("Florence", 43.7808, 11.2820),
-        "Frosinone": ("Frosinone", 41.6459, 13.3480),
-        "Genoa": ("Genoa", 44.4162, 8.9524),
-        "Inter": ("Milan", 45.4781, 9.1240),
-        "Juventus": ("Turin", 45.1096, 7.6413),
-        "Lazio": ("Rome", 41.9339, 12.4547),
-        "Lecce": ("Lecce", 40.3515, 18.2084),
-        "Monza": ("Monza", 45.5869, 9.2012),
-        "Napoli": ("Naples", 40.8279, 14.1930),
-        "Parma Calcio 1913": ("Parma", 44.7832, 10.3390),
-        "Pisa": ("Pisa", 43.7270, 10.3950),
-        "Roma": ("Rome", 41.9340, 12.4547),
-        "Salernitana": ("Salerno", 40.6242, 14.8290),
-        "Sampdoria": ("Genoa", 44.4162, 8.9524),
-        "Sassuolo": ("Reggio Emilia", 44.7157, 10.6500),
-        "Spezia": ("La Spezia", 44.1080, 9.8600),
-        "Torino": ("Turin", 45.1096, 7.6413),
-        "Udinese": ("Udine", 46.0819, 13.1990),
-        "Venezia": ("Venice", 45.4340, 12.3388),
-        "Verona": ("Verona", 45.4352, 10.9686),
+        "AC Milan": ("Milan", "San Siro", 45.4781, 9.1240, -12, -12),
+        "Atalanta": ("Bergamo", "Gewiss Stadium", 45.7091, 9.6808, 18, -8),
+        "Bari": ("Bari", "Stadio San Nicola", 41.0840, 16.8400, 0, 0),
+        "Bologna": ("Bologna", "Stadio Renato Dall'Ara", 44.4925, 11.3096, 0, 0),
+        "Cagliari": ("Cagliari", "Unipol Domus", 39.1994, 9.1367, 0, 0),
+        "Como": ("Como", "Stadio Giuseppe Sinigaglia", 45.8080, 9.0852, -14, -12),
+        "Cremonese": ("Cremona", "Stadio Giovanni Zini", 45.1362, 10.0320, 0, 0),
+        "Empoli": ("Empoli", "Stadio Carlo Castellani", 43.7262, 10.9470, 0, 0),
+        "Fiorentina": ("Florence", "Stadio Artemio Franchi", 43.7808, 11.2820, 0, -15),
+        "Frosinone": ("Frosinone", "Stadio Benito Stirpe", 41.6459, 13.3480, 0, 0),
+        "Genoa": ("Genoa", "Stadio Luigi Ferraris", 44.4162, 8.9524, -12, -12),
+        "Inter": ("Milan", "San Siro", 45.4781, 9.1240, 12, 12),
+        "Juventus": ("Turin", "Allianz Stadium", 45.1096, 7.6413, -12, -12),
+        "Lazio": ("Rome", "Stadio Olimpico", 41.9339, 12.4547, -12, -12),
+        "Lecce": ("Lecce", "Stadio Via del Mare", 40.3515, 18.2084, 0, 0),
+        "Monza": ("Monza", "U-Power Stadium", 45.5869, 9.2012, 12, -14),
+        "Napoli": ("Naples", "Stadio Diego Armando Maradona", 40.8279, 14.1930, 0, 0),
+        "Palermo": ("Palermo", "Stadio Renzo Barbera", 38.1260, 13.3500, 0, 0),
+        "Parma": ("Parma", "Stadio Ennio Tardini", 44.7832, 10.3390, 0, 0),
+        "Parma Calcio 1913": ("Parma", "Stadio Ennio Tardini", 44.7832, 10.3390, 0, 0),
+        "Pisa": ("Pisa", "Arena Garibaldi", 43.7270, 10.3950, 0, 0),
+        "Roma": ("Rome", "Stadio Olimpico", 41.9339, 12.4547, 12, 12),
+        "Salernitana": ("Salerno", "Stadio Arechi", 40.6242, 14.8290, 0, 0),
+        "Sampdoria": ("Genoa", "Stadio Luigi Ferraris", 44.4162, 8.9524, 12, 12),
+        "Sassuolo": ("Reggio Emilia", "MAPEI Stadium", 44.7157, 10.6500, 0, 18),
+        "Spezia": ("La Spezia", "Stadio Alberto Picco", 44.1080, 9.8600, 0, 0),
+        "Torino": ("Turin", "Stadio Olimpico Grande Torino", 45.0417, 7.6500, 12, 12),
+        "Udinese": ("Udine", "Bluenergy Stadium", 46.0819, 13.1990, 0, 0),
+        "Venezia": ("Venice", "Stadio Pier Luigi Penzo", 45.4340, 12.3388, 0, 0),
+        "Verona": ("Verona", "Stadio Marcantonio Bentegodi", 45.4352, 10.9686, 0, 0),
     }
     priors = priors_db.get(MATCH_LEAGUES["seriea"]["priors"], {}).get("teams", {})
     team_names = set(priors)
-    offsets = {
-        "AC Milan": (-9, 0),
-        "Inter": (9, 0),
-        "Lazio": (-9, 0),
-        "Roma": (9, 0),
-        "Sampdoria": (-9, 0),
-        "Genoa": (9, 0),
-        "Juventus": (-9, 0),
-        "Torino": (9, 0),
-    }
     try:
         fixtures = get_upcoming_fixtures_fd("SA", max_fixtures=50)
         current_names = {
@@ -465,17 +458,23 @@ async def teams_seriea(request: Request):
         location = locations.get(name)
         point = None
         if location:
-            city, latitude, longitude = location
-            offset_x, offset_y = offsets.get(name, (0, 0))
+            city, stadium, latitude, longitude, offset_x, offset_y = location
+            x = round(30 + (longitude - 6.0) * 39, 1)
+            y = round(25 + (47.8 - latitude) * 54, 1)
             point = {
-                "x": round(28 + (longitude - 6.5) / (19.0 - 6.5) * 444 + offset_x, 1),
-                "y": round(24 + (47.2 - latitude) / (47.2 - 35.5) * 560 + offset_y, 1),
+                "x": x,
+                "y": y,
+                "pin_x": round(x + offset_x, 1),
+                "pin_y": round(y + offset_y, 1),
+                "leader": bool(offset_x or offset_y),
                 "city": city,
+                "stadium": stadium,
             }
         team_list.append({
             "name": name,
             "index": index,
             "point": point,
+            "map_key": f"club-{index}",
             "colour": get_theme_for_team(name).get("primary", "#2563EB"),
             "href": f"/league-team?league=seriea&team={quote(name)}",
         })
