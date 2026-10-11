@@ -17,9 +17,20 @@ from pathlib import Path
 ROOT = Path(__file__).parent
 
 # ── Load model artefacts ──────────────────────────────────────────────────────
-elo_path = ROOT / "nba" / "model" / "elo_ratings_v3.json"
-if not elo_path.exists():
-    sys.exit(f"ERROR: {elo_path} not found — copy from V3/model/")
+# Search in order: v4_web/nba/model/, V3/model/, V3/data/raw/
+_elo_candidates = [
+    ROOT / "nba" / "model" / "elo_ratings_v3.json",
+    ROOT.parent / "NBA Live Win Probability" / "V3" / "model" / "elo_ratings_v3.json",
+    ROOT.parent / "NBA Live Win Probability" / "data" / "raw" / "elo_ratings_v3.json",
+]
+elo_path = next((p for p in _elo_candidates if p.exists()), None)
+if elo_path is None:
+    print("Searched:")
+    for p in _elo_candidates:
+        print(f"  {p}")
+    sys.exit("ERROR: elo_ratings_v3.json not found in any expected location.\n"
+             "Copy it from V3/data/raw/ or V3/model/ into v4_web/nba/model/")
+print(f"Elo file: {elo_path}")
 
 with open(elo_path) as f:
     elo_ratings = {str(k): float(v) for k, v in json.load(f).items()}
