@@ -112,16 +112,22 @@ def _get_nba_history(limit: int = 50, conference: str = "all") -> list[dict]:
         return []
     try:
         cur = _db.cursor()
-        if conference == "all":
+        if conference not in ("East", "West"):
             cur.execute(
                 "SELECT * FROM predictions WHERE league='nba' "
                 "ORDER BY created_at DESC LIMIT ?", (limit,)
             )
         else:
+            team_ids = [
+                team_id for team_id, team in NBA_TEAMS.items()
+                if team.get("conference") == conference
+            ]
+            placeholders = ",".join("?" for _ in team_ids)
             cur.execute(
                 "SELECT * FROM predictions WHERE league='nba' "
-                "AND conference=? ORDER BY created_at DESC LIMIT ?",
-                (conference, limit)
+                f"AND home_team_id IN ({placeholders}) "
+                "ORDER BY created_at DESC LIMIT ?",
+                (*team_ids, limit)
             )
         cols = [d[0] for d in cur.description]
         return [dict(zip(cols, row)) for row in cur.fetchall()]
@@ -160,6 +166,13 @@ async def nba_hub(request: Request):
         n = pred_log.bulk_log_pregame(games, probs)
         if n:
             log.info("NBA: logged %d new pregame predictions", n)
+        for game in final:
+            if game.get("home_score") is not None and game.get("away_score") is not None:
+                pred_log.log_result(
+                    str(game["game_id"]),
+                    int(game["home_score"]),
+                    int(game["away_score"]),
+                )
 
     from datetime import timedelta
     d = datetime.now(EAT).date() + (timedelta(days=1) if showing_tomorrow else timedelta())

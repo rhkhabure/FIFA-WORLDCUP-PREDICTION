@@ -15,7 +15,10 @@ so a DB error never crashes a page load.
 
 import logging
 import sqlite3
+from datetime import datetime
 from pathlib import Path
+
+from constants import EAT, nba_team
 
 log = logging.getLogger(__name__)
 
@@ -69,12 +72,34 @@ def log_pregame(game: dict, home_win_prob: float) -> bool:
         game_id, home_tricode, away_tricode,
         home_team_id, away_team_id, game_time_utc, status
     """
-    if _game_exists(game.get("game_id", "")):
-        return False   # already logged
+    game_id = str(game.get("game_id", ""))
+    if not game_id:
+        return False
 
     away_win_prob = round(1.0 - home_win_prob, 4)
     hp            = round(home_win_prob, 4)
-    created_at    = (game.get("game_time_utc") or "")[:10]  # YYYY-MM-DD
+    kickoff = game.get("game_time_utc") or ""
+    try:
+        kickoff_dt = datetime.fromisoformat(kickoff.replace("Z", "+00:00"))
+        created_at = kickoff_dt.astimezone(EAT).date().isoformat()
+    except (AttributeError, ValueError):
+        created_at = datetime.now(EAT).date().isoformat()
+
+    home_team_id = game.get("home_team_id")
+    away_team_id = game.get("away_team_id")
+    conference = (
+        nba_team(home_team_id).get("conference")
+        or nba_team(away_team_id).get("conference")
+        or ""
+    )
+
+    if _game_exists(game_id):
+        _execute(
+            "UPDATE predictions SET conference=?, created_at=? "
+            "WHERE game_id=? AND league='nba'",
+            (conference, created_at, game_id),
+        )
+        return False
 
     return _execute("""
         INSERT OR IGNORE INTO predictions
@@ -85,12 +110,12 @@ def log_pregame(game: dict, home_win_prob: float) -> bool:
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         "nba",
-        game.get("game_id", ""),
+        game_id,
         game.get("home_tricode", ""),
         game.get("away_tricode", ""),
-        game.get("home_team_id"),
-        game.get("away_team_id"),
-        "Preseason" if str(game.get("game_id","")).startswith("001") else "Regular Season",
+        home_team_id,
+        away_team_id,
+        conference,
         hp,
         away_win_prob,
         None,   # scores filled in by log_result()
