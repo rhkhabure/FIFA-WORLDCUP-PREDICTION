@@ -22,6 +22,7 @@ Usage in main.py:
 
 import logging
 from pathlib import Path
+from datetime import datetime
 
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -160,12 +161,9 @@ async def nba_hub(request: Request):
         if n:
             log.info("NBA: logged %d new pregame predictions", n)
 
-    from datetime import date, timedelta
-    if showing_tomorrow:
-        d = date.today() + timedelta(days=1)
-        hub_date = d.strftime("%A %b ") + str(d.day)   # avoids %-d (Linux-only)
-    else:
-        hub_date = "Today"
+    from datetime import timedelta
+    d = datetime.now(EAT).date() + (timedelta(days=1) if showing_tomorrow else timedelta())
+    hub_date = d.strftime("%A %b ") + str(d.day)
 
     return templates.TemplateResponse(
         request=request,

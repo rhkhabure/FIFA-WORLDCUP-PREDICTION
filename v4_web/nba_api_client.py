@@ -30,6 +30,8 @@ TTL_LIVE    = 25    # scoreboard + PBP during live games
 TTL_STATIC  = 300   # team metadata, box score halftime etc.
 TTL_PREGAME = 60    # scoreboard before tip-off
 
+EAT_TZ = timezone(timedelta(hours=3))
+
 # ── In-memory cache: {cache_key: (data, expires_at)} ─────────────────────────
 _cache: dict[str, tuple[Any, float]] = {}
 
@@ -67,16 +69,14 @@ def _scoreboard_v3(game_date: str):
 
 
 def _today_str() -> str:
-    """Today's date as MM/DD/YYYY for ScoreboardV2."""
-    from datetime import date
-    d = date.today()
+    """Today's EAT calendar date as MM/DD/YYYY for ScoreboardV3."""
+    d = datetime.now(EAT_TZ).date()
     return f"{d.month:02d}/{d.day:02d}/{d.year}"
 
 
 def _tomorrow_str() -> str:
-    """Tomorrow's date as MM/DD/YYYY for ScoreboardV2."""
-    from datetime import date, timedelta
-    d = date.today() + timedelta(days=1)
+    """Tomorrow's EAT calendar date as MM/DD/YYYY for ScoreboardV3."""
+    d = datetime.now(EAT_TZ).date() + timedelta(days=1)
     return f"{d.month:02d}/{d.day:02d}/{d.year}"
 
 
@@ -96,32 +96,58 @@ def _boxscore(game_id: str):
 
 def get_today_scoreboard() -> list[dict]:
     """
-    Returns today's NBA games.  Falls through to ScoreboardV2 (stats endpoint)
-    when the live endpoint returns empty JSON — which happens on off-days and
-    during the early preseason before the live feed is populated.
+    Return games whose tip-off falls on today's EAT calendar date.
+
+    NBA game dates follow the US schedule, so games starting after midnight
+    EAT may be listed under the previous US calendar date. Query both dates,
+    then merge in the live scoreboard so current scores stay fresh.
     """
-    key = "scoreboard_today"
+    today = datetime.now(EAT_TZ).date()
+    key = f"scoreboard_today_{today.isoformat()}"
     cached = _get(key)
     if cached is not None:
         return cached
 
-    # Try live endpoint first (richer data, real-time scores)
-    games = []
+    games_by_id: dict[str, dict] = {}
+    live_by_id: dict[str, dict] = {}
+
+    # ScoreboardV3 is date-specific. Fetch both NBA dates that can contribute
+    # games to one EAT calendar day, then keep only games that actually tip
+    # during that EAT day.
+    for nba_date in (today, today - timedelta(days=1)):
+        date_str = f"{nba_date.month:02d}/{nba_date.day:02d}/{nba_date.year}"
+        for game in get_scoreboard_by_date(date_str):
+            game_utc = game.get("game_time_utc", "")
+            try:
+                tip_eat = datetime.fromisoformat(
+                    game_utc.replace("Z", "+00:00")
+                ).astimezone(EAT_TZ).date()
+            except (AttributeError, ValueError):
+                tip_eat = nba_date
+            if tip_eat == today and game.get("game_id"):
+                games_by_id[game["game_id"]] = game
+
+    # Live feed gives the freshest status, clock, and score. It can return a
+    # different US-local slate than EAT, so only merge matching EAT-day games.
     try:
-        board     = _scoreboard()
+        board = _scoreboard()
         raw_games = board.games.get_dict()
         if raw_games:
-            games = _parse_live_scoreboard(raw_games)
+            for game in _parse_live_scoreboard(raw_games):
+                game_utc = game.get("game_time_utc", "")
+                try:
+                    tip_eat = datetime.fromisoformat(
+                        game_utc.replace("Z", "+00:00")
+                    ).astimezone(EAT_TZ).date()
+                except (AttributeError, ValueError):
+                    tip_eat = today
+                if tip_eat == today and game.get("game_id"):
+                    live_by_id[game["game_id"]] = game
     except Exception as exc:
-        log.warning("Live scoreboard failed (%s) — trying stats endpoint", exc)
+        log.warning("Live scoreboard failed (%s) — using date scoreboards", exc)
 
-    # Fall through to ScoreboardV3 if live gave nothing
-    if not games:
-        try:
-            games = _parse_scoreboardv3(_scoreboard_v3(_today_str()))
-        except Exception as exc:
-            log.warning("ScoreboardV3 also failed: %s", exc)
-
+    games_by_id.update(live_by_id)
+    games = list(games_by_id.values())
     if not games:
         stale = _get_stale(key)
         if stale is not None:
@@ -138,18 +164,22 @@ def get_today_scoreboard() -> list[dict]:
 
 def get_scoreboard_by_date(date_str: str) -> list[dict]:
     """
-    Returns games for any date using ScoreboardV2 (stats endpoint).
+    Returns games for any date using ScoreboardV3 (stats endpoint).
     date_str format: 'MM/DD/YYYY'  e.g. '10/08/2026'
-    Used by the hub to show tomorrow's schedule when today has no games.
     """
+    try:
+        parsed_date = datetime.strptime(date_str, "%m/%d/%Y").date()
+        date_str = f"{parsed_date.month:02d}/{parsed_date.day:02d}/{parsed_date.year}"
+    except ValueError:
+        raise ValueError(f"date_str must be MM/DD/YYYY, got {date_str!r}")
+
     key = f"scoreboard_{date_str}"
     cached = _get(key)
     if cached is not None:
         return cached
     try:
         games = _parse_scoreboardv3(_scoreboard_v3(date_str))
-        if games:
-            _set(key, games, TTL_STATIC)
+        _set(key, games, TTL_PREGAME)
         return games
     except Exception as exc:
         log.warning("ScoreboardV3 for %s failed: %s", date_str, exc)
@@ -685,8 +715,8 @@ def to_eat(utc_str: str) -> str:
         # Handle both "Z" suffix and "+00:00"
         utc_str = utc_str.replace("Z", "+00:00")
         dt_utc  = datetime.fromisoformat(utc_str)
-        dt_eat  = dt_utc.astimezone(timezone(timedelta(hours=3)))
-        return dt_eat.strftime("%-H:%M EAT")
+        dt_eat  = dt_utc.astimezone(EAT_TZ)
+        return f"{dt_eat.hour}:{dt_eat.minute:02d} EAT"
     except Exception:
         return utc_str
 
