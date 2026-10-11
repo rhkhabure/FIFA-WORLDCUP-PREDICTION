@@ -240,6 +240,19 @@
     flex-shrink: 0;
 }
 .match-time.live { color: #FF3B30; }
+.fixture-league-head {
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:10px 16px 7px;
+    font-size:10px;
+    font-weight:800;
+    color:var(--text-muted);
+    text-transform:uppercase;
+    letter-spacing:1px;
+    background:var(--surface);
+}
+.fixture-league-head .acc-dot { width:7px; height:7px; }
 
 /* ── Accuracy panel ───────────────────────────────────────────── */
 .accuracy-panel {
@@ -447,38 +460,63 @@
   <div>
     <div class="section-head">Today's fixtures and weekend results · {{ today }}</div>
     <div class="matches-list">
-      {% if today_matches %}
-        {% for m in today_matches %}
-        <a href="/match?match_id={{ m.match_id }}&league={{ m.league }}" class="match-row">
-          <div class="match-pip" style="background:{{ m.league_colour }}"></div>
-          <div style="flex:1;min-width:0">
-            <div class="match-name">{{ m.home }} vs {{ m.away }}</div>
-            <div class="match-sub">
-              {{ m.league_name }} ·
-              {% if m.local_date == today %}Today{% else %}Weekend · {{ m.local_date }}{% endif %}
+      {% if live_match_groups %}
+        <div class="fixture-league-head" style="color:#FF3B30">Live now</div>
+        {% for group in live_match_groups %}
+          <div class="fixture-league-head">
+            <span class="acc-dot" style="background:{{ group.league_colour }}"></span>
+            {{ group.league_name }}
+          </div>
+          {% for m in group.fixtures %}
+          <a href="/match?match_id={{ m.match_id }}&league={{ m.league }}" class="match-row">
+            <div class="match-pip" style="background:{{ m.league_colour }}"></div>
+            <div style="flex:1;min-width:0">
+              <div class="match-name">{{ m.home }} vs {{ m.away }}</div>
+              <div class="match-sub">{{ group.league_name }} · Today</div>
             </div>
+            <div class="match-time live" style="min-width:100px">
+              {% if m.status == "Half Time" %}HT{% else %}LIVE{% endif %}
+              · {{ m.home_score }}–{{ m.away_score }}
+            </div>
+          </a>
+          {% endfor %}
+        {% endfor %}
+      {% endif %}
+      {% if today_match_groups %}
+        {% for group in today_match_groups %}
+          <div class="fixture-league-head">
+            <span class="acc-dot" style="background:{{ group.league_colour }}"></span>
+            {{ group.league_name }}
           </div>
-          <div class="match-time {% if m.is_live %}live{% endif %}" style="min-width:100px">
-            {% if m.status == "In Play" %}
-              LIVE · {{ m.home_score }}–{{ m.away_score }}
-            {% elif m.status == "Half Time" %}
-              HT · {{ m.home_score }}–{{ m.away_score }}
-            {% elif m.status == "Finished" %}
-              FT · {{ m.home_score }}–{{ m.away_score }}
-            {% elif m.status in ("Postponed", "Cancelled") %}
-              {{ m.status|upper }}
-            {% else %}
-              {{ m.kickoff_eat }}
-            {% endif %}
-          </div>
-        </a>
+          {% for m in group.fixtures %}
+          <a href="/match?match_id={{ m.match_id }}&league={{ m.league }}" class="match-row">
+            <div class="match-pip" style="background:{{ m.league_colour }}"></div>
+            <div style="flex:1;min-width:0">
+              <div class="match-name">{{ m.home }} vs {{ m.away }}</div>
+              <div class="match-sub">
+                {% if m.local_date == today %}Today{% else %}Weekend · {{ m.local_date }}{% endif %}
+              </div>
+            </div>
+            <div class="match-time" style="min-width:100px">
+              {% if m.status == "Finished" %}
+                FT · {{ m.home_score }}–{{ m.away_score }}
+              {% elif m.status in ("Postponed", "Cancelled") %}
+                {{ m.status|upper }}
+              {% else %}
+                {{ m.kickoff_eat }}
+              {% endif %}
+            </div>
+          </a>
+          {% endfor %}
         {% endfor %}
       {% else %}
+        {% if not live_match_groups %}
         <div class="match-row" style="justify-content:center;padding:20px">
           <span style="font-size:12px;color:var(--text-muted);font-weight:500">
             No fixtures today or completed matches from this weekend
           </span>
         </div>
+        {% endif %}
       {% endif %}
     </div>
   </div>

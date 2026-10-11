@@ -890,7 +890,54 @@ async def hub(request: Request):
                 "league_colour": league_data["colour"],
                 "is_live": fixture["status"] in ("In Play", "Half Time"),
             })
-    today_matches.sort(key=lambda fixture: fixture["kickoff_utc"])
+
+    live_matches = [fixture for fixture in today_matches if fixture["is_live"]]
+    other_matches = [fixture for fixture in today_matches if not fixture["is_live"]]
+    league_order = {league: index for index, league in enumerate(leagues)}
+
+    def group_matches(matches, *, live_first=False):
+        grouped = {}
+        for fixture in matches:
+            grouped.setdefault(fixture["league"], []).append(fixture)
+
+        for fixtures in grouped.values():
+            def fixture_order(fixture):
+                try:
+                    kickoff = datetime.fromisoformat(
+                        fixture["kickoff_utc"].replace("Z", "+00:00")
+                    ).timestamp()
+                except (ValueError, TypeError):
+                    kickoff = 0
+                if fixture["status"] == "Finished":
+                    return (1, -kickoff)
+                if fixture["status"] in ("Postponed", "Cancelled"):
+                    return (2, kickoff)
+                return (0, kickoff)
+
+            fixtures.sort(key=fixture_order)
+
+        ordered_leagues = sorted(
+            grouped,
+            key=lambda league: (
+                not any(fixture["is_live"] for fixture in grouped[league])
+                if live_first else False,
+                league_order[league],
+            ),
+        )
+        return [
+            {
+                "league": league,
+                "league_name": MATCH_LEAGUES[league]["name"],
+                "league_colour": leagues[league]["colour"],
+                "fixtures": grouped[league],
+            }
+            for league in ordered_leagues
+        ]
+
+    # Put every live match ahead of all other fixtures; within each league,
+    # completed games are then shown newest-first.
+    live_match_groups = group_matches(live_matches, live_first=True)
+    today_match_groups = group_matches(other_matches)
     today_count_laliga = sum(
         1 for fixture in today_matches
         if fixture["league"] == "laliga" and fixture["local_date"] == today
@@ -904,6 +951,8 @@ async def hub(request: Request):
             "league_code"     : "PL",
             "pl_stats"        : pl_stats,
             "today_matches"   : today_matches,
+            "live_match_groups": live_match_groups,
+            "today_match_groups": today_match_groups,
             "today"           : today,
             "today_count_laliga": today_count_laliga,
             "live_count"      : 0,
