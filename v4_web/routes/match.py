@@ -43,6 +43,7 @@ from footballdata import (
     get_finished_match,
     find_finished_match_by_teams,
     get_upcoming_fixtures_fd,
+    get_fixtures_by_date_fd,
     _populate_finished_cache,
     PL_CODE,
 )
@@ -860,6 +861,16 @@ async def match(request: Request):
         home_formation = None
         away_formation = None
 
+        if active_ctx_key == "laliga" and str(match_id).isdigit():
+            try:
+                match_data = get_live_match_data(match_id)
+                if match_data and match_data.get("home_team") != "Unknown Home":
+                    live_data = match_data
+                    fd_home = match_data.get("home_team", "")
+                    fd_away = match_data.get("away_team", "")
+            except Exception as e:
+                print(f"[match] La Liga match detail error: {e}")
+
         # Step 0a: BBS ID (bbs_UUID) — La Liga live matches
         if str(match_id).startswith("bbs_"):
             bbs_uuid = str(match_id)[4:]
@@ -981,10 +992,9 @@ async def match(request: Request):
         home_name = fd_home or "Unknown Home"
         away_name = fd_away or "Unknown Away"
 
-        # Step 3: find finished match data by team name in the correct league
-        # Skip if we already have live_data from BBS (don't overwrite live score)
+        # Step 3: find finished match data by team name if no detail source worked.
         bbs_live_data = live_data if str(match_id).startswith("bbs_") else None
-        if fd_home and fd_away and not bbs_live_data:
+        if fd_home and fd_away and not live_data:
             live_data = find_finished_match_by_teams(
                 fd_home, fd_away, comp_code=active_comp
             )
@@ -1039,6 +1049,11 @@ async def match(request: Request):
             a_score = live_data.get("a_score", 0) or 0
             status  = "Finished"
             minute  = 90
+        elif live_data and live_data.get("status") in ("In Play", "Half Time"):
+            h_score = live_data.get("h_score", 0) or 0
+            a_score = live_data.get("a_score", 0) or 0
+            status = live_data["status"]
+            minute = 45 if status == "Half Time" else live_data.get("current_minute", 0)
         elif fm and fm["started"]:
             h_score = fm["home_score"]
             a_score = fm["away_score"]
@@ -1279,6 +1294,46 @@ async def match(request: Request):
             fixtures = get_upcoming_fixtures(max_fixtures=10)
         except Exception:
             pass
+    elif active_ctx_key == "laliga":
+        # Dated fixtures include live games that no longer appear as scheduled.
+        today = datetime.now(EAT).date()
+        weekend_start = (
+            today + timedelta(days=5 - today.weekday())
+            if today.weekday() < 5
+            else today - timedelta(days=today.weekday() - 5)
+        )
+        weekend_end = weekend_start + timedelta(days=1)
+        try:
+            dated_fixtures = get_fixtures_by_date_fd(
+                active_comp,
+                date_from=today.isoformat(),
+                date_to=weekend_end.isoformat(),
+            )
+            for fixture in dated_fixtures:
+                fixture_date = datetime.fromisoformat(fixture["local_date"]).date()
+                if fixture_date != today and not weekend_start <= fixture_date <= weekend_end:
+                    continue
+                status = fixture["status"]
+                if fixture["home_score"] is not None and fixture["away_score"] is not None:
+                    label = (
+                        f"🔴 {fixture['home_score']}-{fixture['away_score']}"
+                        if status == "In Play"
+                        else f"HT {fixture['home_score']}-{fixture['away_score']}"
+                        if status == "Half Time"
+                        else f"FT {fixture['home_score']}-{fixture['away_score']}"
+                        if status == "Finished"
+                        else fixture["kickoff_eat"]
+                    )
+                else:
+                    label = fixture["kickoff_eat"]
+                fixtures.append({
+                    "match_id": fixture["match_id"],
+                    "home": fixture["home"],
+                    "away": fixture["away"],
+                    "kickoff_eat": label,
+                })
+        except Exception as e:
+            print(f"[match] La Liga date-range fixture error: {e}")
     else:
         # Non-PL: BBS primary, FotMob fallback, fd.org last resort
         # BBS: get today's matches + upcoming
@@ -1394,39 +1449,40 @@ async def match(request: Request):
     # Include completed predictions in the same strip as live and upcoming
     # fixtures, so a result recorded in history is immediately navigable here.
     recent_results = []
-    try:
-        now_utc = datetime.now(timezone.utc)
-        season = now_utc.year if now_utc.month >= 8 else now_utc.year - 1
-        league_predictions = [
-            p for p in get_all_predictions(season)
-            if p.get("league", "pl") == active_ctx_key
-            and p.get("actual_result")
-            and p.get("actual_hg") is not None
-            and p.get("actual_ag") is not None
-        ]
-        seen_teams = {
-            (str(f.get("home", "")).casefold(), str(f.get("away", "")).casefold())
-            for f in fixtures
-        }
-        for p in league_predictions:
-            teams = (
-                str(p.get("home_team", "")).casefold(),
-                str(p.get("away_team", "")).casefold(),
-            )
-            if teams in seen_teams:
-                continue
-            seen_teams.add(teams)
-            recent_results.append({
-                "match_id": p["match_id"],
-                "home": p["home_team"],
-                "away": p["away_team"],
-                "kickoff_eat": f"FT {p['actual_hg']}-{p['actual_ag']}",
-            })
-            if len(recent_results) == 10:
-                break
-    except Exception as e:
-        print(f"[match] completed prediction lookup error: {e}")
-    fixtures = recent_results + fixtures
+    if active_ctx_key != "laliga":
+        try:
+            now_utc = datetime.now(timezone.utc)
+            season = now_utc.year if now_utc.month >= 8 else now_utc.year - 1
+            league_predictions = [
+                p for p in get_all_predictions(season)
+                if p.get("league", "pl") == active_ctx_key
+                and p.get("actual_result")
+                and p.get("actual_hg") is not None
+                and p.get("actual_ag") is not None
+            ]
+            seen_teams = {
+                (str(f.get("home", "")).casefold(), str(f.get("away", "")).casefold())
+                for f in fixtures
+            }
+            for p in league_predictions:
+                teams = (
+                    str(p.get("home_team", "")).casefold(),
+                    str(p.get("away_team", "")).casefold(),
+                )
+                if teams in seen_teams:
+                    continue
+                seen_teams.add(teams)
+                recent_results.append({
+                    "match_id": p["match_id"],
+                    "home": p["home_team"],
+                    "away": p["away_team"],
+                    "kickoff_eat": f"FT {p['actual_hg']}-{p['actual_ag']}",
+                })
+                if len(recent_results) == 10:
+                    break
+        except Exception as e:
+            print(f"[match] completed prediction lookup error: {e}")
+        fixtures = recent_results + fixtures
 
     ctx = {
         "request"          : request,

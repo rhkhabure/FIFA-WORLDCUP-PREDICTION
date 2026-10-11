@@ -238,12 +238,16 @@ def get_fixtures_by_date_fd(comp_code: str, date_from: str,
         score = match.get("score", {})
         full_time = score.get("fullTime", {})
         current = score.get("regularTime", {})
-        home_score = full_time.get("home")
-        away_score = full_time.get("away")
-        if home_score is None:
+        if match.get("status") == "FINISHED":
+            home_score = full_time.get("home")
+            away_score = full_time.get("away")
+        else:
             home_score = current.get("home")
-        if away_score is None:
             away_score = current.get("away")
+        if home_score is None:
+            home_score = full_time.get("home")
+        if away_score is None:
+            away_score = full_time.get("away")
 
         result.append({
             "match_id": str(match.get("id", "")),
@@ -331,8 +335,15 @@ def _parse_match(m: dict) -> dict:
     score      = m.get("score", {})
     ft         = score.get("fullTime", {})
     ht         = score.get("halfTime", {})
-    h_score    = ft.get("home") or 0
-    a_score    = ft.get("away") or 0
+    current    = score.get("regularTime", {})
+    if m.get("status") == "FINISHED":
+        h_score = ft.get("home")
+        a_score = ft.get("away")
+    else:
+        h_score = current.get("home")
+        a_score = current.get("away")
+    h_score    = h_score if h_score is not None else ft.get("home") or 0
+    a_score    = a_score if a_score is not None else ft.get("away") or 0
     h_ht       = ht.get("home")
     a_ht       = ht.get("away")
     status_raw = m.get("status", "")

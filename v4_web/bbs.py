@@ -156,7 +156,7 @@ def get_today_matches(league: str = "laliga") -> list[dict]:
     if not API_KEY:
         return []
 
-    today_utc = datetime.now(timezone.utc).date()
+    today_eat = datetime.now(EAT).date()
 
     # Step 1: Get scores (active match_ids + scores)
     scores_data = _cached(
@@ -192,11 +192,11 @@ def get_today_matches(league: str = "laliga") -> list[dict]:
             continue
         try:
             ko_dt  = datetime.fromisoformat(ko_raw.replace("Z", "+00:00"))
-            ko_date = ko_dt.astimezone(timezone.utc).date()
+            ko_date = ko_dt.astimezone(EAT).date()
         except Exception:
             continue
 
-        if ko_date != today_utc:
+        if ko_date != today_eat:
             continue
 
         mid      = m.get("id", "")

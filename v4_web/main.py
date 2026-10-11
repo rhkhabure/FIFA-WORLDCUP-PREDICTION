@@ -972,9 +972,18 @@ async def laliga_dashboard(request: Request):
                         else "D" if dc and dc[1]>dc[2] else "A") if dc else None,
         })
 
+    weekend_start = (
+        today_date + timedelta(days=5 - today_date.weekday())
+        if today_date.weekday() < 5
+        else today_date - timedelta(days=today_date.weekday() - 5)
+    )
+    weekend_end = weekend_start + timedelta(days=1)
     future = [
         fixture for fixture in upcoming
-        if fixture.get("local_date", fixture.get("kickoff_utc", "")[:10]) > today
+        if today < fixture.get("local_date", fixture.get("kickoff_utc", "")[:10])
+        and weekend_start.isoformat()
+        <= fixture.get("local_date", fixture.get("kickoff_utc", "")[:10])
+        <= weekend_end.isoformat()
     ]
 
     # La Liga accuracy from predictions DB (season=2025, league tagged laliga)
