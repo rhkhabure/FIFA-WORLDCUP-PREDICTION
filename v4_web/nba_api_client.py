@@ -27,8 +27,8 @@ log = logging.getLogger(__name__)
 
 # ── TTL constants (seconds) ───────────────────────────────────────────────────
 TTL_LIVE    = 25    # play-by-play during live games
-TTL_SCOREBOARD_LIVE = 10  # live score and game clock
-TTL_STATIC  = 300   # team metadata, box score halftime etc.
+TTL_SCOREBOARD_LIVE = 25  # live score and game clock
+TTL_BOX_SCORE = 25  # player stats and on-court lineup
 TTL_PREGAME = 60    # scoreboard before tip-off
 
 EAT_TZ = timezone(timedelta(hours=3))
@@ -377,7 +377,7 @@ def get_live_pbp(game_id: str) -> list[dict]:
 def get_box_score(game_id: str) -> dict:
     """
     Returns team and player stats for a game.
-    Cached for TTL_STATIC (300s) since box score changes slowly.
+    Cached briefly so the on-court lineup stays current during games.
     """
     key = f"box_{game_id}"
     cached = _get(key)
@@ -390,7 +390,7 @@ def get_box_score(game_id: str) -> dict:
             "home": box.home_team.get_dict(),
             "away": box.away_team.get_dict(),
         }
-        _set(key, data, TTL_STATIC)
+        _set(key, data, TTL_BOX_SCORE)
         return data
     except Exception as exc:
         log.warning("BoxScore fetch failed for %s: %s", game_id, exc)

@@ -42,6 +42,7 @@ from nba_api_client import (
     get_tomorrow_scoreboard,
     get_live_game,
     get_live_pbp,
+    get_box_score,
     build_live_snapshot,
     build_snapshot_series,
     to_eat,
@@ -244,12 +245,38 @@ async def nba_match(request: Request, game_id: str = ""):
             "model_info":     _model.info() if _model else {},
             "sport":          "nba",
             # Chart.js score and game-clock poll interval (ms)
-            "poll_interval":  10000,
+            "poll_interval":  30000,
             "topbar_title":   f"{enriched['away_tricode']} @ {enriched['home_tricode']}",
             "live_count":     sum(1 for g in games if g["status"] == "live"),
             "title":          f"{enriched['away_tricode']} @ {enriched['home_tricode']}",
         },
     )
+
+
+@router.get("/lineup/{game_id}")
+async def nba_lineup(game_id: str):
+    """Return players currently marked on court by the NBA live box score."""
+    box = get_box_score(game_id)
+
+    def on_court(team: dict) -> list[dict]:
+        return [
+            {
+                "name": player.get("nameI")
+                        or " ".join(filter(None, (
+                            player.get("firstName"), player.get("familyName")
+                        ))),
+                "jersey": player.get("jerseyNum", ""),
+                "position": player.get("position", ""),
+            }
+            for player in team.get("players", [])
+            if str(player.get("oncourt", "0")) == "1"
+        ]
+
+    return JSONResponse({
+        "available": bool(box),
+        "home": on_court(box.get("home", {})),
+        "away": on_court(box.get("away", {})),
+    })
 
 
 @router.get("/history", response_class=HTMLResponse)
