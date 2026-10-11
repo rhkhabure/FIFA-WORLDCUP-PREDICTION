@@ -58,8 +58,10 @@ from footballdata import (
     get_finished_match,
     find_finished_match_by_teams,
     get_upcoming_fixtures_fd,
+    get_fixtures_by_date_fd,
     _populate_finished_cache,
     PL_CODE,
+    PD_CODE,
 )
 from fotmob import (
     get_lineup,
@@ -928,6 +930,28 @@ async def laliga_dashboard(request: Request):
     EAT    = timezone(timedelta(hours=3))
     today  = datetime.now(EAT).date().isoformat()
 
+    # Recent fixtures include finished matches and scores; upcoming stays scheduled-only.
+    yesterday_date = datetime.now(EAT).date() - timedelta(days=1)
+    today_date = datetime.now(EAT).date()
+    recent_matches = []
+    try:
+        recent_matches = get_fixtures_by_date_fd(
+            PD_CODE,
+            date_from=yesterday_date.isoformat(),
+            date_to=today_date.isoformat(),
+        )
+    except Exception as e:
+        print(f"[laliga] recent fixture fetch error: {e}")
+
+    yesterday_matches = [
+        match for match in recent_matches
+        if match["local_date"] == yesterday_date.isoformat()
+    ]
+    today_matches = [
+        match for match in recent_matches
+        if match["local_date"] == today_date.isoformat()
+    ]
+
     # Upcoming La Liga fixtures
     upcoming_raw = []
     try:
@@ -948,9 +972,10 @@ async def laliga_dashboard(request: Request):
                         else "D" if dc and dc[1]>dc[2] else "A") if dc else None,
         })
 
-    # Split today vs future
-    today_matches = [f for f in upcoming if f.get("kickoff_utc","")[:10] == today]
-    future        = [f for f in upcoming if f.get("kickoff_utc","")[:10] > today]
+    future = [
+        fixture for fixture in upcoming
+        if fixture.get("local_date", fixture.get("kickoff_utc", "")[:10]) > today
+    ]
 
     # La Liga accuracy from predictions DB (season=2025, league tagged laliga)
     ll_stats = None
@@ -965,8 +990,10 @@ async def laliga_dashboard(request: Request):
             "request"      : request,
             **league_ctx("laliga"),
             "today_matches": today_matches,
+            "yesterday_matches": yesterday_matches,
             "upcoming"     : future[:15],
             "ll_stats"     : ll_stats,
             "today"        : today,
+            "yesterday"    : yesterday_date.isoformat(),
         }
     )

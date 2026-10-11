@@ -121,7 +121,7 @@
     <h1 style="font-size:22px;font-weight:900;color:var(--league-primary);
                letter-spacing:-0.5px;margin-bottom:4px">La Liga 2025/26</h1>
     <p style="font-size:12px;color:var(--text-muted);font-weight:500">
-      Dixon-Coles predictions · Spain · {{ upcoming|length + today_matches|length }} fixtures loaded
+      Dixon-Coles predictions · Spain · {{ upcoming|length + today_matches|length + yesterday_matches|length }} fixtures loaded
     </p>
   </div>
   <a href="/teams/laliga"
@@ -160,12 +160,44 @@
   </div>
 </div>
 
+<!-- Yesterday's results -->
+{% if yesterday_matches %}
+<div class="section-head">Yesterday · {{ yesterday }}</div>
+<div class="today-card">
+  <div class="today-header">
+    Yesterday's results · {{ yesterday_matches|length }} match{{ 'es' if yesterday_matches|length != 1 else '' }}
+  </div>
+  {% for f in yesterday_matches %}
+  <div style="display:flex;align-items:center;padding:12px 16px;
+              border-bottom:1px solid var(--border);gap:12px">
+    <div style="flex:1">
+      <div style="font-size:13px;font-weight:800;color:var(--league-primary)">
+        {{ f.home }} <span style="color:var(--text-muted);font-weight:400;font-size:11px">vs</span> {{ f.away }}
+      </div>
+      <div style="font-size:10px;color:var(--text-muted);margin-top:2px;font-family:var(--font-mono)">
+        {{ f.status }} · GW{{ f.gameweek }}
+      </div>
+    </div>
+    {% if f.home_score is not none and f.away_score is not none %}
+    <strong style="font-size:16px;font-family:var(--font-mono);color:var(--league-primary)">
+      {{ f.home_score }} - {{ f.away_score }}
+    </strong>
+    {% else %}
+    <span style="font-size:11px;color:var(--text-muted)">{{ f.status }}</span>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
 <!-- Today's matches -->
 {% if today_matches %}
 <div class="section-head">Today</div>
 <div class="today-card">
   <div class="today-header">
+    {% if today_matches|selectattr('status', 'equalto', 'In Play')|list %}
     <div class="live-dot"></div>
+    {% endif %}
     Matchday · {{ today_matches|length }} fixture{{ 's' if today_matches|length > 1 else '' }}
   </div>
   {% for f in today_matches %}
@@ -176,10 +208,14 @@
         {{ f.home }} <span style="color:var(--text-muted);font-weight:400;font-size:11px">vs</span> {{ f.away }}
       </div>
       <div style="font-size:10px;color:var(--text-muted);margin-top:2px;font-family:var(--font-mono)">
-        {{ f.kickoff_eat }} · GW{{ f.gameweek }}
+        {{ f.kickoff_eat }} · {{ f.status }} · GW{{ f.gameweek }}
       </div>
     </div>
-    {% if f.dc_home %}
+    {% if f.home_score is not none and f.away_score is not none %}
+    <strong style="font-size:16px;font-family:var(--font-mono);color:var(--league-primary)">
+      {{ f.home_score }} - {{ f.away_score }}
+    </strong>
+    {% elif f.dc_home %}
     <div style="display:flex;gap:5px">
       <span class="odd-pill odd-h">H {{ f.dc_home }}%</span>
       <span class="odd-pill odd-d">D {{ f.dc_draw }}%</span>

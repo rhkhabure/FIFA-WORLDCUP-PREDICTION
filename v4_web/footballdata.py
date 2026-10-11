@@ -188,10 +188,13 @@ def get_upcoming_fixtures_fd(comp_code: str = PD_CODE,
         away = _clean_name(m.get("awayTeam", {}).get("name", "Unknown"))
         ko_raw = m.get("utcDate", "")
         ko_eat = ""
+        local_date = ""
         if ko_raw:
             try:
                 ko_utc = datetime.fromisoformat(ko_raw.replace("Z", "+00:00"))
-                ko_eat = ko_utc.astimezone(EAT).strftime("%a %d %b · %H:%M")
+                ko_local = ko_utc.astimezone(EAT)
+                ko_eat = ko_local.strftime("%a %d %b · %H:%M")
+                local_date = ko_local.date().isoformat()
             except Exception:
                 ko_eat = ko_raw[:10]
         result.append({
@@ -200,8 +203,62 @@ def get_upcoming_fixtures_fd(comp_code: str = PD_CODE,
             "away"       : away,
             "kickoff_utc": ko_raw,
             "kickoff_eat": ko_eat,
+            "local_date" : local_date,
             "gameweek"   : m.get("matchday"),
         })
+    return result
+
+
+def get_fixtures_by_date_fd(comp_code: str, date_from: str,
+                            date_to: str,
+                            season: int | None = None) -> list[dict]:
+    """Return all fixtures in an inclusive date range, including their scores."""
+    from datetime import datetime, timezone, timedelta
+    EAT = timezone(timedelta(hours=3))
+
+    if season is None:
+        season = _current_season()
+    data = _fetch(f"competitions/{comp_code}/matches", {
+        "dateFrom": date_from,
+        "dateTo": date_to,
+        "season": season,
+    })
+
+    result = []
+    for match in data.get("matches", []):
+        kickoff_utc = match.get("utcDate", "")
+        if not kickoff_utc:
+            continue
+        try:
+            kickoff = datetime.fromisoformat(kickoff_utc.replace("Z", "+00:00"))
+            kickoff_eat = kickoff.astimezone(EAT)
+        except ValueError:
+            continue
+
+        score = match.get("score", {})
+        full_time = score.get("fullTime", {})
+        current = score.get("regularTime", {})
+        home_score = full_time.get("home")
+        away_score = full_time.get("away")
+        if home_score is None:
+            home_score = current.get("home")
+        if away_score is None:
+            away_score = current.get("away")
+
+        result.append({
+            "match_id": str(match.get("id", "")),
+            "home": _clean_name(match.get("homeTeam", {}).get("name", "Unknown")),
+            "away": _clean_name(match.get("awayTeam", {}).get("name", "Unknown")),
+            "kickoff_utc": kickoff_utc,
+            "kickoff_eat": kickoff_eat.strftime("%a %d %b · %H:%M"),
+            "local_date": kickoff_eat.date().isoformat(),
+            "gameweek": match.get("matchday"),
+            "status": _normalise_status(match.get("status", "")),
+            "home_score": home_score,
+            "away_score": away_score,
+        })
+
+    result.sort(key=lambda fixture: fixture["kickoff_utc"])
     return result
 
 
