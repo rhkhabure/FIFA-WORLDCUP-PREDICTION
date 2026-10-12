@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+  .player-page{max-width:960px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+  .player-card{background:var(--surface,#fff);border:1.5px solid var(--border,#e2e8f0);
+               border-radius:12px;padding:18px}
+  .player-photo{width:132px;height:132px;object-fit:cover;object-position:top;
+                border-radius:12px;background:#e2e8f0}
+  .player-stat-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+  .player-stat{padding:14px 10px;border:1px solid var(--border,#e2e8f0);
+               border-radius:10px;text-align:center}
+  .player-stat-label{font:10px var(--font-mono);text-transform:uppercase;
+                     color:var(--text-muted,#64748b)}
+  .player-stat-value{font-size:21px;font-weight:900;margin-top:5px}
+  @media(max-width:620px){.player-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .player-header{align-items:flex-start!important;flex-direction:column}}
+</style>
+
+<main class="player-page">
+  {% if unavailable %}
+  <section class="player-card" style="text-align:center;padding:32px">
+    <div style="font-size:15px;font-weight:800">Player profile unavailable</div>
+    <p style="font-size:12px;color:var(--text-muted,#64748b)">
+      The NBA player information feed did not return a profile. Please try again later.
+    </p>
+    <a href="/nba/teams" style="font-weight:700;color:var(--league-primary)">Browse NBA teams</a>
+  </section>
+  {% else %}
+  <section class="player-card">
+    <div class="player-header" style="display:flex;align-items:center;gap:20px">
+      <img class="player-photo"
+           src="https://cdn.nba.com/headshots/nba/latest/260x190/{{ player_id }}.png"
+           alt="{{ player.get('DISPLAY_FIRST_LAST', 'NBA player') }}"
+           onerror="this.style.display='none'">
+      <div style="flex:1">
+        <div style="font-size:26px;font-weight:900;line-height:1.1">
+          {{ player.get('DISPLAY_FIRST_LAST', 'NBA Player') }}
+        </div>
+        <div style="font-size:13px;color:var(--text-muted,#64748b);margin-top:7px">
+          {{ player.get('POSITION') or 'Position unavailable' }}
+          {% if player.get('JERSEY') %} · #{{ player.get('JERSEY') }}{% endif %}
+          {% if player.get('TEAM_CITY') and player.get('TEAM_NAME') %}
+          · {{ player.get('TEAM_CITY') }} {{ player.get('TEAM_NAME') }}
+          {% endif %}
+        </div>
+        {% if team_id %}
+        <a href="/nba/team/{{ team_id }}"
+           style="display:inline-block;margin-top:10px;font-size:12px;font-weight:800;color:var(--league-primary)">
+          View team roster
+        </a>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+
+  <section class="player-card">
+    <div style="font:700 10px var(--font-mono);text-transform:uppercase;letter-spacing:.12em;
+                color:var(--text-muted,#64748b);margin-bottom:12px">
+      NBA headline stats{% if headline.get('TimeFrame') %} · {{ headline.get('TimeFrame') }}{% endif %}
+    </div>
+    <div class="player-stat-grid">
+      {% for label, key in [('Points', 'PTS'), ('Rebounds', 'REB'), ('Assists', 'AST'), ('PIE', 'PIE')] %}
+      <div class="player-stat">
+        <div class="player-stat-label">{{ label }}</div>
+        <div class="player-stat-value">{{ headline.get(key) if headline.get(key) is not none else '—' }}</div>
+      </div>
+      {% endfor %}
+    </div>
+    {% if not headline %}
+    <div style="font-size:11px;color:var(--text-muted,#64748b);margin-top:12px">
+      Headline statistics are not available from the current NBA feed.
+    </div>
+    {% endif %}
+  </section>
+
+  <section class="player-card" style="overflow-x:auto">
+    <div style="font:700 10px var(--font-mono);text-transform:uppercase;letter-spacing:.12em;
+                color:var(--text-muted,#64748b);margin-bottom:12px">Recent regular seasons</div>
+    {% if seasons %}
+    <table style="width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap">
+      <thead>
+        <tr style="text-align:right;color:var(--text-muted,#64748b);font:10px var(--font-mono)">
+          <th style="padding:7px;text-align:left">Season</th>
+          <th style="padding:7px">Team</th>
+          <th style="padding:7px">GP</th>
+          <th style="padding:7px">PTS</th>
+          <th style="padding:7px">REB</th>
+          <th style="padding:7px">AST</th>
+          <th style="padding:7px">MIN</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in seasons %}
+        <tr style="text-align:right;border-top:1px solid var(--border,#e2e8f0)">
+          <td style="padding:8px;text-align:left;font-weight:700">{{ row.get('SEASON_ID', '—') }}</td>
+          <td style="padding:8px">{{ row.get('TEAM_ABBREVIATION', '—') or '—' }}</td>
+          <td style="padding:8px">{{ row.get('GP', '—') or '—' }}</td>
+          <td style="padding:8px">{{ row.get('PTS', '—') or '—' }}</td>
+          <td style="padding:8px">{{ row.get('REB', '—') or '—' }}</td>
+          <td style="padding:8px">{{ row.get('AST', '—') or '—' }}</td>
+          <td style="padding:8px">{{ row.get('MIN', '—') or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div style="font-size:11px;color:var(--text-muted,#64748b)">
+      No regular-season NBA stats are available yet for this player.
+    </div>
+    {% endif %}
+  </section>
+
+  <section class="player-card">
+    <div style="font:700 10px var(--font-mono);text-transform:uppercase;letter-spacing:.12em;
+                color:var(--text-muted,#64748b);margin-bottom:12px">Player information</div>
+    <div class="player-stat-grid">
+      {% for label, key in [('Height', 'HEIGHT'), ('Weight', 'WEIGHT'), ('Experience', 'SEASON_EXP'), ('Country', 'COUNTRY')] %}
+      <div class="player-stat">
+        <div class="player-stat-label">{{ label }}</div>
+        <div style="font-size:13px;font-weight:700;margin-top:5px">
+          {{ player.get(key) if player.get(key) is not none else '—' }}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+</main>
+{% endblock %}

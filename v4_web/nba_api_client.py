@@ -19,6 +19,7 @@ Drop this file in v4_web/.
 """
 
 import logging
+import math
 import time
 from datetime import datetime, timezone, timedelta
 from typing import Any
@@ -29,6 +30,8 @@ log = logging.getLogger(__name__)
 TTL_LIVE    = 25    # play-by-play during live games
 TTL_SCOREBOARD_LIVE = 25  # live score and game clock
 TTL_BOX_SCORE = 25  # player stats and on-court lineup
+TTL_TEAM_ROSTER = 21600  # roster changes infrequently
+TTL_PLAYER_PROFILE = 21600  # player bio and headline stats
 TTL_PREGAME = 60    # scoreboard before tip-off
 
 EAT_TZ = timezone(timedelta(hours=3))
@@ -89,6 +92,82 @@ def _playbyplay(game_id: str):
 def _boxscore(game_id: str, timeout: int = 8):
     from nba_api.live.nba.endpoints import boxscore as bs
     return bs.BoxScore(game_id=game_id, timeout=timeout)
+
+
+def current_nba_season() -> str:
+    """Return the NBA season containing today's EAT date, e.g. 2026-27."""
+    today = datetime.now(EAT_TZ).date()
+    start_year = today.year if today.month >= 10 else today.year - 1
+    return f"{start_year}-{str(start_year + 1)[-2:]}"
+
+
+def _records(dataset) -> list[dict]:
+    """Convert an nba_api dataset to JSON/template-friendly plain records."""
+    records = dataset.get_data_frame().to_dict("records")
+    cleaned = []
+    for record in records:
+        row = {}
+        for key, value in record.items():
+            try:
+                missing = value is None or bool(math.isnan(value))
+            except (TypeError, ValueError):
+                missing = value is None
+            row[key] = None if missing else value.item() if hasattr(value, "item") else value
+        cleaned.append(row)
+    return cleaned
+
+
+def get_team_roster(team_id: int, season: str | None = None) -> list[dict]:
+    """Return a team's roster for a given NBA season, with a six-hour cache."""
+    season = season or current_nba_season()
+    key = f"team_roster_{team_id}_{season}"
+    cached = _get(key)
+    if cached is not None:
+        return cached
+    try:
+        from nba_api.stats.endpoints import commonteamroster
+        roster = _records(commonteamroster.CommonTeamRoster(
+            team_id=team_id, season=season, timeout=10
+        ).common_team_roster)
+        _set(key, roster, TTL_TEAM_ROSTER)
+        return roster
+    except Exception as exc:
+        log.warning("NBA roster request failed for team %s (%s): %s", team_id, season, exc)
+        stale = _get_stale(key)
+        return stale if stale is not None else []
+
+
+def get_player_profile(player_id: int) -> dict:
+    """Return a player's NBA bio and headline stats, cached for six hours."""
+    key = f"player_profile_{player_id}"
+    cached = _get(key)
+    if cached is not None:
+        return cached
+    try:
+        from nba_api.stats.endpoints import commonplayerinfo
+        endpoint = commonplayerinfo.CommonPlayerInfo(player_id=player_id, timeout=10)
+        info = _records(endpoint.common_player_info)
+        headline = _records(endpoint.player_headline_stats)
+        try:
+            from nba_api.stats.endpoints import playercareerstats
+            career = playercareerstats.PlayerCareerStats(
+                player_id=player_id, timeout=10
+            )
+            seasons = _records(career.season_totals_regular_season)
+        except Exception as exc:
+            log.warning("NBA season stats unavailable for player %s: %s", player_id, exc)
+            seasons = []
+        profile = {
+            "info": info[0] if info else {},
+            "headline": headline[0] if headline else {},
+            "seasons": list(reversed(seasons[-5:])),
+        }
+        _set(key, profile, TTL_PLAYER_PROFILE)
+        return profile
+    except Exception as exc:
+        log.warning("NBA player profile request failed for player %s: %s", player_id, exc)
+        stale = _get_stale(key)
+        return stale if stale is not None else {}
 
 
 # ─────────────────────────────────────────────────────────────────────────────

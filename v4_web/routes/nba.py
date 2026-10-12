@@ -24,7 +24,7 @@ import logging
 from pathlib import Path
 from datetime import datetime
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from starlette.concurrency import run_in_threadpool
@@ -44,6 +44,9 @@ from nba_api_client import (
     get_live_game,
     get_live_pbp,
     get_box_score,
+    get_team_roster,
+    get_player_profile,
+    current_nba_season,
     build_live_snapshot,
     build_snapshot_series,
     to_eat,
@@ -367,8 +370,13 @@ async def nba_team_profile(request: Request, team_id: int):
     /nba/team/{team_id} — single team profile.
     Season record, Elo trend, recent form, upcoming games.
     """
+    if team_id not in NBA_TEAM_IDS:
+        raise HTTPException(status_code=404, detail="NBA team not found")
+
     t   = nba_team(team_id)
     elo = _model.get_elo(team_id) if _model else 1500.0
+    season = current_nba_season()
+    roster = await run_in_threadpool(get_team_roster, team_id, season)
 
     # Recent games from history DB involving this team
     recent = []
@@ -400,10 +408,51 @@ async def nba_team_profile(request: Request, team_id: int):
             "team":          {**t, "elo": round(elo, 0), "team_id": team_id},
             "recent":        recent,
             "upcoming":      upcoming,
+            "roster":        roster,
+            "roster_season": season,
             "sport":         "nba",
             "topbar_title":  f"{t.get('city','')} {t.get('name','')}",
             "live_count":    0,
             "title":         f"{t.get('tricode','')} · NBA",
+        },
+    )
+
+
+@router.get("/player/{player_id}", response_class=HTMLResponse)
+async def nba_player_profile(request: Request, player_id: int):
+    """Show NBA player bio and the league's headline season statistics."""
+    if player_id <= 0:
+        raise HTTPException(status_code=404, detail="NBA player not found")
+
+    profile = await run_in_threadpool(get_player_profile, player_id)
+    info = profile.get("info", {})
+    if info:
+        team_id = info.get("TEAM_ID")
+        try:
+            team_id = int(team_id)
+        except (TypeError, ValueError):
+            team_id = None
+        if team_id not in NBA_TEAM_IDS:
+            team_id = None
+    else:
+        team_id = None
+
+    player_name = info.get("DISPLAY_FIRST_LAST") or f"Player {player_id}"
+    return templates.TemplateResponse(
+        request=request,
+        name="nba_player.html",
+        context={
+            "player_id": player_id,
+            "player": info,
+            "headline": profile.get("headline", {}),
+            "seasons": profile.get("seasons", []),
+            "team": nba_team(team_id) if team_id else {},
+            "team_id": team_id,
+            "unavailable": not bool(info),
+            "sport": "nba",
+            "topbar_title": player_name,
+            "live_count": 0,
+            "title": f"{player_name} · NBA",
         },
     )
 
