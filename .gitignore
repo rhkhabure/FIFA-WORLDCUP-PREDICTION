@@ -3,3 +3,6 @@
 .env
 .env.*
 !.env.example
+
+# Download separately; this multi-gigabyte database is not tracked in Git.
+v4_web/nba/sql/nba_stats_pbp.sqlite
