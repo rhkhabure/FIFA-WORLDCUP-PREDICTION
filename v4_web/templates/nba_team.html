@@ -113,6 +113,47 @@
     {% endif %}
   </section>
 
+  <section class="tp-card" style="overflow-x:auto">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:5px">
+      <div class="tp-label" style="margin:0">Historical regular-season records</div>
+      <span style="font-size:10px;color:var(--text-muted,#64748b)">Through {{ historical_season_cutoff }}</span>
+    </div>
+    <div style="font-size:11px;color:var(--text-muted,#64748b);margin-bottom:12px">
+      Local game history; current and previous seasons remain API-backed.
+      {% if team_history_unavailable %} Historical database unavailable for this request.{% endif %}
+    </div>
+    {% if historical_seasons %}
+    <table style="width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap">
+      <thead>
+        <tr style="text-align:right;color:var(--text-muted,#64748b);font:10px var(--font-mono)">
+          <th style="padding:7px;text-align:left">Season</th>
+          <th style="padding:7px">GP</th>
+          <th style="padding:7px">W</th>
+          <th style="padding:7px">L</th>
+          <th style="padding:7px">PF</th>
+          <th style="padding:7px">PA</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in historical_seasons %}
+        <tr style="text-align:right;border-top:1px solid var(--border,#e2e8f0)">
+          <td style="padding:8px;text-align:left;font-weight:700">{{ row.get('season_year') }}</td>
+          <td style="padding:8px">{{ row.get('games_played') }}</td>
+          <td style="padding:8px">{{ row.get('wins') }}</td>
+          <td style="padding:8px">{{ row.get('losses') }}</td>
+          <td style="padding:8px">{{ row.get('points_for') }}</td>
+          <td style="padding:8px">{{ row.get('points_against') }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div style="font-size:12px;color:var(--text-muted,#64748b);padding:8px 0">
+      No historical team records are available.
+    </div>
+    {% endif %}
+  </section>
+
   <!-- ── Two-column body ─────────────────────────────────────────── -->
   <div style="display:grid;grid-template-columns:260px minmax(0,1fr);gap:16px;align-items:start">
 

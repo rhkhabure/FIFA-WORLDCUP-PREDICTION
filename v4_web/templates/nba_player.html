@@ -12,6 +12,7 @@
   .player-stat-label{font:10px var(--font-mono);text-transform:uppercase;
                      color:var(--text-muted,#64748b)}
   .player-stat-value{font-size:21px;font-weight:900;margin-top:5px}
+  .player-table-note{font-size:11px;color:var(--text-muted,#64748b);margin-top:10px}
   @media(max-width:620px){.player-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
     .player-header{align-items:flex-start!important;flex-direction:column}}
 </style>
@@ -87,18 +88,20 @@
           <th style="padding:7px">REB</th>
           <th style="padding:7px">AST</th>
           <th style="padding:7px">MIN</th>
+          <th style="padding:7px;text-align:left">Source</th>
         </tr>
       </thead>
       <tbody>
         {% for row in seasons %}
         <tr style="text-align:right;border-top:1px solid var(--border,#e2e8f0)">
-          <td style="padding:8px;text-align:left;font-weight:700">{{ row.get('SEASON_ID', '—') }}</td>
-          <td style="padding:8px">{{ row.get('TEAM_ABBREVIATION', '—') or '—' }}</td>
-          <td style="padding:8px">{{ row.get('GP', '—') or '—' }}</td>
-          <td style="padding:8px">{{ row.get('PTS', '—') or '—' }}</td>
-          <td style="padding:8px">{{ row.get('REB', '—') or '—' }}</td>
-          <td style="padding:8px">{{ row.get('AST', '—') or '—' }}</td>
-          <td style="padding:8px">{{ row.get('MIN', '—') or '—' }}</td>
+          <td style="padding:8px;text-align:left;font-weight:700">{{ row.get('SEASON_ID') or '—' }}</td>
+          <td style="padding:8px">{{ row.get('TEAM_ABBREVIATION') or '—' }}</td>
+          <td style="padding:8px">{{ row.get('GP') if row.get('GP') is not none else '—' }}</td>
+          <td style="padding:8px">{{ row.get('PTS') if row.get('PTS') is not none else '—' }}</td>
+          <td style="padding:8px">{{ row.get('REB') if row.get('REB') is not none else '—' }}</td>
+          <td style="padding:8px">{{ row.get('AST') if row.get('AST') is not none else '—' }}</td>
+          <td style="padding:8px">{{ row.get('MIN') if row.get('MIN') is not none else '—' }}</td>
+          <td style="padding:8px;text-align:left;color:var(--text-muted,#64748b)">{{ row.get('_source') }}</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -108,7 +111,158 @@
       No regular-season NBA stats are available yet for this player.
     </div>
     {% endif %}
+    <div class="player-table-note">
+    Current and previous seasons come from the NBA API. Earlier rows are historical regular-season totals through {{ historical_season_cutoff }}.
+    {% if history_unavailable %} Historical database data could not be loaded for this request.{% endif %}
+    </div>
   </section>
+
+  {% if career_highs %}
+  <section class="player-card">
+    <div style="font:700 10px var(--font-mono);text-transform:uppercase;letter-spacing:.12em;
+              color:var(--text-muted,#64748b);margin-bottom:5px">
+    Historical single-game highs · regular season
+    </div>
+    <div class="player-table-note" style="margin:0 0 12px">
+    Calculated from the local database through {{ historical_season_cutoff }}; these are not verified all-time NBA records.
+    </div>
+    <div class="player-stat-grid">
+    {% for record in career_highs %}
+    <div class="player-stat">
+      <div class="player-stat-label">{{ record.get('stat') }}</div>
+      <div class="player-stat-value">{{ record.get('value') }}</div>
+      <div class="player-table-note">{{ record.get('season_year') }} · {{ record.get('matchup') }}</div>
+    </div>
+    {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  <section class="player-card" style="overflow-x:auto">
+    <div style="font:700 10px var(--font-mono);text-transform:uppercase;letter-spacing:.12em;
+                color:var(--text-muted,#64748b);margin-bottom:5px">
+      Historical shot profile · regular season
+    </div>
+    <div class="player-table-note" style="margin:0 0 12px">
+      Play-by-play shot data through {{ historical_season_cutoff }}; current and 2025–26 season shots are excluded.
+      {% if shot_history_unavailable %} The local play-by-play database is unavailable; see v4_web/nba/sql/README.md.{% endif %}
+    </div>
+    {% if shot_profile.get('attempts') %}
+    <div class="player-stat-grid" style="margin-bottom:14px">
+      <div class="player-stat">
+        <div class="player-stat-label">Most attempted shot</div>
+        <div class="player-stat-value" style="font-size:17px">
+          {{ shot_profile.get('favorite', {}).get('shot_type', '—') }}
+        </div>
+        <div class="player-table-note">
+          {{ shot_profile.get('favorite', {}).get('attempts', 0) }} attempts
+        </div>
+      </div>
+      <div class="player-stat">
+        <div class="player-stat-label">Shot accuracy</div>
+        <div class="player-stat-value">{{ (shot_profile.get('accuracy', 0) * 100)|round(1) }}%</div>
+        <div class="player-table-note">
+          {{ shot_profile.get('made', 0) }} made of {{ shot_profile.get('attempts', 0) }}
+        </div>
+      </div>
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap">
+      <thead>
+        <tr style="text-align:right;color:var(--text-muted,#64748b);font:10px var(--font-mono)">
+          <th style="padding:7px;text-align:left">Shot type</th>
+          <th style="padding:7px">Attempts</th>
+          <th style="padding:7px">Made</th>
+          <th style="padding:7px">Accuracy</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in shot_profile.get('shot_types', []) %}
+        <tr style="text-align:right;border-top:1px solid var(--border,#e2e8f0)">
+          <td style="padding:8px;text-align:left;font-weight:700">{{ row.get('shot_type') }}</td>
+          <td style="padding:8px">{{ row.get('attempts') }}</td>
+          <td style="padding:8px">{{ row.get('made') }}</td>
+          <td style="padding:8px">{{ (row.get('accuracy', 0) * 100)|round(1) }}%</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div class="player-table-note">
+      Shot labels are grouped into broad types; attempts count made and missed field goals with 2- or 3-point values.
+    </div>
+    {% elif not shot_history_unavailable %}
+    <div style="font-size:11px;color:var(--text-muted,#64748b)">
+      No historical shot attempts are available for this player.
+    </div>
+    {% endif %}
+  </section>
+
+  {% if team_history %}
+  <section class="player-card" style="overflow-x:auto">
+    <div style="font:700 10px var(--font-mono);text-transform:uppercase;letter-spacing:.12em;
+              color:var(--text-muted,#64748b);margin-bottom:12px">
+    Historical team seasons · through {{ historical_season_cutoff }}
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap">
+    <thead>
+      <tr style="text-align:right;color:var(--text-muted,#64748b);font:10px var(--font-mono)">
+        <th style="padding:7px;text-align:left">Season</th>
+        <th style="padding:7px;text-align:left">Team</th>
+        <th style="padding:7px">GP</th>
+        <th style="padding:7px">W</th>
+        <th style="padding:7px">L</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in team_history %}
+      <tr style="text-align:right;border-top:1px solid var(--border,#e2e8f0)">
+        <td style="padding:8px;text-align:left;font-weight:700">{{ row.get('season_year') }}</td>
+        <td style="padding:8px;text-align:left">{{ row.get('team_name') }}</td>
+        <td style="padding:8px">{{ row.get('games_played') }}</td>
+        <td style="padding:8px">{{ row.get('wins') }}</td>
+        <td style="padding:8px">{{ row.get('losses') }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    </table>
+    <div class="player-table-note">W–L reflects the player's regular-season team games in the historical dataset.</div>
+  </section>
+  {% endif %}
+
+  {% if game_log %}
+  <section class="player-card" style="overflow-x:auto">
+    <div style="font:700 10px var(--font-mono);text-transform:uppercase;letter-spacing:.12em;
+              color:var(--text-muted,#64748b);margin-bottom:12px">
+    Recent historical regular-season games
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap">
+    <thead>
+      <tr style="text-align:right;color:var(--text-muted,#64748b);font:10px var(--font-mono)">
+        <th style="padding:7px;text-align:left">Date</th>
+        <th style="padding:7px;text-align:left">Matchup</th>
+        <th style="padding:7px">Result</th>
+        <th style="padding:7px">PTS</th>
+        <th style="padding:7px">REB</th>
+        <th style="padding:7px">AST</th>
+        <th style="padding:7px">MIN</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in game_log %}
+      <tr style="text-align:right;border-top:1px solid var(--border,#e2e8f0)">
+        <td style="padding:8px;text-align:left">{{ row.get('game_date', '')[:10] }}</td>
+        <td style="padding:8px;text-align:left">{{ row.get('matchup') }}</td>
+        <td style="padding:8px">{{ 'W' if row.get('wl') else 'L' }}</td>
+        <td style="padding:8px">{{ row.get('pts') }}</td>
+        <td style="padding:8px">{{ row.get('reb') }}</td>
+        <td style="padding:8px">{{ row.get('ast') }}</td>
+        <td style="padding:8px">{{ row.get('min') }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    </table>
+    <div class="player-table-note">Historical regular-season games only; current-season game data remains API-backed.</div>
+  </section>
+  {% endif %}
 
   <section class="player-card">
     <div style="font:700 10px var(--font-mono);text-transform:uppercase;letter-spacing:.12em;

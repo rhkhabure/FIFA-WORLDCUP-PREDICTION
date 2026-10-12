@@ -21,6 +21,8 @@ Usage in main.py:
 """
 
 import logging
+import re
+import sqlite3
 from pathlib import Path
 from datetime import datetime
 
@@ -55,6 +57,13 @@ from nba_api_client import (
     _elapsed,
 )
 from nba_model import NBAModel
+from historical_nba import (
+    HISTORICAL_SEASON_CUTOFF,
+    HistoricalNBADataUnavailableError,
+    get_player_history,
+    get_player_shot_profile,
+    get_team_seasons,
+)
 import nba_predictions as pred_log
 
 log = logging.getLogger(__name__)
@@ -377,6 +386,13 @@ async def nba_team_profile(request: Request, team_id: int):
     elo = _model.get_elo(team_id) if _model else 1500.0
     season = current_nba_season()
     roster = await run_in_threadpool(get_team_roster, team_id, season)
+    historical_team_seasons = []
+    team_history_unavailable = False
+    try:
+        historical_team_seasons = await run_in_threadpool(get_team_seasons, team_id)
+    except (HistoricalNBADataUnavailableError, sqlite3.Error) as exc:
+        log.error("NBA historical team data unavailable for %s: %s", team_id, exc)
+        team_history_unavailable = True
 
     # Recent games from history DB involving this team
     recent = []
@@ -410,6 +426,9 @@ async def nba_team_profile(request: Request, team_id: int):
             "upcoming":      upcoming,
             "roster":        roster,
             "roster_season": season,
+            "historical_seasons": historical_team_seasons,
+            "historical_season_cutoff": HISTORICAL_SEASON_CUTOFF,
+            "team_history_unavailable": team_history_unavailable,
             "sport":         "nba",
             "topbar_title":  f"{t.get('city','')} {t.get('name','')}",
             "live_count":    0,
@@ -420,12 +439,68 @@ async def nba_team_profile(request: Request, team_id: int):
 
 @router.get("/player/{player_id}", response_class=HTMLResponse)
 async def nba_player_profile(request: Request, player_id: int):
-    """Show NBA player bio and the league's headline season statistics."""
+    """Show current NBA profile data alongside local historical regular seasons."""
     if player_id <= 0:
         raise HTTPException(status_code=404, detail="NBA player not found")
 
     profile = await run_in_threadpool(get_player_profile, player_id)
     info = profile.get("info", {})
+    history_unavailable = False
+    try:
+        historical = await run_in_threadpool(get_player_history, player_id)
+    except (HistoricalNBADataUnavailableError, sqlite3.Error) as exc:
+        log.error("NBA player history unavailable for %s: %s", player_id, exc)
+        historical = {
+            "seasons": [],
+            "game_log": [],
+            "team_history": [],
+            "career_highs": [],
+        }
+        history_unavailable = True
+    shot_history_unavailable = False
+    try:
+        shot_profile = await run_in_threadpool(get_player_shot_profile, player_id)
+    except (HistoricalNBADataUnavailableError, sqlite3.Error) as exc:
+        log.error("NBA player shot history unavailable for %s: %s", player_id, exc)
+        shot_profile = {}
+        shot_history_unavailable = True
+
+    current_season = current_nba_season()
+    current_start_year = int(current_season[:4])
+    api_seasons = []
+    for row in profile.get("seasons", []):
+        season_id = str(row.get("SEASON_ID") or row.get("season_year") or "")
+        match = re.fullmatch(r"(\d{4})-(\d{2})", season_id)
+        if not match:
+            continue
+        start_year = int(match.group(1))
+        if start_year not in (current_start_year - 1, current_start_year):
+            continue
+        season_id = f"{start_year}-{str(start_year + 1)[-2:]}"
+        api_seasons.append({**row, "SEASON_ID": season_id, "_source": "NBA API"})
+
+    historical_seasons = [
+        {
+            "SEASON_ID": row["season_year"],
+            "TEAM_ABBREVIATION": row.get("teams") or "—",
+            "GP": row.get("games_played"),
+            "PTS": row.get("points"),
+            "REB": row.get("rebounds"),
+            "AST": row.get("assists"),
+            "MIN": round(row["minutes"], 1) if row.get("minutes") is not None else None,
+            "_source": "Historical database",
+        }
+        for row in historical["seasons"]
+    ]
+    seasons = sorted(
+        [*api_seasons, *historical_seasons],
+        key=lambda row: row["SEASON_ID"],
+        reverse=True,
+    )
+
+    info = dict(info)
+    if not info and historical["seasons"]:
+        info["DISPLAY_FIRST_LAST"] = historical["seasons"][0].get("player_name")
     if info:
         team_id = info.get("TEAM_ID")
         try:
@@ -438,6 +513,7 @@ async def nba_player_profile(request: Request, player_id: int):
         team_id = None
 
     player_name = info.get("DISPLAY_FIRST_LAST") or f"Player {player_id}"
+    unavailable = not bool(profile.get("info")) and not bool(historical["seasons"])
     return templates.TemplateResponse(
         request=request,
         name="nba_player.html",
@@ -445,10 +521,17 @@ async def nba_player_profile(request: Request, player_id: int):
             "player_id": player_id,
             "player": info,
             "headline": profile.get("headline", {}),
-            "seasons": profile.get("seasons", []),
+            "seasons": seasons,
+            "game_log": historical["game_log"],
+            "team_history": historical["team_history"],
+            "career_highs": historical["career_highs"],
+            "shot_profile": shot_profile,
+            "shot_history_unavailable": shot_history_unavailable,
+            "historical_season_cutoff": HISTORICAL_SEASON_CUTOFF,
+            "history_unavailable": history_unavailable,
             "team": nba_team(team_id) if team_id else {},
             "team_id": team_id,
-            "unavailable": not bool(info),
+            "unavailable": unavailable,
             "sport": "nba",
             "topbar_title": player_name,
             "live_count": 0,

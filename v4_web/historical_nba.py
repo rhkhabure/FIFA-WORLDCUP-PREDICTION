@@ -108,6 +108,8 @@ def _player_seasons(
         rows = connection.execute(
             """
             SELECT season_year,
+                   MAX(player_name) AS player_name,
+                   GROUP_CONCAT(DISTINCT team_abbreviation) AS teams,
                    COUNT(DISTINCT game_id) AS games_played,
                    SUM(pts) AS points,
                    SUM(reb) AS rebounds,
@@ -122,7 +124,7 @@ def _player_seasons(
                    SUM(fta) AS free_throws_attempted,
                    SUM(min) AS minutes
             FROM player_boxscores
-            WHERE player_id = ? AND season_year <= ?
+            WHERE player_id = ? AND season_year <= ? AND game_id LIKE '002%'
             GROUP BY season_year
             ORDER BY season_year DESC
             """,
@@ -150,7 +152,7 @@ def _player_game_log(
                pts, reb, ast, stl, blk, tov, fgm, fga, fg_pct,
                fg3m, fg3a, fg3_pct, ftm, fta, ft_pct, plus_minus
         FROM player_boxscores
-        WHERE player_id = ? AND season_year <= ?
+        WHERE player_id = ? AND season_year <= ? AND game_id LIKE '002%'
     """
     params: list[object] = [player_id, HISTORICAL_SEASON_CUTOFF]
     if season_year is not None:
@@ -196,7 +198,7 @@ def _player_team_history(
                    SUM(reb) AS rebounds,
                    SUM(ast) AS assists
             FROM player_boxscores
-            WHERE player_id = ? AND season_year <= ?
+            WHERE player_id = ? AND season_year <= ? AND game_id LIKE '002%'
             GROUP BY season_year, team_id, team_abbreviation, team_name
             ORDER BY season_year DESC, games_played DESC
             """,
@@ -227,7 +229,7 @@ def _team_seasons(
                    SUM(pts) AS points_for,
                    SUM(pts - plus_minus) AS points_against
             FROM team_boxscores
-            WHERE team_id = ? AND season_year <= ?
+            WHERE team_id = ? AND season_year <= ? AND game_id LIKE '002%'
             GROUP BY season_year, team_abbreviation, team_name
             ORDER BY season_year DESC
             """,
@@ -242,12 +244,163 @@ def get_team_seasons(team_id: int) -> list[dict[str, object]]:
     return _public_rows(_team_seasons(str(get_historical_db_path()), team_id))
 
 
+@lru_cache(maxsize=256)
+def _player_career_highs(
+    database_path: str, player_id: int
+) -> tuple[Mapping[str, object], ...]:
+    fields = (
+        ("Points", "pts"),
+        ("Rebounds", "reb"),
+        ("Assists", "ast"),
+        ("Steals", "stl"),
+        ("Blocks", "blk"),
+        ("Three-pointers", "fg3m"),
+    )
+    selects = [
+        f"""
+        SELECT *
+        FROM (
+            SELECT '{label}' AS stat, {column} AS value,
+                   season_year, game_date, matchup, game_id
+            FROM player_boxscores
+            WHERE player_id = ? AND season_year <= ?
+                  AND game_id LIKE '002%' AND {column} IS NOT NULL
+            ORDER BY {column} DESC, game_date ASC, game_id ASC
+            LIMIT 1
+        )
+        """
+        for label, column in fields
+    ]
+    params = tuple(
+        value
+        for _ in fields
+        for value in (player_id, HISTORICAL_SEASON_CUTOFF)
+    )
+    with _read_only_connection(Path(database_path)) as connection:
+        rows = connection.execute(" UNION ALL ".join(selects), params).fetchall()
+    return _immutable_rows(rows)
+
+
+def get_player_career_highs(player_id: int) -> list[dict[str, object]]:
+    """Return best historical regular-season single-game box-score marks."""
+    player_id = _validate_player_id(player_id)
+    return _public_rows(
+        _player_career_highs(str(get_historical_db_path()), player_id)
+    )
+
+
+def get_player_history(player_id: int) -> dict[str, list[dict[str, object]]]:
+    """Gather the historical player-page datasets from the local database."""
+    player_id = _validate_player_id(player_id)
+    return {
+        "seasons": get_player_seasons(player_id),
+        "game_log": get_player_game_log(player_id),
+        "team_history": get_player_team_history(player_id),
+        "career_highs": get_player_career_highs(player_id),
+    }
+
+
+def _normalize_shot_type(subtype: object) -> str:
+    label = " ".join(str(subtype or "").lower().split())
+    if "fadeaway" in label or "fade away" in label:
+        return "Fadeaway"
+    if "putback" in label or "put back" in label:
+        return "Putback"
+    if "dunk" in label:
+        return "Dunk"
+    if "layup" in label or "finger roll" in label:
+        return "Layup"
+    if "hook" in label:
+        return "Hook"
+    if "tip" in label:
+        return "Tip-in"
+    if "jump" in label or "pullup" in label or "pull-up" in label:
+        return "Jump shot"
+    if "bank" in label:
+        return "Bank shot"
+    return "Other"
+
+
+@lru_cache(maxsize=256)
+def _player_shot_profile(
+    database_path: str, player_id: int
+) -> tuple[
+    int,
+    int,
+    float | None,
+    Mapping[str, object] | None,
+    tuple[Mapping[str, object], ...],
+]:
+    with _read_only_connection(Path(database_path)) as connection:
+        rows = connection.execute(
+            """
+            SELECT subtype, action_type, COUNT(*) AS attempts
+            FROM play_by_play
+            WHERE person_id = ?
+                  AND game_id LIKE '002%'
+                  AND game_date < '2025-07-01'
+                  AND action_type IN ('Made Shot', 'Missed Shot')
+                  AND shot_value IN (2, 3)
+            GROUP BY subtype, action_type
+            """,
+            (player_id,),
+        ).fetchall()
+
+    totals: dict[str, dict[str, int]] = {}
+    for row in rows:
+        shot_type = _normalize_shot_type(row["subtype"])
+        counts = totals.setdefault(shot_type, {"attempts": 0, "made": 0})
+        count = int(row["attempts"])
+        counts["attempts"] += count
+        if row["action_type"] == "Made Shot":
+            counts["made"] += count
+
+    shot_types = [
+        {
+            "shot_type": label,
+            **counts,
+            "accuracy": counts["made"] / counts["attempts"],
+        }
+        for label, counts in sorted(
+            totals.items(), key=lambda item: (-item[1]["attempts"], item[0])
+        )
+        if counts["attempts"] > 0
+    ]
+    attempts = sum(row["attempts"] for row in shot_types)
+    made = sum(row["made"] for row in shot_types)
+    favorite = shot_types[0] if shot_types else None
+    return (
+        attempts,
+        made,
+        made / attempts if attempts else None,
+        MappingProxyType(favorite) if favorite else None,
+        tuple(MappingProxyType(row) for row in shot_types),
+    )
+
+
+def get_player_shot_profile(player_id: int) -> dict[str, object]:
+    """Return historical regular-season shot types and conversion rates."""
+    player_id = _validate_player_id(player_id)
+    attempts, made, accuracy, favorite, shot_types = _player_shot_profile(
+        str(get_play_by_play_db_path()), player_id
+    )
+    return {
+        "attempts": attempts,
+        "made": made,
+        "accuracy": accuracy,
+        "favorite": dict(favorite) if favorite else None,
+        "shot_types": _public_rows(shot_types),
+    }
+
+
 def clear_historical_nba_cache() -> None:
     """Clear cached historical query results after the local database changes."""
     _player_seasons.cache_clear()
     _player_game_log.cache_clear()
     _player_team_history.cache_clear()
     _team_seasons.cache_clear()
+    _player_career_highs.cache_clear()
+    _player_shot_profile.cache_clear()
 
 
 def historical_nba_cache_info() -> dict[str, object]:
@@ -257,4 +410,6 @@ def historical_nba_cache_info() -> dict[str, object]:
         "player_game_log": _player_game_log.cache_info()._asdict(),
         "player_team_history": _player_team_history.cache_info()._asdict(),
         "team_seasons": _team_seasons.cache_info()._asdict(),
+        "player_career_highs": _player_career_highs.cache_info()._asdict(),
+        "player_shot_profile": _player_shot_profile.cache_info()._asdict(),
     }
