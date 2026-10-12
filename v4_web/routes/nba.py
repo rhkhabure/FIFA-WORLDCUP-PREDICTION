@@ -268,34 +268,48 @@ async def nba_match(request: Request, game_id: str = ""):
 
 @router.get("/lineup/{game_id}")
 async def nba_lineup(game_id: str):
-    """Return players currently marked on court by the NBA live box score."""
+    """Return current on-court players, falling back to confirmed starters."""
     box = await run_in_threadpool(get_box_score, game_id)
     used_starters = False
 
+    def is_flagged(value: object) -> bool:
+        return value is True or str(value).strip().lower() in ("1", "true", "yes")
+
     def on_court(team: dict) -> list[dict]:
         nonlocal used_starters
-        roster = team.get("players", [])
+        roster = team.get("players")
+        if not isinstance(roster, list):
+            roster = []
         active = [
             player for player in roster
-            if str(player.get("oncourt", "0")).strip().lower()
-            in ("1", "true", "yes")
+            if isinstance(player, dict)
+            and is_flagged(
+                player.get(
+                    "oncourt",
+                    player.get("onCourt", player.get("isOnCourt")),
+                )
+            )
         ]
         if not active and roster:
             active = [
                 player for player in roster
-                if str(player.get("starter", "0")).strip().lower()
-                in ("1", "true", "yes")
+                if isinstance(player, dict)
+                and is_flagged(
+                    player.get("starter", player.get("isStarter"))
+                )
             ][:5]
             used_starters = used_starters or bool(active)
 
         players = []
         for player in active[:5]:
             person_id = str(player.get("personId", ""))
+            name = player.get("nameI") or player.get("name") or " ".join(
+                filter(None, (player.get("firstName"), player.get("familyName")))
+            )
+            if not name and person_id.isdigit():
+                name = f"Player {person_id}"
             players.append({
-                "name": player.get("nameI")
-                        or " ".join(filter(None, (
-                            player.get("firstName"), player.get("familyName")
-                        ))),
+                "name": name,
                 "jersey": player.get("jerseyNum", ""),
                 "position": player.get("position", ""),
                 "headshot": (
@@ -308,7 +322,7 @@ async def nba_lineup(game_id: str):
     home_players = on_court(box.get("home", {}))
     away_players = on_court(box.get("away", {}))
     return JSONResponse({
-        "available": bool(box),
+        "available": bool(home_players or away_players),
         "used_starters": used_starters,
         "home": home_players,
         "away": away_players,
