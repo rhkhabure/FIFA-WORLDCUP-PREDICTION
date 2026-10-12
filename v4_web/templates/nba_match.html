@@ -376,10 +376,16 @@
     let status = CFG.status;
     let timer  = null;
     let lineupTimer = null;
+    let lineupRequestTimeout = null;
 
     async function pollLineup() {
         try {
-            const response = await fetch(`/nba/lineup/${CFG.gameId}`);
+            const controller = new AbortController();
+            lineupRequestTimeout = setTimeout(() => controller.abort(), 12000);
+            const response = await fetch(`/nba/lineup/${CFG.gameId}`, {
+                signal: controller.signal,
+            });
+            clearTimeout(lineupRequestTimeout);
             if (!response.ok) throw new Error(`Lineup request failed (${response.status})`);
             const data = await response.json();
             const svgNS = 'http://www.w3.org/2000/svg';
@@ -481,9 +487,15 @@
                     ? 'Live on-court player data will appear when the game is underway.'
                     : 'Lineup data is temporarily unavailable; retrying in 30 seconds.';
         } catch (error) {
+            clearTimeout(lineupRequestTimeout);
             $('court-status').textContent = 'Could not load the current lineup; retrying in 30 seconds.';
         }
     }
+
+    // Start independently of Chart.js so chart load/runtime errors don't leave
+    // the court stuck in its initial loading state.
+    pollLineup();
+    if (status !== 'final') lineupTimer = setInterval(pollLineup, 30000);
 
     // ── Chart ────────────────────────────────────────────────────────
     const QTR = [0, 720, 1440, 2160, 2880];
@@ -639,8 +651,6 @@
     }
 
     // ── Boot ─────────────────────────────────────────────────────────
-    pollLineup();
-    if (status !== 'final') lineupTimer = setInterval(pollLineup, 30000);
     loadCurve().then(() => {
         poll();
         if (status !== 'final') timer = setInterval(poll, CFG.poll);
