@@ -259,18 +259,24 @@ async def nba_lineup(game_id: str):
     box = get_box_score(game_id)
 
     def on_court(team: dict) -> list[dict]:
-        return [
-            {
+        players = []
+        for player in team.get("players", []):
+            if str(player.get("oncourt", "0")) != "1":
+                continue
+            person_id = str(player.get("personId", ""))
+            players.append({
                 "name": player.get("nameI")
                         or " ".join(filter(None, (
                             player.get("firstName"), player.get("familyName")
                         ))),
                 "jersey": player.get("jerseyNum", ""),
                 "position": player.get("position", ""),
-            }
-            for player in team.get("players", [])
-            if str(player.get("oncourt", "0")) == "1"
-        ]
+                "headshot": (
+                    f"https://cdn.nba.com/headshots/nba/latest/260x190/{person_id}.png"
+                    if person_id.isdigit() else ""
+                ),
+            })
+        return players
 
     return JSONResponse({
         "available": bool(box),

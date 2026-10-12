@@ -194,6 +194,7 @@
                 <image x="447" y="227" width="66" height="66"
                        href="https://cdn.nba.com/logos/nba/{{ game.home_team_id }}/global/L/logo.svg"
                        preserveAspectRatio="xMidYMid meet" aria-label="{{ game.home_tricode }} crest"/>
+                <defs id="court-player-clips"></defs>
                 <g id="away-court-players" fill="{{ away_line }}" data-side="away"></g>
                 <g id="home-court-players" fill="{{ home_line }}" data-side="home"></g>
             </svg>
@@ -376,6 +377,8 @@
             if (!response.ok) throw new Error(`Lineup request failed (${response.status})`);
             const data = await response.json();
             const svgNS = 'http://www.w3.org/2000/svg';
+            const clips = $('court-player-clips');
+            clips.replaceChildren();
             const spots = {
                 away: [[170, 150], [315, 150], [242, 260], [170, 370], [315, 370]],
                 home: [[790, 150], [645, 150], [718, 260], [790, 370], [645, 370]],
@@ -408,6 +411,37 @@
                     jersey.setAttribute('font-weight', '800');
                     jersey.textContent = player.jersey || '•';
                     marker.append(jersey);
+
+                    if (player.headshot) {
+                        const clipId = `player-clip-${side}-${index}`;
+                        const clip = document.createElementNS(svgNS, 'clipPath');
+                        clip.setAttribute('id', clipId);
+                        const clipCircle = document.createElementNS(svgNS, 'circle');
+                        clipCircle.setAttribute('cx', x);
+                        clipCircle.setAttribute('cy', y);
+                        clipCircle.setAttribute('r', '18');
+                        clip.append(clipCircle);
+                        clips.append(clip);
+
+                        const headshot = document.createElementNS(svgNS, 'image');
+                        headshot.setAttribute('x', x - 18);
+                        headshot.setAttribute('y', y - 18);
+                        headshot.setAttribute('width', '36');
+                        headshot.setAttribute('height', '36');
+                        headshot.setAttribute('preserveAspectRatio', 'xMidYMin slice');
+                        headshot.setAttribute('clip-path', `url(#${clipId})`);
+                        headshot.setAttribute('href', player.headshot);
+                        headshot.addEventListener('error', () => headshot.remove(), { once: true });
+                        marker.append(headshot);
+                        const outline = document.createElementNS(svgNS, 'circle');
+                        outline.setAttribute('cx', x);
+                        outline.setAttribute('cy', y);
+                        outline.setAttribute('r', '18');
+                        outline.setAttribute('fill', 'none');
+                        outline.setAttribute('stroke', '#fff');
+                        outline.setAttribute('stroke-width', '2');
+                        marker.append(outline);
+                    }
 
                     const labelBg = document.createElementNS(svgNS, 'rect');
                     labelBg.setAttribute('x', x - 57);
