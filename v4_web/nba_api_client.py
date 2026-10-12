@@ -86,9 +86,9 @@ def _playbyplay(game_id: str):
     return pbp.PlayByPlay(game_id=game_id)
 
 
-def _boxscore(game_id: str):
+def _boxscore(game_id: str, timeout: int = 8):
     from nba_api.live.nba.endpoints import boxscore as bs
-    return bs.BoxScore(game_id=game_id)
+    return bs.BoxScore(game_id=game_id, timeout=timeout)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

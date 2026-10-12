@@ -27,6 +27,7 @@ from datetime import datetime
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
+from starlette.concurrency import run_in_threadpool
 
 from constants import (
     NBA_TEAMS,
@@ -256,13 +257,27 @@ async def nba_match(request: Request, game_id: str = ""):
 @router.get("/lineup/{game_id}")
 async def nba_lineup(game_id: str):
     """Return players currently marked on court by the NBA live box score."""
-    box = get_box_score(game_id)
+    box = await run_in_threadpool(get_box_score, game_id)
+    used_starters = False
 
     def on_court(team: dict) -> list[dict]:
+        nonlocal used_starters
+        roster = team.get("players", [])
+        active = [
+            player for player in roster
+            if str(player.get("oncourt", "0")).strip().lower()
+            in ("1", "true", "yes")
+        ]
+        if not active and roster:
+            active = [
+                player for player in roster
+                if str(player.get("starter", "0")).strip().lower()
+                in ("1", "true", "yes")
+            ][:5]
+            used_starters = used_starters or bool(active)
+
         players = []
-        for player in team.get("players", []):
-            if str(player.get("oncourt", "0")) != "1":
-                continue
+        for player in active[:5]:
             person_id = str(player.get("personId", ""))
             players.append({
                 "name": player.get("nameI")
@@ -278,10 +293,13 @@ async def nba_lineup(game_id: str):
             })
         return players
 
+    home_players = on_court(box.get("home", {}))
+    away_players = on_court(box.get("away", {}))
     return JSONResponse({
         "available": bool(box),
-        "home": on_court(box.get("home", {})),
-        "away": on_court(box.get("away", {})),
+        "used_starters": used_starters,
+        "home": home_players,
+        "away": away_players,
     })
 
 
