@@ -46,6 +46,7 @@ from nba_api_client import (
     get_live_game,
     get_live_pbp,
     get_box_score,
+    get_espn_lineup,
     get_team_roster,
     get_player_profile,
     current_nba_season,
@@ -161,15 +162,18 @@ async def nba_hub(request: Request):
     /nba — today's games hub.
     Shows live game strip + full day schedule with pregame win probabilities.
     """
-    games_raw = get_today_scoreboard()
-    showing_tomorrow = False
+    today_games_raw = get_today_scoreboard()
+    tomorrow_games_raw = get_tomorrow_scoreboard()
+    showing_tomorrow = not today_games_raw
 
-    # Off-day fallback: show tomorrow's schedule so the hub is never empty
-    if not games_raw:
-        games_raw        = get_tomorrow_scoreboard()
-        showing_tomorrow = True
+    # Off-day fallback: keep the primary schedule useful when today is empty.
+    games_raw = today_games_raw or tomorrow_games_raw
 
     games = [_enrich_game(g) for g in games_raw]
+    next_day_games = (
+        [] if showing_tomorrow
+        else [_enrich_game(g) for g in tomorrow_games_raw]
+    )
     live  = [g for g in games if g["status"] == "live"]
     pre   = [g for g in games if g["status"] == "pre"]
     final = [g for g in games if g["status"] == "final"]
@@ -206,6 +210,7 @@ async def nba_hub(request: Request):
             "live_count":        len(live),
             "title":             "NBA Hub",
             "showing_tomorrow":  showing_tomorrow,
+            "tomorrow_games":   next_day_games,
             "hub_date":          hub_date,
         },
     )
@@ -219,13 +224,19 @@ async def nba_match(request: Request, game_id: str = ""):
     Right panel: live win probability chart (Chart.js, polls /nba/live/{id}).
     """
     games = get_today_scoreboard()
+    tomorrow_games = get_tomorrow_scoreboard()
+    all_games = [*games, *tomorrow_games]
 
     # If no game_id given, use first live game, else first game today
     if not game_id:
         live = [g for g in games if g["status"] == "live"]
-        game_id = live[0]["game_id"] if live else (games[0]["game_id"] if games else "")
+        game_id = (
+            live[0]["game_id"] if live else
+            games[0]["game_id"] if games else
+            tomorrow_games[0]["game_id"] if tomorrow_games else ""
+        )
 
-    game = next((g for g in games if g["game_id"] == game_id), {})
+    game = next((g for g in all_games if g["game_id"] == game_id), {})
     if not game:
         return templates.TemplateResponse(
             request=request,
@@ -267,7 +278,12 @@ async def nba_match(request: Request, game_id: str = ""):
 
 
 @router.get("/lineup/{game_id}")
-async def nba_lineup(game_id: str):
+async def nba_lineup(
+    game_id: str,
+    game_time_utc: str = "",
+    home_tricode: str = "",
+    away_tricode: str = "",
+):
     """Return current on-court players, falling back to confirmed starters."""
     box = await run_in_threadpool(get_box_score, game_id)
     used_starters = False
@@ -321,9 +337,30 @@ async def nba_lineup(game_id: str):
 
     home_players = on_court(box.get("home", {}))
     away_players = on_court(box.get("away", {}))
+    lineup_source = "NBA live" if not used_starters else "NBA starters"
+
+    if (not home_players or not away_players) and all(
+        (game_time_utc, home_tricode, away_tricode)
+    ):
+        fallback = await run_in_threadpool(
+            get_espn_lineup,
+            game_time_utc,
+            home_tricode,
+            away_tricode,
+        )
+        if not home_players and fallback.get("home"):
+            home_players = fallback["home"]
+            used_starters = True
+        if not away_players and fallback.get("away"):
+            away_players = fallback["away"]
+            used_starters = True
+        if fallback.get("available"):
+            lineup_source = "ESPN starters"
+
     return JSONResponse({
         "available": bool(home_players or away_players),
         "used_starters": used_starters,
+        "source": lineup_source,
         "home": home_players,
         "away": away_players,
     })

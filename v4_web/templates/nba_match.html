@@ -363,6 +363,7 @@
 (function () {
     const CFG = {
         gameId:   "{{ game_id }}",
+        gameTimeUtc: "{{ game.game_time_utc }}",
         status:   "{{ game.status }}",
         homeTri:  "{{ game.home_tricode }}",
         awayTri:  "{{ game.away_tricode }}",
@@ -382,7 +383,14 @@
         try {
             const controller = new AbortController();
             lineupRequestTimeout = setTimeout(() => controller.abort(), 12000);
-            const response = await fetch(`/nba/lineup/${CFG.gameId}`, {
+            const lineupUrl = new URL(
+                `/nba/lineup/${encodeURIComponent(CFG.gameId)}`,
+                window.location.origin,
+            );
+            lineupUrl.searchParams.set('game_time_utc', CFG.gameTimeUtc);
+            lineupUrl.searchParams.set('home_tricode', CFG.homeTri);
+            lineupUrl.searchParams.set('away_tricode', CFG.awayTri);
+            const response = await fetch(lineupUrl, {
                 signal: controller.signal,
             });
             clearTimeout(lineupRequestTimeout);
@@ -481,8 +489,8 @@
             }
             $('court-status').textContent = count
                 ? data.used_starters
-                    ? `${count} starters shown · current on-court status is not in the feed`
-                    : `${count} players shown · lineup refreshes every 30 seconds`
+                    ? `${count} players shown from ${data.source || 'confirmed starters'} · current on-court status is unavailable`
+                    : `${count} players shown · ${data.source || 'NBA live feed'} · refreshes every 30 seconds`
                 : data.available
                     ? 'Live on-court player data will appear when the game is underway.'
                     : 'Lineup data is temporarily unavailable; retrying in 30 seconds.';

@@ -22,6 +22,9 @@ import logging
 import math
 import time
 from datetime import datetime, timezone, timedelta
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
+import json
 from typing import Any
 
 log = logging.getLogger(__name__)
@@ -32,6 +35,7 @@ TTL_SCOREBOARD_LIVE = 25  # live score and game clock
 TTL_BOX_SCORE = 25  # player stats and on-court lineup
 TTL_TEAM_ROSTER = 21600  # roster changes infrequently
 TTL_PLAYER_PROFILE = 21600  # player bio and headline stats
+TTL_LINEUP_FALLBACK = 30  # ESPN scoreboard/box-score fallback
 TTL_PREGAME = 60    # scoreboard before tip-off
 
 EAT_TZ = timezone(timedelta(hours=3))
@@ -75,12 +79,6 @@ def _scoreboard_v3(game_date: str):
 def _today_str() -> str:
     """Today's EAT calendar date as MM/DD/YYYY for ScoreboardV3."""
     d = datetime.now(EAT_TZ).date()
-    return f"{d.month:02d}/{d.day:02d}/{d.year}"
-
-
-def _tomorrow_str() -> str:
-    """Tomorrow's EAT calendar date as MM/DD/YYYY for ScoreboardV3."""
-    d = datetime.now(EAT_TZ).date() + timedelta(days=1)
     return f"{d.month:02d}/{d.day:02d}/{d.year}"
 
 
@@ -271,8 +269,161 @@ def get_scoreboard_by_date(date_str: str) -> list[dict]:
 
 
 def get_tomorrow_scoreboard() -> list[dict]:
-    """Convenience wrapper for tomorrow's games."""
-    return get_scoreboard_by_date(_tomorrow_str())
+    """Return games tipping on tomorrow's EAT date across NBA date boundaries."""
+    target_date = datetime.now(EAT_TZ).date() + timedelta(days=1)
+    key = f"scoreboard_eat_{target_date.isoformat()}"
+    cached = _get(key)
+    if cached is not None:
+        return cached
+
+    games_by_id: dict[str, dict] = {}
+    for nba_date in (target_date, target_date - timedelta(days=1)):
+        date_str = f"{nba_date.month:02d}/{nba_date.day:02d}/{nba_date.year}"
+        for game in get_scoreboard_by_date(date_str):
+            game_utc = game.get("game_time_utc", "")
+            try:
+                tip_eat = datetime.fromisoformat(
+                    game_utc.replace("Z", "+00:00")
+                ).astimezone(EAT_TZ).date()
+            except (AttributeError, ValueError):
+                log.warning(
+                    "Skipping NBA game %s with invalid tip time %r",
+                    game.get("game_id"),
+                    game_utc,
+                )
+                continue
+            if tip_eat == target_date and game.get("game_id"):
+                games_by_id[game["game_id"]] = game
+
+    games = list(games_by_id.values())
+    games.sort(key=lambda game: game.get("game_time_utc", ""))
+    if games:
+        _set(key, games, TTL_PREGAME)
+    return games
+
+
+def get_espn_lineup(
+    game_time_utc: str,
+    home_tricode: str,
+    away_tricode: str,
+) -> dict[str, Any]:
+    """Fetch announced starters from ESPN when the NBA live box score is empty."""
+    try:
+        tip = datetime.fromisoformat(game_time_utc.replace("Z", "+00:00"))
+    except (AttributeError, ValueError):
+        log.warning("Cannot find ESPN lineup for invalid game time %r", game_time_utc)
+        return {}
+
+    key = (
+        f"espn_lineup_{tip.date().isoformat()}_"
+        f"{home_tricode.upper()}_{away_tricode.upper()}"
+    )
+    cached = _get(key)
+    if cached is not None:
+        return cached
+
+    def espn_code(code: str) -> str:
+        return {
+            "GSW": "GS",
+            "NYK": "NY",
+            "NOP": "NO",
+            "WAS": "WSH",
+            "UTA": "UTAH",
+            "SAS": "SA",
+        }.get(code.upper(), code.upper())
+
+    def fetch_json(url: str) -> dict:
+        request = Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urlopen(request, timeout=8) as response:
+            return json.loads(response.read())
+
+    try:
+        expected = {espn_code(home_tricode), espn_code(away_tricode)}
+        candidates_by_id: dict[str, dict] = {}
+        for scoreboard_date in (tip.date(), tip.date() - timedelta(days=1)):
+            scoreboard_url = (
+                "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?"
+                + urlencode({"dates": scoreboard_date.strftime("%Y%m%d")})
+            )
+            scoreboard = fetch_json(scoreboard_url)
+            for event in scoreboard.get("events", []):
+                competition = (event.get("competitions") or [{}])[0]
+                competitors = competition.get("competitors", [])
+                codes = {
+                    espn_code(item.get("team", {}).get("abbreviation", ""))
+                    for item in competitors
+                }
+                if codes == expected and event.get("id"):
+                    candidates_by_id[event["id"]] = event
+        candidates = list(candidates_by_id.values())
+        if not candidates:
+            _set(key, {}, TTL_LINEUP_FALLBACK)
+            return {}
+
+        event = min(
+            candidates,
+            key=lambda item: abs(
+                (
+                    datetime.fromisoformat(item["date"].replace("Z", "+00:00"))
+                    - tip
+                ).total_seconds()
+            ),
+        )
+        summary_url = (
+            "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?"
+            + urlencode({"event": event["id"]})
+        )
+        summary = fetch_json(summary_url)
+
+        lineups: dict[str, list[dict[str, str]]] = {"home": [], "away": []}
+        for team_data in summary.get("boxscore", {}).get("players", []):
+            code = espn_code(team_data.get("team", {}).get("abbreviation", ""))
+            side = (
+                "home" if code == espn_code(home_tricode)
+                else "away" if code == espn_code(away_tricode)
+                else None
+            )
+            if side is None:
+                continue
+            statistics = team_data.get("statistics") or []
+            athletes = next(
+                (
+                    stat.get("athletes", [])
+                    for stat in statistics
+                    if isinstance(stat.get("athletes"), list)
+                ),
+                [],
+            )
+            lineups[side] = [
+                {
+                    "name": athlete.get("athlete", {}).get("displayName", "Player"),
+                    "jersey": athlete.get("athlete", {}).get("jersey", ""),
+                    "position": athlete.get("athlete", {})
+                        .get("position", {}).get("abbreviation", ""),
+                    "headshot": athlete.get("athlete", {})
+                        .get("headshot", {}).get("href", ""),
+                }
+                for athlete in athletes
+                if athlete.get("starter")
+            ][:5]
+
+        result = {
+            **lineups,
+            "available": bool(lineups["home"] or lineups["away"]),
+            "used_starters": bool(lineups["home"] or lineups["away"]),
+            "source": "ESPN",
+        }
+        _set(key, result, TTL_LINEUP_FALLBACK)
+        return result
+    except Exception as exc:
+        log.warning(
+            "ESPN lineup fallback failed for %s (%s @ %s): %s",
+            game_time_utc,
+            away_tricode,
+            home_tricode,
+            exc,
+        )
+        return _get_stale(key) or {}
 
 
 # ── Scoreboard parsers ────────────────────────────────────────────────────────
