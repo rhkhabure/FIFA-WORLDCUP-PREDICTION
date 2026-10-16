@@ -20,8 +20,8 @@ The application is a FastAPI server with Jinja2 templates, a dark-mode UI, footb
 ## Quick start
 
 ```bash
-# 1. Install dependencies
-pip install fastapi uvicorn jinja2 pandas numpy scipy torch python-dotenv requests nba_api==1.11.4
+# 1. Install all repository dependencies (Python 3.11 recommended)
+pip install -r requirements.txt
 
 # 2. Set up environment variables
 cp .env.example .env

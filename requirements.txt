@@ -1,7 +1,13 @@
+# Shared FastAPI/NBA runtime used by v4_web and the Render deployment.
+-r v4_web/requirements.txt
+
+# Legacy Streamlit dashboard and its optional live refresh widget.
 streamlit
-torch
-numpy
+streamlit-autorefresh
+
+# Football data preparation, model validation, and backend training scripts.
 pandas
 scikit-learn
 requests
-streamlit-autorefresh
+soccerdata
+notebook

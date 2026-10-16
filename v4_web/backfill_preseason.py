@@ -17,23 +17,25 @@ from pathlib import Path
 ROOT = Path(__file__).parent
 
 # ── Load model artefacts ──────────────────────────────────────────────────────
-# Search in order: v4_web/nba/model/, V3/model/, V3/data/raw/
-_elo_candidates = [
-    ROOT / "nba" / "model" / "elo_ratings_v3.json",
-    ROOT.parent / "NBA Live Win Probability" / "V3" / "model" / "elo_ratings_v3.json",
-    ROOT.parent / "NBA Live Win Probability" / "data" / "raw" / "elo_ratings_v3.json",
-]
-elo_path = next((p for p in _elo_candidates if p.exists()), None)
+# Search: env var, v4_web/nba/model/, then the NBA project (found by walking up
+# from here) -> <NBA project>/data/raw/ (where Phase 1 writes it) or V3/model/
+_name = "elo_ratings_v3.json"
+_cands = []
+import os
+if os.environ.get("NBA_ELO_PATH"):
+    _cands.append(Path(os.environ["NBA_ELO_PATH"]))
+_cands.append(ROOT / "nba" / "model" / _name)
+for _anc in list(ROOT.parents)[:5]:
+    for _proj in ("NBA LIVE PREDICTIONS/NBA Live Win Probability", "NBA Live Win Probability"):
+        for _sub in ("data/raw", "V3/model", "V3/data/raw", "model"):
+            _cands.append(_anc / _proj / _sub / _name)
+elo_path = next((p for p in _cands if p.is_file()), None)
 if elo_path is None:
-    print("Searched:")
-    for p in _elo_candidates:
-        print(f"  {p}")
-    sys.exit("ERROR: elo_ratings_v3.json not found in any expected location.\n"
-             "Copy it from V3/data/raw/ or V3/model/ into v4_web/nba/model/")
-print(f"Elo file: {elo_path}")
-
+    sys.exit("ERROR: elo_ratings_v3.json not found. Copy it from "
+             "<NBA project>/data/raw/ into v4_web/nba/model/ and re-run.")
 with open(elo_path) as f:
     elo_ratings = {str(k): float(v) for k, v in json.load(f).items()}
+print(f"Elo file: {elo_path}")
 
 HOME_ADVANTAGE = 100
 ELO_START = 1500
@@ -132,6 +134,10 @@ while d < today:
             # Brier = (prob - outcome)^2
             brier = (hp - (1 if won else 0)) ** 2
 
+            if conn.execute("SELECT 1 FROM predictions WHERE game_id=? AND league='nba'",
+                            (g["game_id"],)).fetchone():
+                skipped += 1
+                continue
             try:
                 conn.execute("""
                     INSERT OR IGNORE INTO predictions

@@ -64,6 +64,26 @@ ELO_START      = 1500
 HOME_ADVANTAGE = 100   # Elo points — same as training
 
 
+def find_elo_file() -> Path | None:
+    """
+    Find elo_ratings_v3.json. Order: NBA_ELO_PATH env var, nba/model/, then the
+    NBA project found by walking up from this file (Phase 1 writes it to
+    <NBA project>/data/raw/, Phase 2 to <NBA project>/V3/model/).
+    """
+    import os
+    name = "elo_ratings_v3.json"
+    candidates = []
+    if os.environ.get("NBA_ELO_PATH"):
+        candidates.append(Path(os.environ["NBA_ELO_PATH"]))
+    candidates.append(MODEL_DIR / name)
+    for anc in list(_HERE.parents)[:5]:
+        for proj in ("NBA LIVE PREDICTIONS/NBA Live Win Probability",
+                     "NBA Live Win Probability"):
+            for sub in ("data/raw", "V3/model", "V3/data/raw", "model"):
+                candidates.append(anc / proj / sub / name)
+    return next((p for p in candidates if p.is_file()), None)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Network definition — must match phase2_training.py WinProbNet exactly
 # ─────────────────────────────────────────────────────────────────────────────
@@ -105,6 +125,7 @@ class NBAModel:
         self._scaler   = None
         self._T:       float = 1.0
         self._elo:     dict  = {}
+        self._elo_path = None
         self._config:  dict  = {}
         self.loaded:   bool  = False
 
@@ -148,10 +169,11 @@ class NBAModel:
                 t_data = pickle.load(f)
             self._T = float(t_data.get("T", 1.0)) if isinstance(t_data, dict) else float(t_data)
 
-            # Elo ratings
-            if ELO_PATH.exists():
-                with open(ELO_PATH, encoding="utf-8") as f:
-                    self._elo = {str(k): float(v) for k, v in json.load(f).items()}
+            # Elo ratings — Phase 1 writes this file to data/raw/ in the NBA
+            # project, so it is NOT in nba/model/ unless copied. Search for it,
+            # copy it in once, and fail LOUDLY if it can't be found (a silent
+            # miss makes every team 1500 and every home team exactly 64%).
+            self._load_elo()
 
             self.loaded = True
             metrics = self._config.get("val_metrics", {})
@@ -166,6 +188,40 @@ class NBAModel:
         except Exception as exc:
             log.error("NBA model failed to load: %s", exc, exc_info=True)
             self.loaded = False
+
+    # ── Elo loading ───────────────────────────────────────────────────────────
+
+    def _load_elo(self) -> None:
+        """Locate elo_ratings_v3.json, copy it into nba/model/, load it."""
+        import os, shutil
+        self._elo = {}
+        self._elo_path = None
+
+        path = find_elo_file()
+        if path is None:
+            log.error(
+                "ELO RATINGS NOT FOUND. Every team will default to %d and every "
+                "home team will show exactly 64%%. Copy elo_ratings_v3.json "
+                "(written by Phase 1 to <NBA project>/data/raw/) into %s, or set "
+                "the NBA_ELO_PATH environment variable.", ELO_START, MODEL_DIR)
+            return
+
+        # One-time copy so everything the dashboard needs lives in v4_web
+        if path.resolve() != ELO_PATH.resolve():
+            try:
+                MODEL_DIR.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(path, ELO_PATH)
+                log.info("Copied Elo ratings %s -> %s", path, ELO_PATH)
+                path = ELO_PATH
+            except Exception as exc:
+                log.warning("Could not copy Elo file (%s) — using it in place", exc)
+
+        with open(path, encoding="utf-8") as f:
+            self._elo = {str(k): float(v) for k, v in json.load(f).items()}
+        self._elo_path = path
+        if len(self._elo) < 30:
+            log.error("Elo file has only %d teams (expected 30): %s",
+                      len(self._elo), path)
 
     # ── Elo helpers ───────────────────────────────────────────────────────────
 
@@ -390,6 +446,8 @@ class NBAModel:
             "accuracy":    metrics.get("accuracy"),
             "temperature": self._T,
             "n_teams_elo": len(self._elo),
+            "elo_ok":      len(self._elo) >= 30,
+            "elo_path":    str(getattr(self, "_elo_path", None)),
             "features":    N_FEATURES,
         }
 

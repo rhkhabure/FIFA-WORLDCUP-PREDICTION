@@ -1,6 +1,6 @@
 # 📘 User Manual: Melios Dira Odds — V4.2
 
-This manual covers everything you need to set up, run, and use the V4.2 football prediction dashboard from scratch.
+This manual covers how to set up, run, and use the V4.2 football and NBA prediction dashboard, including temporarily sharing it over the internet from your own computer.
 
 ---
 
@@ -14,15 +14,18 @@ This manual covers everything you need to set up, run, and use the V4.2 football
 
 ## Step 1: Install dependencies
 
+From the repository root, install the complete dependency set for the FastAPI
+dashboard, NBA pages, legacy Streamlit app, and football data/model scripts:
+
 ```bash
-pip install fastapi uvicorn jinja2 pandas numpy scipy torch torchvision \
-            python-dotenv requests soccerdata
+pip install -r requirements.txt
 ```
 
-If you have a CUDA-capable GPU, install the CUDA version of PyTorch instead:
-```bash
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
-```
+The application requirements select a CPU-compatible PyTorch build, so an
+NVIDIA GPU or separate CUDA install is not required. The runtime dependencies
+for the hosted FastAPI app are maintained in `v4_web/requirements.txt`; the
+repository-level file includes those plus packages for the older Streamlit
+dashboard and model/data preparation tools.
 
 ---
 
@@ -75,16 +78,70 @@ Click **Run All**. The notebook runs the SLSQP MLE optimiser with exponential ti
 
 ```bash
 cd v4_web
-python -m uvicorn main:app --reload
+python -m uvicorn main:app --host 127.0.0.1 --port 8000
 ```
 
-Open `http://localhost:8000` in your browser. The `--reload` flag means the server automatically restarts when you edit a file — useful during development.
+Open `http://localhost:8000` in your browser. Keep this terminal open while you use the dashboard. To develop and automatically reload after editing files, use `--reload` instead; do not use that development option when sharing the site.
 
 **What happens at startup:**
 1. `football_v4.pth` loads into memory (neural net, ~1 second)
 2. FPL bootstrap is fetched and cached (PL team names + fixtures)
 3. The prediction logging job is scheduled to run every 30 minutes
 4. The first prediction job cycle runs immediately
+
+---
+
+## Temporarily share the site on your phone or with friends
+
+For a free, temporary public link, you can create a Cloudflare Quick Tunnel to the app running on your computer. This is suitable for demos and testing, not permanent production hosting. No Azure subscription or domain is needed.
+
+### 1. Install `cloudflared` (once)
+
+On Windows, open PowerShell and run:
+
+```powershell
+winget install --exact --id Cloudflare.cloudflared
+```
+
+After installation, open a **new** PowerShell window so it can find `cloudflared`.
+
+### 2. Start the dashboard
+
+In one PowerShell window:
+
+```powershell
+cd C:\path\to\FIFA-WORLDCUP-PREDICTION\v4_web
+python -m uvicorn main:app --host 127.0.0.1 --port 8000
+```
+
+Leave this window running. Confirm the site opens at `http://127.0.0.1:8000` on your computer.
+
+### 3. Start the tunnel
+
+In a **second** PowerShell window:
+
+```powershell
+cloudflared tunnel --url http://127.0.0.1:8000
+```
+
+Wait for the message `Your quick Tunnel has been created!` and copy the `https://…trycloudflare.com` address. Open that HTTPS link on your phone or share it with friends.
+
+### Important limitations and safety
+
+- The link is public to anyone who has it unless you add an access restriction. The app does not require users to sign in, so do not share it widely or include private/personal data while it is exposed.
+- You can limit access to specific email addresses by adding one `--allowed-mail` option for each visitor:
+
+  ```powershell
+  cloudflared tunnel --url http://127.0.0.1:8000 `
+    --allowed-mail friend1@example.com `
+    --allowed-mail friend2@example.com
+  ```
+
+- Your computer must stay on, online, and running both the app and tunnel. The link stops working if either process exits, the computer sleeps, or the network disconnects.
+- The temporary URL can change each time you restart the tunnel. Cloudflare Quick Tunnels have no uptime guarantee and are intended for testing/development.
+- The application and its SQLite prediction history remain on your computer. This avoids free-host filesystem loss, but it is not a remote backup; protect your computer and back up important database files.
+- To stop sharing, press **Ctrl+C** in the tunnel window. Stop the app separately with **Ctrl+C** in its terminal.
+- Do not use this as permanent hosting. For a stable link and always-on availability, deploy to a hosting service with persistent storage and appropriate authentication.
 
 ---
 
