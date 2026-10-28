@@ -369,7 +369,7 @@
         awayTri:  "{{ game.away_tricode }}",
         homeCol:  "{{ home_line }}",
         awayCol:  "{{ away_line }}",
-        poll:     {{ poll_interval | default(30000) }},
+        poll:     {{ poll_interval | default(20000) }},
         tipUtc:   "{{ game.game_time_utc }}",
         pregame:  {{ game.home_win_prob }},
     };
@@ -490,20 +490,20 @@
             $('court-status').textContent = count
                 ? data.used_starters
                     ? `${count} players shown from ${data.source || 'confirmed starters'} · current on-court status is unavailable`
-                    : `${count} players shown · ${data.source || 'NBA live feed'} · refreshes every 30 seconds`
+                    : `${count} players shown · ${data.source || 'NBA live feed'} · refreshes every 20 seconds`
                 : data.available
                     ? 'Live on-court player data will appear when the game is underway.'
-                    : 'Lineup data is temporarily unavailable; retrying in 30 seconds.';
+                    : 'Lineup data is temporarily unavailable; retrying in 20 seconds.';
         } catch (error) {
             clearTimeout(lineupRequestTimeout);
-            $('court-status').textContent = 'Could not load the current lineup; retrying in 30 seconds.';
+            $('court-status').textContent = 'Could not load the current lineup; retrying in 20 seconds.';
         }
     }
 
     // Start independently of Chart.js so chart load/runtime errors don't leave
     // the court stuck in its initial loading state.
     pollLineup();
-    if (status !== 'final') lineupTimer = setInterval(pollLineup, 30000);
+    if (status !== 'final') lineupTimer = setInterval(pollLineup, 20000);
 
     // ── Chart ────────────────────────────────────────────────────────
     const QTR = [0, 720, 1440, 2160, 2880];

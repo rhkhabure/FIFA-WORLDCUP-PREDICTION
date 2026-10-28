@@ -7,7 +7,7 @@ Mounted in main.py with prefix="/nba".
 Routes:
     GET  /nba                       → nba_hub.html
     GET  /nba/match                 → nba_match.html
-    GET  /nba/live/{game_id}        → JSON (live poll, called every 30s)
+    GET  /nba/live/{game_id}        → JSON (live poll, called every 20s)
     GET  /nba/history               → nba_history.html
     GET  /nba/teams                 → nba_teams.html
     GET  /nba/team/{team_id}        → nba_team.html
@@ -269,7 +269,7 @@ async def nba_match(request: Request, game_id: str = ""):
             "model_info":     _model.info() if _model else {},
             "sport":          "nba",
             # Chart.js score and game-clock poll interval (ms)
-            "poll_interval":  30000,
+            "poll_interval":  20000,
             "topbar_title":   f"{enriched['away_tricode']} @ {enriched['home_tricode']}",
             "live_count":     sum(1 for g in games if g["status"] == "live"),
             "title":          f"{enriched['away_tricode']} @ {enriched['home_tricode']}",
@@ -599,7 +599,7 @@ async def nba_player_profile(request: Request, player_id: int):
 async def nba_live_poll(game_id: str):
     """
     /nba/live/{game_id} — live poll endpoint.
-    Called by Chart.js every 30 seconds from nba_match.html.
+    Called by Chart.js every 20 seconds from nba_match.html.
 
     Returns:
         {

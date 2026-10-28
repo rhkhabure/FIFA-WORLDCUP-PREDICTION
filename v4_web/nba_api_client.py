@@ -12,7 +12,7 @@ Exposes:
     build_live_snapshot(game_id)    -> dict          feature dict for nba_model
 
 The nba_api library is rate-limited by stats.nba.com. All calls are
-cached (TTL 25s for live data, 300s for static) and serve stale data
+cached (TTL 15s for live data, 300s for static) and serve stale data
 on any API failure so the dashboard never crashes mid-game.
 
 Drop this file in v4_web/.
@@ -30,9 +30,9 @@ from typing import Any
 log = logging.getLogger(__name__)
 
 # ── TTL constants (seconds) ───────────────────────────────────────────────────
-TTL_LIVE    = 25    # play-by-play during live games
-TTL_SCOREBOARD_LIVE = 25  # live score and game clock
-TTL_BOX_SCORE = 25  # player stats and on-court lineup
+TTL_LIVE    = 15    # play-by-play during live games
+TTL_SCOREBOARD_LIVE = 15  # live score and game clock
+TTL_BOX_SCORE = 15  # player stats and on-court lineup
 TTL_TEAM_ROSTER = 21600  # roster changes infrequently
 TTL_PLAYER_PROFILE = 21600  # player bio and headline stats
 TTL_LINEUP_FALLBACK = 30  # ESPN scoreboard/box-score fallback
