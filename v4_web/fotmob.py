@@ -413,7 +413,10 @@ def fotmob_to_fpl_team_name(fotmob_name: str) -> str:
         "Coventry City"            : "Coventry",
         "Sunderland"               : "Sunderland",
     }
-    return _MAP.get(fotmob_name, fotmob_name)
+    mapped_name = _MAP.get(fotmob_name, fotmob_name)
+    from v4_backend.feature_builder import TEAM_NAME_ALIASES
+
+    return TEAM_NAME_ALIASES.get(mapped_name, mapped_name)
 
 
 def get_fotmob_match_id(home_name: str, away_name: str, date_str: str | None = None) -> str | None:
@@ -452,10 +455,16 @@ def get_fotmob_match_id(home_name: str, away_name: str, date_str: str | None = N
     data = _lineup_cache[cache_key]
 
     def norm(s: str) -> str:
-        return s.lower().replace("fc", "").replace("afc", "").strip()
+        return (
+            fotmob_to_fpl_team_name(s)
+            .lower()
+            .replace("fc", "")
+            .replace("afc", "")
+            .strip()
+        )
 
-    home_n = norm(fotmob_to_fpl_team_name(home_name) or home_name)
-    away_n = norm(fotmob_to_fpl_team_name(away_name) or away_name)
+    home_n = norm(home_name)
+    away_n = norm(away_name)
 
     leagues = data.get("data", {}).get("leagues", [])
     for league in leagues:

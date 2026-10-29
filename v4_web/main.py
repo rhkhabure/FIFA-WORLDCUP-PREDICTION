@@ -539,7 +539,7 @@ async def league_team_page(
     gamma = get_effective_gamma(
         league_data.get("meta", {}).get("gamma_home_advantage", 1.25)
     )
-    if league_key == "seriea":
+    if league_key in ("seriea", "bundesliga"):
         now = datetime.now(timezone.utc)
         season = season or (now.year if now.month >= 7 else now.year - 1)
         season_teams = get_competition_teams_fd(league_cfg["comp"], season)
@@ -576,7 +576,8 @@ async def league_team_page(
                         term in raw_position for term in ("mid", "wing")
                     )
                     else "Forward" if any(
-                        term in raw_position for term in ("forward", "attack", "striker")
+                        term in raw_position
+                        for term in ("forward", "attack", "striker", "off")
                     )
                     else None
                 )
@@ -676,6 +677,7 @@ async def league_team_page(
                 ),
                 "team_page_league": league_key,
                 "match_data_available": True,
+                "league_name": league_cfg["name"],
             }
             return templates.TemplateResponse(
                 request=request, name="team.html", context=ctx
@@ -722,6 +724,7 @@ async def league_team_page(
                 ),
                 "team_page_league": league_key,
                 "match_data_available": False,
+                "league_name": league_cfg["name"],
             },
         )
 
@@ -1125,9 +1128,9 @@ async def tournament_page(request: Request):
 async def history_page(request: Request):
     """Prediction history — model accuracy tracker, filterable by league."""
 
-    # League filter from query param: ?league=pl|laliga|seriea / (all)
+    # League filter from query param: ?league=pl|laliga|seriea|bundesliga / (all)
     league_filter = request.query_params.get("league", "all").lower()
-    if league_filter not in ("all", "pl", "laliga", "seriea"):
+    if league_filter not in ("all", "pl", "laliga", "seriea", "bundesliga"):
         league_filter = "all"
 
     try:
@@ -1164,6 +1167,8 @@ async def history_page(request: Request):
             all_pred = [p for p in all_pred if p.get("league","pl") == "laliga"]
         elif league_filter == "seriea":
             all_pred = [p for p in all_pred if p.get("league","pl") == "seriea"]
+        elif league_filter == "bundesliga":
+            all_pred = [p for p in all_pred if p.get("league","pl") == "bundesliga"]
 
         finished = [p for p in all_pred if p["actual_result"]]
         upcoming = [p for p in all_pred if not p["actual_result"]]
@@ -1173,6 +1178,7 @@ async def history_page(request: Request):
         pl_count  = sum(1 for p in all_preds_all if p.get("league","pl") == "pl")
         ll_count  = sum(1 for p in all_preds_all if p.get("league","pl") == "laliga")
         sa_count  = sum(1 for p in all_preds_all if p.get("league","pl") == "seriea")
+        bl_count  = sum(1 for p in all_preds_all if p.get("league","pl") == "bundesliga")
 
         # Accuracy stats
         def _stats(preds):
@@ -1202,9 +1208,11 @@ async def history_page(request: Request):
         pl_preds  = [p for p in all_preds_all if p.get("league","pl") == "pl"]
         ll_preds  = [p for p in all_preds_all if p.get("league","pl") == "laliga"]
         sa_preds  = [p for p in all_preds_all if p.get("league","pl") == "seriea"]
+        bl_preds  = [p for p in all_preds_all if p.get("league","pl") == "bundesliga"]
         pl_stats  = _stats(pl_preds)
         ll_stats  = _stats(ll_preds)
         sa_stats  = _stats(sa_preds)
+        bl_stats  = _stats(bl_preds)
 
         # Confidence band breakdown
         bands = {
@@ -1242,11 +1250,11 @@ async def history_page(request: Request):
 
     except Exception as e:
         print(f"[history] error: {e}")
-        stats = pl_stats = ll_stats = sa_stats = None
+        stats = pl_stats = ll_stats = sa_stats = bl_stats = None
         finished = upcoming = []
         band_stats = {}
         draws_actual = draws_predicted = 0
-        pl_count = ll_count = sa_count = 0
+        pl_count = ll_count = sa_count = bl_count = 0
         league_filter = "all"
 
     return templates.TemplateResponse(
@@ -1257,9 +1265,11 @@ async def history_page(request: Request):
             "pl_stats"        : pl_stats,
             "ll_stats"        : ll_stats,
             "sa_stats"        : sa_stats,
+            "bl_stats"        : bl_stats,
             "pl_count"        : pl_count,
             "ll_count"        : ll_count,
             "sa_count"        : sa_count,
+            "bl_count"        : bl_count,
             "league_filter"   : league_filter,
             "finished"        : finished,
             "upcoming"        : upcoming[:10],

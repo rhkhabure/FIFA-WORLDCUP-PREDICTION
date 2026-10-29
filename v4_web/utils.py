@@ -530,7 +530,8 @@ def generate_pitch_svg_horizontal(home_formation="4-3-3", away_formation="4-3-3"
                                   away_crest_url: str = "",
                                   h_score: int | None = None,
                                   a_score: int | None = None,
-                                  status: str = ""):
+                                  status: str = "",
+                                  league: str = "pl"):
     """
     Full horizontal pitch for the Live Match page.
 
@@ -797,9 +798,14 @@ def generate_pitch_svg_horizontal(home_formation="4-3-3", away_formation="4-3-3"
             for row_idx in range(num_players):
                 y = 14 + (172 / (num_players + 1)) * (row_idx + 1)
                 name = home_players[p_idx] if p_idx < len(home_players) else f"H{p_idx+1}"
+                player_href = (
+                    f"/player?name={quote(name, safe='')}"
+                    f"&amp;team={quote(home_team, safe='')}"
+                    f"&amp;league={quote(league, safe='')}"
+                )
                 j = _jersey_svg(x, y, h_kit, True, jersey_clip_defs)
                 jersey_svgs.append(
-                    f'<a href="/player?name={name}&team={home_team}" style="cursor:pointer;">'
+                    f'<a href="{player_href}" style="cursor:pointer;">'
                     f'{j}'
                     f'<text x="{x:.1f}" y="{y+11:.1f}" fill="white"'
                     f' font-family="\'JetBrains Mono\',monospace"'
@@ -818,9 +824,14 @@ def generate_pitch_svg_horizontal(home_formation="4-3-3", away_formation="4-3-3"
             for row_idx in range(num_players):
                 y = 14 + (172 / (num_players + 1)) * (row_idx + 1)
                 name = away_players[p_idx] if p_idx < len(away_players) else f"A{p_idx+1}"
+                player_href = (
+                    f"/player?name={quote(name, safe='')}"
+                    f"&amp;team={quote(away_team, safe='')}"
+                    f"&amp;league={quote(league, safe='')}"
+                )
                 j = _jersey_svg(x, y, a_kit, False, jersey_clip_defs)
                 jersey_svgs.append(
-                    f'<a href="/player?name={name}&team={away_team}" style="cursor:pointer;">'
+                    f'<a href="{player_href}" style="cursor:pointer;">'
                     f'{j}'
                     f'<text x="{x:.1f}" y="{y+11:.1f}" fill="white"'
                     f' font-family="\'JetBrains Mono\',monospace"'

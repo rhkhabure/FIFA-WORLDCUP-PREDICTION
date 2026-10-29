@@ -482,6 +482,35 @@ async def match(request: Request):
                 except Exception as e:
                     print(f"[match] FotMob redirect error: {e}")
 
+        if active_ctx_key == "bundesliga":
+            try:
+                today = datetime.now(EAT).date()
+                today_fixtures = get_fixtures_by_date_fd(
+                    active_comp,
+                    date_from=today.isoformat(),
+                    date_to=today.isoformat(),
+                )
+                live = [
+                    fixture for fixture in today_fixtures
+                    if fixture.get("status") in ("In Play", "Half Time")
+                ]
+                target = live[0] if live else None
+                if target is None:
+                    upcoming = get_upcoming_fixtures_fd(
+                        active_comp, max_fixtures=50
+                    )
+                    target = upcoming[0] if upcoming else None
+                if target and target.get("match_id"):
+                    return RedirectResponse(
+                        url=(
+                            f"/match?match_id={target['match_id']}"
+                            f"&league={active_ctx_key}"
+                        ),
+                        status_code=302,
+                    )
+            except Exception as e:
+                print(f"[match] Bundesliga fixture redirect error: {e}")
+
         # FotMob unavailable or 429 — use fd.org finished cache for any league
         # This gives us real team names and DC odds even without live data
         if active_ctx_key != "pl":
@@ -644,6 +673,7 @@ async def match(request: Request):
                 home_formation=home_formation, away_formation=away_formation,
                 home_color=home_colour, away_color=away_colour,
                 home_team=home_name, away_team=away_name,
+                league=active_ctx_key,
                 home_players=home_players, away_players=away_players,
                 home_crest_url=get_crest_proxy_url(home_name),
                 away_crest_url=get_crest_proxy_url(away_name),
@@ -816,6 +846,7 @@ async def match(request: Request):
             away_color=away_colour,
             home_team=home_name,
             away_team=away_name,
+            league=active_ctx_key,
             home_players=home_players,
             away_players=away_players,
             home_crest_url=get_crest_proxy_url(home_name),
@@ -1192,6 +1223,7 @@ async def match(request: Request):
                 away_color=away_colour,
                 home_team=home_name,
                 away_team=away_name,
+                league=active_ctx_key,
                 home_players=home_players,
                 away_players=away_players,
                 home_crest_url=get_crest_proxy_url(home_name),
@@ -1297,7 +1329,7 @@ async def match(request: Request):
             fixtures = get_upcoming_fixtures(max_fixtures=10)
         except Exception:
             pass
-    elif active_ctx_key == "laliga":
+    elif active_ctx_key in ("laliga", "bundesliga"):
         # Dated fixtures include live games that no longer appear as scheduled.
         today = datetime.now(EAT).date()
         weekend_start = (
@@ -1336,7 +1368,7 @@ async def match(request: Request):
                     "kickoff_eat": label,
                 })
         except Exception as e:
-            print(f"[match] La Liga date-range fixture error: {e}")
+            print(f"[match] {active_name} date-range fixture error: {e}")
     else:
         # Non-PL: BBS primary, FotMob fallback, fd.org last resort
         # BBS: get today's matches + upcoming
@@ -1521,9 +1553,8 @@ async def match(request: Request):
         "home_team_id"            : _CREST_IDS.get(home_name if featured else "", 0),
         "away_team_id"            : _CREST_IDS.get(away_name if featured else "", 0),
     }
-    # DEBUG — remove after confirming La Liga data flow
     if active_ctx_key != "pl":
-        print(f"[DEBUG-LALIGA] match_id={match_id} featured={bool(featured)} "
+        print(f"[match] {active_name} match_id={match_id} featured={bool(featured)} "
               f"home={featured.get('home_name','') if featured else ''} "
               f"away={featured.get('away_name','') if featured else ''} "
               f"prior={prior} pitch={bool(pitch_svg)} matrix={bool(matrix_svg)} "

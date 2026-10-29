@@ -21,10 +21,12 @@ EAT = timezone(timedelta(hours=3))
 DRAW_PROPENSITY = 0.10
 
 LEAGUE_FILTERS = {
-    "pl":     {"competition_id": "PL", "name": "Premier League"},
-    "laliga": {"competition_id": "PD", "name": "La Liga"},
-    "cl":     {"competition_id": "CL", "name": "Champions League"},
-    "wc":     {"competition_id": "WC", "name": "World Cup"},
+    "pl": ("premier league",),
+    "laliga": ("la liga", "laliga"),
+    "bundesliga": ("bundesliga",),
+    "seriea": ("serie a",),
+    "cl": ("champions league",),
+    "wc": ("world cup",),
 }
 
 LEAGUE_MAP = {
