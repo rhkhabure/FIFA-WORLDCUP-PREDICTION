@@ -342,6 +342,7 @@ for _league_key, _context in LEAGUE_CONTEXTS.items():
     _context["team_map_href"] = (
         "/teams/laliga" if _league_key == "laliga"
         else "/teams/seriea" if _league_key == "seriea"
+        else None if _league_key == "bundesliga"
         else "/teams"
     )
 
@@ -1416,8 +1417,8 @@ async def league_page(request: Request, league_key: str):
     League dashboard router.
     PL      → redirects to /match (fully built).
     La Liga → live dashboard with DC odds and upcoming fixtures.
-    Serie A → fixtures, scores and pre-match probabilities.
-    Others  → under-construction page.
+    Serie A and Bundesliga → fixtures, scores and pre-match probabilities.
+    Ligue 1               → under-construction page.
     """
 
     if league_key not in LEAGUE_CONTEXTS:
@@ -1430,18 +1431,13 @@ async def league_page(request: Request, league_key: str):
         return RedirectResponse(url="/match?league=laliga")
 
     if league_key == "seriea":
-        return await seriea_dashboard(request)
+        return await football_league_dashboard(request, league_key)
+
+    if league_key == "bundesliga":
+        return await football_league_dashboard(request, league_key)
 
     # All other leagues — under construction
     LEAGUE_FEATURES = {
-        "bundesliga": [
-            ("DC prior odds (18 teams)",          90),
-            ("Live match scores via FotMob",      60),
-            ("Germany team map",                  15),
-            ("Lineup-adjusted predictions",       10),
-            ("Prediction history logging",        10),
-            ("Neural net live model",             10),
-        ],
         "ligue1": [
             ("DC prior odds (18 teams)",          90),
             ("Live match scores via FotMob",      60),
@@ -1465,9 +1461,8 @@ async def league_page(request: Request, league_key: str):
     )
 
 
-async def seriea_dashboard(request: Request):
-    """Initial Serie A overview with live results and pre-match probabilities."""
-    league_key = "seriea"
+async def football_league_dashboard(request: Request, league_key: str):
+    """League overview with recent scores, today's fixtures and DC predictions."""
     league_cfg = MATCH_LEAGUES[league_key]
     priors = priors_db.get(league_cfg["priors"], {})
     teams = priors.get("teams", {})
@@ -1483,7 +1478,7 @@ async def seriea_dashboard(request: Request):
             date_to=today_date.isoformat(),
         )
     except Exception as e:
-        print(f"[seriea] recent fixture fetch error: {e}")
+        print(f"[{league_key}] recent fixture fetch error: {e}")
 
     upcoming_raw = []
     try:
@@ -1491,7 +1486,7 @@ async def seriea_dashboard(request: Request):
             league_cfg["comp"], max_fixtures=50
         )
     except Exception as e:
-        print(f"[seriea] upcoming fixture fetch error: {e}")
+        print(f"[{league_key}] upcoming fixture fetch error: {e}")
 
     current_team_names = {
         TEAM_NAME_ALIASES.get(fixture[side], fixture[side])
@@ -1555,6 +1550,8 @@ async def seriea_dashboard(request: Request):
             **league_ctx(league_key),
             "league_key": league_key,
             "title": league_cfg["name"],
+            "country": "Germany" if league_key == "bundesliga" else "Italy",
+            "history_href": f"/history?league={league_key}",
             "today": today_date.isoformat(),
             "yesterday": yesterday_date.isoformat(),
             "today_matches": today_matches,

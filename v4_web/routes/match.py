@@ -861,7 +861,10 @@ async def match(request: Request):
         home_formation = None
         away_formation = None
 
-        if active_ctx_key in ("laliga", "seriea") and str(match_id).isdigit():
+        if (
+            active_ctx_key in ("laliga", "seriea", "bundesliga")
+            and str(match_id).isdigit()
+        ):
             try:
                 match_data = get_live_match_data(match_id)
                 if match_data and match_data.get("home_team") != "Unknown Home":

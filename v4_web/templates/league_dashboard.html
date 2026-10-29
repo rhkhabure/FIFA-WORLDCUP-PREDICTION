@@ -26,7 +26,7 @@
 
 <header class="league-heading">
   <h1>{{ title }}</h1>
-  <p>Serie A fixtures, scores and Dixon-Coles pre-match probabilities</p>
+  <p>{{ title }} fixtures, scores and Dixon-Coles pre-match probabilities · {{ country }}</p>
 </header>
 
 <div class="stat-row">
@@ -36,12 +36,14 @@
   <div class="stat"><strong>{{ home_advantage }}</strong><span>Historical home advantage</span></div>
 </div>
 
-<a href="/history?league=seriea" style="display:inline-flex;margin:0 0 18px;padding:8px 12px;border:1px solid var(--league-light);border-radius:8px;color:var(--league-primary);font-size:11px;font-weight:800;text-decoration:none">
+{% if league_key == 'seriea' %}
+<a href="{{ history_href }}" style="display:inline-flex;margin:0 0 18px;padding:8px 12px;border:1px solid var(--league-light);border-radius:8px;color:var(--league-primary);font-size:11px;font-weight:800;text-decoration:none">
   View Serie A prediction history →
 </a>
 <a href="/teams/seriea" style="display:inline-flex;margin:0 0 18px 8px;padding:8px 12px;border:1px solid var(--league-light);border-radius:8px;color:var(--league-primary);font-size:11px;font-weight:800;text-decoration:none">
   Open Italy club map →
 </a>
+{% endif %}
 
 {% if fallback_fixture_count %}
 <div class="notice">
@@ -55,7 +57,7 @@
 {% if matches %}
 <div class="fixture-list">
   {% for f in matches %}
-  <a class="fixture" href="/match?match_id={{ f.match_id }}&amp;league=seriea">
+  <a class="fixture" href="/match?match_id={{ f.match_id }}&amp;league={{ league_key }}">
     <div class="fixture-main">
       <div class="teams">{{ f.home }} <span class="muted">vs</span> {{ f.away }}</div>
       <div class="fixture-meta">

@@ -84,6 +84,26 @@ TEAM_NAME_ALIASES = {
     "Udinese Calcio"              : "Udinese",
     "FC Internazionale"           : "Inter",
     "Hellas Verona"               : "Verona",
+    # football-data.org Bundesliga names -> keys in the German priors
+    "FC Bayern München"           : "Bayern Munich",
+    "FC Bayern Munich"            : "Bayern Munich",
+    "Borussia Mönchengladbach"    : "Borussia M.Gladbach",
+    "Borussia Monchengladbach"    : "Borussia M.Gladbach",
+    "RB Leipzig"                  : "RasenBallsport Leipzig",
+    "Bayer 04 Leverkusen"         : "Bayer Leverkusen",
+    "1. FC Union Berlin"          : "Union Berlin",
+    "1. FC Heidenheim 1846"       : "FC Heidenheim",
+    "1. FSV Mainz 05"             : "Mainz 05",
+    "1. FC Köln"                  : "FC Cologne",
+    "1. FC Koln"                  : "FC Cologne",
+    "SV Werder Bremen"            : "Werder Bremen",
+    "VfL Wolfsburg"               : "Wolfsburg",
+    "VfL Bochum 1848"             : "Bochum",
+    "FC Augsburg"                 : "Augsburg",
+    "TSG 1899 Hoffenheim"         : "Hoffenheim",
+    "SC Freiburg"                 : "Freiburg",
+    "FC St. Pauli 1910"           : "St. Pauli",
+    "FC St. Pauli"                : "St. Pauli",
 }
 
 
