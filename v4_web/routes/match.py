@@ -51,6 +51,7 @@ from fotmob import (
     get_lineup,
     get_live_xg,
     get_fotmob_match_id,
+    get_match_details,
     get_match_status_from_date_cache,
     has_key as fotmob_available,
     _lineup_cache,
@@ -269,19 +270,40 @@ async def live_poll(match_id: str, request: Request):
         return _Response(status_code=204)
 
     fotmob_id = request.query_params.get("fotmob_id") or match_id
+    kickoff_utc = request.query_params.get("kickoff_utc")
 
-    # Status/score/minute from date cache (free)
+    # Match details are cooldown-limited and do not depend on refreshing the date feed.
+    details = get_match_details(fotmob_id, kickoff_utc=kickoff_utc)
     fm = get_match_status_from_date_cache(fotmob_id)
 
-    # xG from separate endpoint (1 credit, cached 5 min)
-    xg = get_live_xg(fotmob_id, max_age_seconds=300)
+    xg = get_live_xg(
+        fotmob_id, max_age_seconds=300, kickoff_utc=kickoff_utc
+    )
 
-    if not fm and not xg:
+    if not fm and not details and not xg:
         return JSONResponse({"status": "no_data"})
 
     payload: dict = {"status": "ok"}
 
-    if fm:
+    if details:
+        detail_status = (details.get("status") or "").lower()
+        if "finished" in detail_status or "full time" in detail_status:
+            match_status = "Finished"
+        elif "half" in detail_status:
+            match_status = "Half Time"
+        elif detail_status in ("", "scheduled", "not started"):
+            match_status = "Not Started"
+        else:
+            match_status = "In Play"
+        score = details.get("score") or {}
+        payload.update({
+            "match_status": match_status,
+            "live_minute": details.get("live_minute"),
+            "minute_str": str(details.get("live_minute") or ""),
+            "home_score": score.get("home", 0),
+            "away_score": score.get("away", 0),
+        })
+    elif fm:
         if fm["finished"]:
             match_status = "Finished"
         elif fm["is_halftime"]:
@@ -482,7 +504,7 @@ async def match(request: Request):
                 except Exception as e:
                     print(f"[match] FotMob redirect error: {e}")
 
-        if active_ctx_key == "bundesliga":
+        if active_ctx_key in ("bundesliga", "seriea"):
             try:
                 today = datetime.now(EAT).date()
                 today_fixtures = get_fixtures_by_date_fd(
@@ -509,7 +531,7 @@ async def match(request: Request):
                         status_code=302,
                     )
             except Exception as e:
-                print(f"[match] Bundesliga fixture redirect error: {e}")
+                print(f"[match] {active_ctx_key} fixture redirect error: {e}")
 
         # FotMob unavailable or 429 — use fd.org finished cache for any league
         # This gives us real team names and DC odds even without live data
@@ -662,6 +684,7 @@ async def match(request: Request):
                 "h_xg"      : 0.0,       "a_xg"     : 0.0,
                 "fixture_id": int(match_id) if str(match_id).isdigit() else 0,
                 "fotmob_id" : fotmob_id,
+                "kickoff_utc": snap.get("kickoff_utc", ""),
             }
             prior = dc_pregame(home_name, away_name, active_league)
             posterior = nn_live(home_name, away_name, active_league,
@@ -740,6 +763,7 @@ async def match(request: Request):
             "h_xg"      : 0.0,
             "a_xg"      : 0.0,
             "fixture_id": fpl_match.get("match_id"),
+            "kickoff_utc": kickoff,
         }
         prior = dc_pregame(home_name, away_name, active_league)
         if status not in ("Not Started",):
@@ -757,7 +781,7 @@ async def match(request: Request):
         if fotmob_available():
             fotmob_id = get_fotmob_match_id(home_name, away_name)
             if fotmob_id:
-                fotmob_lineup = get_lineup(fotmob_id)
+                fotmob_lineup = get_lineup(fotmob_id, kickoff)
                 featured["fotmob_id"] = fotmob_id
 
         # Try FotMob for confirmed lineup
@@ -767,7 +791,7 @@ async def match(request: Request):
         if fotmob_available():
             fotmob_id = get_fotmob_match_id(home_name, away_name)
             if fotmob_id:
-                fotmob_lineup = get_lineup(fotmob_id)
+                fotmob_lineup = get_lineup(fotmob_id, kickoff)
                 featured["fotmob_id"] = fotmob_id
 
         if fotmob_lineup and fotmob_lineup.get("home_players"):
@@ -1129,6 +1153,7 @@ async def match(request: Request):
                 "a_xg"      : 0.0,
                 "fixture_id": fixture_id_int,
                 "fotmob_id" : fotmob_id or "",
+                "kickoff_utc": (live_data or {}).get("kickoff_utc", ""),
                 "venue"     : live_data.get("venue", "") if live_data else "",
                 "referee"   : live_data.get("referee", "") if live_data else "",
             }
@@ -1173,7 +1198,9 @@ async def match(request: Request):
         # Lineup from predictions DB (has cached lineup from match day)
         # Fall back to FotMob if available, then DEFAULT_SQUADS
         if not home_players and fotmob_id and fotmob_available():
-            fotmob_lineup_post = get_lineup(fotmob_id)
+            fotmob_lineup_post = get_lineup(
+                fotmob_id, featured.get("kickoff_utc")
+            )
             if fotmob_lineup_post and fotmob_lineup_post.get("home_players"):
                 home_formation = fotmob_lineup_post["home_formation"]
                 away_formation = fotmob_lineup_post["away_formation"]

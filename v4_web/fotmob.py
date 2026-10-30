@@ -25,9 +25,11 @@ API base: https://api.parse.bot/scraper/645b8e03-271d-4c85-97e7-35d5733a2d78
 
 import json
 import os
+import threading
 import time
 import urllib.request
 import urllib.error
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from constants import EAT, LEAGUE_FILTERS
 
@@ -37,6 +39,11 @@ PARSE_BASE = "https://api.parse.bot/scraper/645b8e03-271d-4c85-97e7-35d5733a2d78
 _lineup_cache: dict[str, dict] = {}          # match_id -> lineup data
 _xg_cache:     dict[str, tuple] = {}         # match_id -> (data, timestamp)
 XG_CACHE_TTL = 60  # seconds -- actual TTL controlled by poll_interval in JS
+DATE_CACHE_TTL = 24 * 60 * 60
+MATCH_DETAIL_CACHE_TTL = 10 * 60
+LINEUP_RETRY_TTL = 15 * 60
+MATCH_WINDOW_AFTER_KICKOFF = 4 * 60 * 60
+_api_cache_lock = threading.RLock()
 
 
 def _get_api_key() -> str:
@@ -79,6 +86,79 @@ def _fetch(endpoint: str, params: dict | None = None) -> dict:
     return {}
 
 
+def _persisted_fetch(
+    endpoint: str,
+    params: dict,
+    cache_key: str,
+    ttl_seconds: int,
+) -> dict:
+    """Fetch once per TTL and retain the response across application restarts."""
+    from predictions import get_provider_api_cache, save_provider_api_cache
+
+    with _api_cache_lock:
+        cached = get_provider_api_cache(cache_key)
+        failure_key = f"{cache_key}:failure"
+        recent_failure = get_provider_api_cache(failure_key)
+        now = time.time()
+        if recent_failure and now - recent_failure["fetched_at"] < min(ttl_seconds, 300):
+            return cached["payload"] if cached else recent_failure["payload"]
+        if cached:
+            if (
+                cached["payload"].get("status") == "success"
+                and now - cached["fetched_at"] < ttl_seconds
+            ):
+                return cached["payload"]
+        payload = _fetch(endpoint, params)
+        if payload.get("status") == "success":
+            save_provider_api_cache(cache_key, now, payload)
+        else:
+            save_provider_api_cache(failure_key, now, payload)
+            return cached["payload"] if cached else payload
+        return payload
+
+
+def _parse_kickoff(kickoff_utc: str | None):
+    if not kickoff_utc:
+        return None
+    try:
+        kickoff = datetime.fromisoformat(kickoff_utc.replace("Z", "+00:00"))
+    except (AttributeError, TypeError, ValueError):
+        return None
+    if kickoff.tzinfo is None:
+        kickoff = kickoff.replace(tzinfo=timezone.utc)
+    return kickoff.astimezone(timezone.utc)
+
+
+def _match_window_is_active(kickoff_utc: str | None) -> bool:
+    """Allow live endpoints only from kickoff through four hours afterward."""
+    kickoff = _parse_kickoff(kickoff_utc)
+    if not kickoff:
+        return False
+    now = datetime.now(timezone.utc)
+    return kickoff <= now <= kickoff + timedelta(seconds=MATCH_WINDOW_AFTER_KICKOFF)
+
+
+def _match_date_has_active_fixture(date_str: str) -> bool:
+    """Use logged kickoff times as the authority for whether today's feed is needed."""
+    from predictions import get_all_predictions
+
+    now = datetime.now(timezone.utc)
+    try:
+        predictions = get_all_predictions()
+    except Exception as e:
+        print(f"[fotmob] scheduled fixture lookup failed: {e}")
+        return False
+    for prediction in predictions:
+        if prediction.get("actual_result"):
+            continue
+        kickoff = _parse_kickoff(prediction.get("kickoff_utc"))
+        if not kickoff or kickoff.strftime("%Y%m%d") != date_str:
+            continue
+        if kickoff <= now <= kickoff + timedelta(seconds=MATCH_WINDOW_AFTER_KICKOFF):
+            return True
+    return False
+
+
 # ── Public API ─────────────────────────────────────────────────────────────────
 
 def has_key() -> bool:
@@ -86,16 +166,19 @@ def has_key() -> bool:
     return bool(API_KEY)
 
 
-def get_lineup(match_id: str | int) -> dict | None:
+def get_lineup(
+    match_id: str | int, kickoff_utc: str | None = None
+) -> dict | None:
     """
     Fetch confirmed lineup for a match.
 
-    Cache strategy:
-    - If cached status is "scheduled"/"timed": re-fetch after 5 minutes
-      (game may have kicked off and lineup changed)
-    - If cached status is live/finished: cache permanently (lineup is set)
+    Lineup requests are match-window-gated. Confirmed lineups persist; empty
+    responses are retried after a short cooldown.
     """
     key = str(match_id)
+    if not API_KEY or not _match_window_is_active(kickoff_utc):
+        return None
+
     ts_key = f"{key}_ts"
     if key in _lineup_cache:
         cached = _lineup_cache[key]
@@ -108,10 +191,25 @@ def get_lineup(match_id: str | int) -> dict | None:
         else:
             return cached  # live/finished — lineup is fixed
 
-    if not API_KEY:
-        return None
-
-    data = _fetch("get_match_lineup", {"match_id": match_id})
+    from predictions import get_provider_api_cache
+    cache_key = f"fotmob:lineup:{key}"
+    cached_response = get_provider_api_cache(cache_key)
+    if cached_response:
+        raw = cached_response["payload"]
+        ttl = 365 * 24 * 60 * 60 if _raw_has_lineup(raw) else LINEUP_RETRY_TTL
+        if time.time() - cached_response["fetched_at"] < ttl:
+            data = raw
+        else:
+            data = _persisted_fetch(
+                "get_match_lineup", {"match_id": match_id}, cache_key, ttl
+            )
+    else:
+        data = _persisted_fetch(
+            "get_match_lineup",
+            {"match_id": match_id},
+            cache_key,
+            LINEUP_RETRY_TTL,
+        )
     if data.get("status") != "success":
         return None
 
@@ -151,23 +249,38 @@ def get_lineup(match_id: str | int) -> dict | None:
     return result
 
 
-def get_match_details(match_id: str | int) -> dict | None:
-    """
-    Fetch live match details: score, minute, status.
-    Costs 3 credits. Cached for 60 seconds.
-    Returns dict with: status, live_minute, score {home, away}
-    """
-    key = f"details_{match_id}"
-    if key in _xg_cache:
-        data, ts = _xg_cache[key]
-        if time.time() - ts < 60:
-            return data
+def _raw_has_lineup(data: dict) -> bool:
+    match = data.get("data", {})
+    return bool(
+        (match.get("home_team", {}).get("players") or [])
+        or (match.get("away_team", {}).get("players") or [])
+    )
 
+
+def get_match_details(
+    match_id: str | int, kickoff_utc: str | None = None
+) -> dict | None:
+    """
+    Fetch match status and events, refreshing no more than every 10 minutes.
+    """
     if not API_KEY:
         return None
 
-    data = _fetch("get_match_details", {"match_id": match_id})
-    if data.get("status") != "success":
+    key = f"details_{match_id}"
+    cache_key = f"fotmob:details:{match_id}"
+    from predictions import get_provider_api_cache
+
+    cached = get_provider_api_cache(cache_key)
+    if _match_window_is_active(kickoff_utc):
+        data = _persisted_fetch(
+            "get_match_details",
+            {"match_id": match_id},
+            cache_key,
+            MATCH_DETAIL_CACHE_TTL,
+        )
+    else:
+        data = cached["payload"] if cached else None
+    if not data or data.get("status") != "success":
         return None
 
     d = data.get("data", {})
@@ -175,38 +288,47 @@ def get_match_details(match_id: str | int) -> dict | None:
         "status"      : d.get("match_status", ""),
         "live_minute" : d.get("live_minute"),
         "score"       : d.get("score", {"home": 0, "away": 0}),
+        "events"      : d.get("events", []),
     }
     _xg_cache[key] = (result, time.time())
     return result
 
 
 def _refresh_date_cache_if_stale(date_str: str):
-    """Re-fetch date cache if older than 2 minutes. Respects 5-min failure backoff."""
+    """Fetch a date feed once daily, only during a logged fixture's match window."""
     cache_key  = f"matches_{date_str}"
-    ts_key     = f"{cache_key}_ts"
     failed_key = f"{cache_key}_failed"
     failed_ts  = f"{failed_key}_ts"
 
-    # If last fetch failed, back off for 5 minutes before retrying
     if _lineup_cache.get(failed_key):
         fail_time = _lineup_cache.get(failed_ts, 0)
         if time.time() - fail_time < 300:
-            return  # still in backoff window
-        # Backoff expired — clear the failed flag and try again
+            return
         _lineup_cache.pop(failed_key, None)
         _lineup_cache.pop(failed_ts, None)
 
-    ts = _lineup_cache.get(ts_key, 0)
-    if isinstance(ts, (int, float)) and time.time() - ts < 120:
-        return  # fresh enough
+    from predictions import get_provider_api_cache
+    cached = get_provider_api_cache(f"fotmob:{cache_key}")
+    if cached:
+        if time.time() - cached["fetched_at"] < DATE_CACHE_TTL:
+            _lineup_cache[cache_key] = cached["payload"]
+            _lineup_cache[f"{cache_key}_ts"] = cached["fetched_at"]
+            return
+    _lineup_cache.pop(cache_key, None)
 
-    # Re-fetch
-    data = _fetch("get_matches_by_date", {"date": date_str})
+    if not _match_date_has_active_fixture(date_str):
+        return
+
+    data = _persisted_fetch(
+        "get_matches_by_date",
+        {"date": date_str},
+        f"fotmob:{cache_key}",
+        DATE_CACHE_TTL,
+    )
     if data.get("status") == "success":
         _lineup_cache[cache_key] = data
-        _lineup_cache[ts_key]    = time.time()
+        _lineup_cache[f"{cache_key}_ts"] = time.time()
     else:
-        # Mark failure with timestamp
         _lineup_cache[failed_key] = True
         _lineup_cache[failed_ts]  = time.time()
 
@@ -233,9 +355,19 @@ def get_match_status_from_date_cache(match_id: str | int,
     date_str  = datetime.now(timezone.utc).strftime("%Y%m%d")
     cache_key = f"matches_{date_str}"
 
-    # Refresh cache if stale (live games update every ~minute)
-    _refresh_date_cache_if_stale(date_str)
-
+    cached_at = _lineup_cache.get(f"{cache_key}_ts")
+    if (
+        cache_key in _lineup_cache
+        and isinstance(cached_at, (int, float))
+        and time.time() - cached_at >= DATE_CACHE_TTL
+    ):
+        _lineup_cache.pop(cache_key, None)
+    if cache_key not in _lineup_cache:
+        from predictions import get_provider_api_cache
+        cached = get_provider_api_cache(f"fotmob:{cache_key}")
+        if cached and time.time() - cached["fetched_at"] < DATE_CACHE_TTL:
+            _lineup_cache[cache_key] = cached["payload"]
+            _lineup_cache[f"{cache_key}_ts"] = cached["fetched_at"]
     if cache_key not in _lineup_cache:
         return None
 
@@ -328,9 +460,13 @@ def get_match_status_from_date_cache(match_id: str | int,
     return None  # not in cache
 
 
-def get_live_xg(match_id: str | int, max_age_seconds: int = 300) -> dict | None:
+def get_live_xg(
+    match_id: str | int,
+    max_age_seconds: int = 300,
+    kickoff_utc: str | None = None,
+) -> dict | None:
     """
-    Fetch live xG for a match. Cached for max_age_seconds.
+    Fetch xG for an active fixture, with a persistent max_age_seconds cooldown.
 
     Returns dict with:
       home_xg, away_xg,
@@ -338,16 +474,42 @@ def get_live_xg(match_id: str | int, max_age_seconds: int = 300) -> dict | None:
       home_xg_h2, away_xg_h2
     Or None if unavailable / match hasn't started.
     """
-    key = f"xg_{match_id}"
-    if key in _xg_cache:
-        cached_data, cached_time = _xg_cache[key]
-        if time.time() - cached_time < max_age_seconds:
-            return cached_data
+    return get_live_xg_for_fixture(match_id, kickoff_utc, max_age_seconds)
 
-    if not API_KEY:
+
+def get_live_xg_for_fixture(
+    match_id: str | int,
+    kickoff_utc: str | None,
+    max_age_seconds: int = 300,
+) -> dict | None:
+    """Fetch xG only during the fixture window and persist its cooldown."""
+    key = f"xg_{match_id}"
+    cache_key = f"fotmob:xg:{match_id}"
+    from predictions import get_provider_api_cache
+
+    cached = get_provider_api_cache(cache_key)
+    if cached and time.time() - cached["fetched_at"] < max_age_seconds:
+        result = _parse_xg_response(cached["payload"])
+        if result:
+            _xg_cache[key] = (result, cached["fetched_at"])
+        return result
+    if not API_KEY or not _match_window_is_active(kickoff_utc):
         return None
 
-    data = _fetch("get_match_xg", {"match_id": match_id})
+    data = _persisted_fetch(
+        "get_match_xg",
+        {"match_id": match_id},
+        cache_key,
+        max_age_seconds,
+    )
+    result = _parse_xg_response(data)
+    if not result:
+        return None
+    _xg_cache[key] = (result, time.time())
+    return result
+
+
+def _parse_xg_response(data: dict) -> dict | None:
     if data.get("status") != "success":
         return None
 
@@ -370,7 +532,6 @@ def get_live_xg(match_id: str | int, max_age_seconds: int = 300) -> dict | None:
         "away_xg_h2": safe_float(away.get("second_half")),
     }
 
-    _xg_cache[key] = (result, time.time())
     return result
 
 
@@ -438,20 +599,9 @@ def get_fotmob_match_id(home_name: str, away_name: str, date_str: str | None = N
     cache_key  = f"matches_{date_str}"
     failed_key = f"{cache_key}_failed"
 
-    # Don't retry if we already know today's fetch failed (e.g. 429)
-    if _lineup_cache.get(failed_key):
-        return None
-
+    _refresh_date_cache_if_stale(date_str)
     if cache_key not in _lineup_cache:
-        data = _fetch("get_matches_by_date", {"date": date_str})
-        if data.get("status") == "success":
-            _lineup_cache[cache_key]         = data
-            _lineup_cache[f"{cache_key}_ts"] = time.time()
-        else:
-            # Mark as failed for 5 minutes so the loop doesn't retry 50x
-            _lineup_cache[failed_key]    = True
-            _lineup_cache[f"{failed_key}_ts"] = time.time()
-            return None
+        return None
     data = _lineup_cache[cache_key]
 
     def norm(s: str) -> str:
@@ -488,17 +638,9 @@ def get_matches_by_date_for_league(date_str: str, league_key: str) -> list[dict]
     # Map our league key → FotMob league name fragments to match on
     filters = LEAGUE_FILTERS.get(league_key, [])
 
-    # Use the date cache — refresh if stale
+    # Use the persisted daily date cache; never bypass match-day gating.
     _refresh_date_cache_if_stale(date_str)
-    data = _lineup_cache.get(f"date_{date_str}_data") or {}
-
-    if not data:
-        # Direct fetch if cache empty
-        try:
-            data = _fetch("get_matches_by_date", {"date": date_str})
-        except Exception as e:
-            print(f"[fotmob] get_matches_by_date_for_league error: {e}")
-            return []
+    data = _lineup_cache.get(f"matches_{date_str}") or {}
 
     leagues = data.get("data", {}).get("leagues", [])
     matches = []

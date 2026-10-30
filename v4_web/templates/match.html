@@ -611,6 +611,7 @@
 (function () {
     const matchId   = "{{ featured.fixture_id if featured.fixture_id else '' }}";
     const fotmobId  = "{{ featured.fotmob_id if featured.fotmob_id else '' }}";
+    const kickoffUtc = "{{ featured.kickoff_utc if featured.kickoff_utc else '' }}";
     const status    = "{{ featured.status if featured.status else '' }}";
     const homeXgEl  = document.getElementById("home-xg");
     const awayXgEl  = document.getElementById("away-xg");
@@ -632,7 +633,11 @@
 
     async function poll() {
         try {
-            const resp = await fetch(`/live/${matchId}${fotmobId ? '?fotmob_id=' + fotmobId : ''}`);
+            const params = new URLSearchParams();
+            if (fotmobId) params.set("fotmob_id", fotmobId);
+            if (kickoffUtc) params.set("kickoff_utc", kickoffUtc);
+            const query = params.toString();
+            const resp = await fetch(`/live/${matchId}${query ? '?' + query : ''}`);
             if (resp.status === 204) {
                 if (statusEl) statusEl.textContent = "FotMob key not configured";
                 return;

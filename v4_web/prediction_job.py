@@ -284,7 +284,7 @@ async def run_prediction_job(priors_db: dict, league_key: str):
                 fotmob_id = get_fotmob_match_id(home, away, today_str)
                 if not fotmob_id:
                     continue
-                lineup = get_lineup(fotmob_id)
+                lineup = get_lineup(fotmob_id, p.get("kickoff_utc"))
                 if not lineup or not lineup.get("home_players"):
                     continue
 

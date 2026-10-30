@@ -1425,26 +1425,18 @@ async def hub(request: Request):
 async def league_page(request: Request, league_key: str):
     """
     League dashboard router.
-    PL      → redirects to /match (fully built).
-    La Liga → live dashboard with DC odds and upcoming fixtures.
-    Serie A and Bundesliga → fixtures, scores and pre-match probabilities.
-    Ligue 1               → under-construction page.
+    Premier League, La Liga, Serie A and Bundesliga share the match dashboard.
+    Other leagues show their development status.
     """
 
     if league_key not in LEAGUE_CONTEXTS:
         return RedirectResponse(url="/")
 
-    if league_key == "pl":
-        return RedirectResponse(url="/match")
-
-    if league_key == "laliga":
-        return RedirectResponse(url="/match?league=laliga")
-
-    if league_key == "seriea":
-        return await football_league_dashboard(request, league_key)
-
-    if league_key == "bundesliga":
-        return await football_league_dashboard(request, league_key)
+    if league_key in ("pl", "laliga", "bundesliga", "seriea"):
+        return RedirectResponse(
+            url=f"/match?league={league_key}",
+            status_code=302,
+        )
 
     # All other leagues — under construction
     LEAGUE_FEATURES = {

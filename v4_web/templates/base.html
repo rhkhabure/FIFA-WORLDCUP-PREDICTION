@@ -204,7 +204,7 @@
     {% else %}
         <div class="nav-section-label">Navigation</div>
         <a href="/"       class="nav-item" data-page="home">    <span class="nav-icon"><i class="ti ti-layout-dashboard" aria-hidden="true"></i></span><span class="nav-label">Hub</span></a>
-        <a href="/match"  class="nav-item" data-page="match">   <span class="nav-icon"><i class="ti ti-ball-football" aria-hidden="true"></i></span><span class="nav-label">Match dashboard</span></a>
+        <a href="/match?league={{ league|default('pl') }}" class="nav-item" data-page="match"><span class="nav-icon"><i class="ti ti-ball-football" aria-hidden="true"></i></span><span class="nav-label">Match dashboard</span></a>
         {% if team_map_href|default('/teams') %}
         <a href="{{ team_map_href|default('/teams') }}" class="nav-item" data-page="teams"><span class="nav-icon"><i class="ti ti-map-2" aria-hidden="true"></i></span><span class="nav-label">Team map</span></a>
         {% endif %}
@@ -218,7 +218,7 @@
             ("ligue1","Ligue 1","#00A3E0"),
         ] %}
         {% for code, name, dot in leagues_nav %}
-        <a href="/league/{{ code }}" class="nav-item" data-page="league-{{ code }}"
+        <a href="{% if code in ('pl', 'laliga', 'bundesliga', 'seriea') %}/match?league={{ code }}{% else %}/league/{{ code }}{% endif %}" class="nav-item" data-page="league-{{ code }}"
            {% if (league|default('pl'))==code %}style="background:rgba(255,255,255,0.12);color:#fff;border-left-color:var(--league-active-bar)"{% endif %}>
             <span class="nav-icon"><span class="league-nav-dot" style="background:{{ dot }}"></span></span>
             <span class="nav-label">{{ name }}</span>

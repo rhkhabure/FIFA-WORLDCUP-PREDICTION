@@ -146,6 +146,42 @@ def init_db():
                 snapped_at      TEXT
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS provider_api_cache (
+                cache_key TEXT PRIMARY KEY,
+                fetched_at REAL NOT NULL,
+                payload TEXT NOT NULL
+            )
+        """)
+        conn.commit()
+
+
+def get_provider_api_cache(cache_key: str) -> dict | None:
+    """Return one persisted provider response and its fetch timestamp."""
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT fetched_at, payload FROM provider_api_cache WHERE cache_key=?",
+            (cache_key,),
+        ).fetchone()
+    if not row:
+        return None
+    try:
+        payload = json.loads(row["payload"])
+    except (TypeError, ValueError):
+        return None
+    return {"fetched_at": row["fetched_at"], "payload": payload}
+
+
+def save_provider_api_cache(cache_key: str, fetched_at: float, payload: dict):
+    """Persist a provider response so app restarts do not discard its cache."""
+    with _conn() as conn:
+        conn.execute("""
+            INSERT INTO provider_api_cache (cache_key, fetched_at, payload)
+            VALUES (?, ?, ?)
+            ON CONFLICT(cache_key) DO UPDATE SET
+                fetched_at=excluded.fetched_at,
+                payload=excluded.payload
+        """, (cache_key, fetched_at, json.dumps(payload)))
         conn.commit()
 
 
