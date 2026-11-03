@@ -29,6 +29,20 @@
 </div>
 {%- endmacro %}
 
+{% macro schedule_team_side(team_id, tricode, colour, score, side, playing) -%}
+<div class="team-side {{ side }}">
+    {% set displayed_score = score if playing else '—' %}
+    {% if side == 'team-side-right' %}
+    <span class="team-score">{{ displayed_score }}</span>
+    {% endif %}
+    {{ logo(team_id, tricode, colour, 22) }}
+    <span class="t-name" style="color:{{ colour }}">{{ tricode }}</span>
+    {% if side == 'team-side-left' %}
+    <span class="team-score">{{ displayed_score }}</span>
+    {% endif %}
+</div>
+{%- endmacro %}
+
 {% block content %}
 <style>
     .nba-section-label {
@@ -72,18 +86,18 @@
     .stat-tile .l { font-family: var(--font-mono); font-size: 9px; text-transform: uppercase;
                     letter-spacing: 0.12em; color: var(--text-muted, #64748b); margin-top: 4px; }
 
-    .sched-row { display: grid; grid-template-columns: 72px minmax(0,1fr) 160px 72px 28px;
+    .sched-row { display: grid; grid-template-columns: 72px minmax(0,1fr) minmax(160px,.9fr) minmax(0,1fr) 28px;
                  align-items: center; gap: 10px; padding: 10px 14px; overflow: hidden; }
     .sched-row .time { font-family: var(--font-mono); font-size: 11px;
                        color: var(--text-muted, #64748b); white-space: nowrap; overflow: hidden; }
-    .sched-row .teams { display: flex; align-items: center; gap: 6px;
-                        min-width: 0; overflow: hidden; }
-    .sched-row .teams .t-name { font-size: 12px; font-weight: 700; flex-shrink: 1;
+    .sched-row .team-side { display: flex; align-items: center; gap: 6px;
+                            min-width: 0; overflow: hidden; }
+    .sched-row .team-side-right { justify-content: flex-end; }
+    .sched-row .team-side .t-name { font-size: 12px; font-weight: 700; flex-shrink: 1;
                                  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .sched-row .teams .at { color: var(--text-muted, #64748b); font-weight: 400;
-                             font-size: 11px; flex-shrink: 0; margin: 0 2px; }
-    .sched-row .score { font-family: var(--font-mono); font-size: 13px;
-                        font-weight: 700; text-align: right; white-space: nowrap; }
+    .sched-row .team-score { font-family: var(--font-mono); font-size: 13px;
+                             font-weight: 700; white-space: nowrap; flex-shrink: 0; }
+    .sched-row .prob-col { min-width: 0; }
     .pick { font-family: var(--font-mono); font-size: 10px; font-weight: 700; margin-top: 4px;
             display: flex; justify-content: space-between; }
     .final-row { opacity: 0.72; }
@@ -92,8 +106,13 @@
     .res-bad { color: #C8102E; font-size: 16px; }
 
     @media (max-width: 760px) {
-        .sched-row { grid-template-columns: 56px minmax(0,1fr) 28px; }
-        .sched-row .prob-col, .sched-row .score { display: none; }
+        .sched-row { grid-template-columns: 44px minmax(0,1fr) minmax(76px,.9fr) minmax(0,1fr) 20px;
+                     gap: 5px; padding: 8px; }
+        .sched-row .team-side { gap: 3px; }
+        .sched-row .team-side .t-name { font-size: 10px; }
+        .sched-row .team-score { font-size: 11px; }
+        .sched-row .prob-col .pick { justify-content: center; font-size: 8px; }
+        .sched-row .prob-col .pick span:last-child { display: none; }
     }
 </style>
 
@@ -214,6 +233,16 @@
             {% set fav_pct  = ((g.home_win_prob if fav_home else g.away_win_prob) * 100) | round(0) | int %}
             {% set fav_tri  = g.home_tricode if fav_home else g.away_tricode %}
             {% set fav_col  = g.home_colour if fav_home else g.away_colour %}
+            {% set left_home = g.home_conference == 'West' and g.away_conference == 'East' %}
+            {% set left_id = g.home_team_id if left_home else g.away_team_id %}
+            {% set left_tri = g.home_tricode if left_home else g.away_tricode %}
+            {% set left_colour = g.home_colour if left_home else g.away_colour %}
+            {% set left_score = g.home_score if left_home else g.away_score %}
+            {% set right_id = g.away_team_id if left_home else g.home_team_id %}
+            {% set right_tri = g.away_tricode if left_home else g.home_tricode %}
+            {% set right_colour = g.away_colour if left_home else g.home_colour %}
+            {% set right_score = g.away_score if left_home else g.home_score %}
+            {% set playing = g.status in ('live', 'final') %}
             <a href="/nba/match?game_id={{ g.game_id }}"
                class="nba-card sched-row {{ 'final-row' if g.status == 'final' else '' }}"
                style="{% if g.status == 'live' %}border-color:#C8102E{% endif %}">
@@ -232,13 +261,7 @@
                     {% endif %}
                 </div>
 
-                <div class="teams">
-                    {{ logo(g.away_team_id, g.away_tricode, g.away_colour, 22) }}
-                    <span class="t-name" style="color:{{ g.away_colour }}">{{ g.away_tricode }}</span>
-                    <span class="at">@</span>
-                    {{ logo(g.home_team_id, g.home_tricode, g.home_colour, 22) }}
-                    <span class="t-name" style="color:{{ g.home_colour }}">{{ g.home_tricode }}</span>
-                </div>
+                {{ schedule_team_side(left_id, left_tri, left_colour, left_score, 'team-side-left', playing) }}
 
                 <div class="prob-col">
                     {{ prob_bar(g, 5) }}
@@ -248,13 +271,7 @@
                     </div>
                 </div>
 
-                <div class="score">
-                    {% if g.status in ('live', 'final') %}
-                        {{ g.away_score }}–{{ g.home_score }}
-                    {% else %}
-                        <span style="color:var(--text-muted,#94a3b8);font-weight:400">—</span>
-                    {% endif %}
-                </div>
+                {{ schedule_team_side(right_id, right_tri, right_colour, right_score, 'team-side-right', playing) }}
 
                 <div style="text-align:center">
                     {% if g.status == 'final' %}
@@ -293,15 +310,18 @@
             {% set fav_pct = ((g.home_win_prob if fav_home else g.away_win_prob) * 100) | round(0) | int %}
             {% set fav_tri = g.home_tricode if fav_home else g.away_tricode %}
             {% set fav_col = g.home_colour if fav_home else g.away_colour %}
+            {% set left_home = g.home_conference == 'West' and g.away_conference == 'East' %}
+            {% set left_id = g.home_team_id if left_home else g.away_team_id %}
+            {% set left_tri = g.home_tricode if left_home else g.away_tricode %}
+            {% set left_colour = g.home_colour if left_home else g.away_colour %}
+            {% set left_score = g.home_score if left_home else g.away_score %}
+            {% set right_id = g.away_team_id if left_home else g.home_team_id %}
+            {% set right_tri = g.away_tricode if left_home else g.home_tricode %}
+            {% set right_colour = g.away_colour if left_home else g.home_colour %}
+            {% set right_score = g.away_score if left_home else g.home_score %}
             <a href="/nba/match?game_id={{ g.game_id }}" class="nba-card sched-row">
                 <div class="time">{{ g.tip_off_eat or 'TBD' }}</div>
-                <div class="teams">
-                    {{ logo(g.away_team_id, g.away_tricode, g.away_colour, 22) }}
-                    <span class="t-name" style="color:{{ g.away_colour }}">{{ g.away_tricode }}</span>
-                    <span class="at">@</span>
-                    {{ logo(g.home_team_id, g.home_tricode, g.home_colour, 22) }}
-                    <span class="t-name" style="color:{{ g.home_colour }}">{{ g.home_tricode }}</span>
-                </div>
+                {{ schedule_team_side(left_id, left_tri, left_colour, left_score, 'team-side-left', false) }}
                 <div class="prob-col">
                     {{ prob_bar(g, 5) }}
                     <div class="pick">
@@ -309,7 +329,7 @@
                         <span style="color:var(--text-muted,#94a3b8);font-weight:400">Elo {{ g.home_elo|int }}–{{ g.away_elo|int }}</span>
                     </div>
                 </div>
-                <div class="score"><span style="color:var(--text-muted,#94a3b8);font-weight:400">—</span></div>
+                {{ schedule_team_side(right_id, right_tri, right_colour, right_score, 'team-side-right', false) }}
                 <div style="text-align:center">
                     <i class="ti ti-chevron-right" style="color:var(--text-muted,#94a3b8)" aria-hidden="true"></i>
                 </div>

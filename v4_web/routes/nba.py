@@ -112,6 +112,8 @@ def _enrich_game(game: dict) -> dict:
         "away_colour":    at.get("primary", "#6b7280"),
         "home_full":      f"{ht.get('city','')} {ht.get('name','')}".strip(),
         "away_full":      f"{at.get('city','')} {at.get('name','')}".strip(),
+        "home_conference": ht.get("conference", ""),
+        "away_conference": at.get("conference", ""),
         "home_win_prob":  pregame["home_win_prob"],
         "away_win_prob":  pregame["away_win_prob"],
         "home_elo":       pregame["home_elo"],
