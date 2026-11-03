@@ -49,6 +49,7 @@ def _dc_probs(home_name: str, away_name: str, priors_db: dict,
     """
     from v4_backend.feature_builder import TEAM_NAME_ALIASES
     from routes.match import get_effective_gamma
+    from model_updates import get_football_match_factors
     from scipy.stats import poisson
 
     league_data = priors_db.get(league_key, {})
@@ -75,8 +76,21 @@ def _dc_probs(home_name: str, away_name: str, priors_db: dict,
     rho   = meta.get("rho_draw_correction",  0.0)
     dp    = 0.10   # draw propensity
 
-    lam = float(np.clip(h_alpha * a_beta * gamma, 1e-5, 15.0))
-    mu  = float(np.clip(a_alpha * h_beta,          1e-5, 15.0))
+    from constants import MATCH_LEAGUES
+    rating_league = next(
+        (cfg["ctx_key"] for cfg in MATCH_LEAGUES.values()
+         if cfg["priors"] == league_key),
+        league_key,
+    )
+    rating_lam_factor, rating_mu_factor = get_football_match_factors(
+        rating_league, hk, ak
+    )
+    lam = float(np.clip(
+        h_alpha * a_beta * gamma * rating_lam_factor, 1e-5, 15.0
+    ))
+    mu  = float(np.clip(
+        a_alpha * h_beta * rating_mu_factor, 1e-5, 15.0
+    ))
 
     N  = 9
     hp = poisson.pmf(np.arange(N), lam)
@@ -105,6 +119,8 @@ def _dc_probs(home_name: str, away_name: str, priors_db: dict,
         round(pa2/tot*100,1),
         round(lam,3),
         round(mu,3),
+        rating_lam_factor,
+        rating_mu_factor,
     )
 
 
@@ -146,7 +162,7 @@ async def run_prediction_job(priors_db: dict, league_key: str):
             continue
         if not result:
             continue
-        ph, pd, pa, lam, mu = result
+        ph, pd, pa, lam, mu, lam_factor, mu_factor = result
         try:
             log_pre_lineup(
                 match_id=mid, home_team=home, away_team=away,
@@ -154,6 +170,11 @@ async def run_prediction_job(priors_db: dict, league_key: str):
                 dc_home=ph, dc_draw=pd, dc_away=pa,
                 dc_lam=lam, dc_mu=mu,
                 league="pl",
+                rating_lam_factor=lam_factor,
+                rating_mu_factor=mu_factor,
+                rating_version="dc-rating-v1" if (
+                    lam_factor != 1.0 or mu_factor != 1.0
+                ) else "dc-static-v0",
             )
         except Exception as e:
             print(f"[prediction_job] log_pre PL error {mid}: {e}")
@@ -177,7 +198,7 @@ async def run_prediction_job(priors_db: dict, league_key: str):
                     continue
                 if not result:
                     continue
-                ph, pd, pa, lam, mu = result
+                ph, pd, pa, lam, mu, lam_factor, mu_factor = result
                 try:
                     log_pre_lineup(
                         match_id=mid, home_team=home, away_team=away,
@@ -185,6 +206,11 @@ async def run_prediction_job(priors_db: dict, league_key: str):
                         dc_home=ph, dc_draw=pd, dc_away=pa,
                         dc_lam=lam, dc_mu=mu,
                         league="laliga",
+                        rating_lam_factor=lam_factor,
+                        rating_mu_factor=mu_factor,
+                        rating_version="dc-rating-v1" if (
+                            lam_factor != 1.0 or mu_factor != 1.0
+                        ) else "dc-static-v0",
                     )
                     ll_logged += 1
                 except Exception as e:
@@ -228,7 +254,7 @@ async def run_prediction_job(priors_db: dict, league_key: str):
                     continue
                 if not result:
                     continue
-                ph, pd, pa, lam, mu = result
+                ph, pd, pa, lam, mu, lam_factor, mu_factor = result
                 try:
                     log_pre_lineup(
                         match_id=match_id, home_team=home, away_team=away,
@@ -236,6 +262,11 @@ async def run_prediction_job(priors_db: dict, league_key: str):
                         dc_home=ph, dc_draw=pd, dc_away=pa,
                         dc_lam=lam, dc_mu=mu,
                         league=league,
+                        rating_lam_factor=lam_factor,
+                        rating_mu_factor=mu_factor,
+                        rating_version="dc-rating-v1" if (
+                            lam_factor != 1.0 or mu_factor != 1.0
+                        ) else "dc-static-v0",
                     )
                     league_logged += 1
                 except Exception as e:
@@ -434,6 +465,22 @@ async def run_prediction_job(priors_db: dict, league_key: str):
 
         except Exception as e:
             print(f"[prediction_job] result error {mid}: {e}")
+
+    try:
+        from model_updates import refresh_football_ratings
+        from predictions import DB_PATH
+        update = refresh_football_ratings(DB_PATH, priors_db)
+        accepted = [
+            item["league"] for item in update.get("evaluations", [])
+            if item["accepted"]
+        ]
+        if accepted:
+            print(
+                "[prediction_job] validated football rating updates: "
+                + ", ".join(accepted)
+            )
+    except Exception as e:
+        print(f"[prediction_job] football rating update failed: {e}")
 
     print(f"[prediction_job] cycle done — "
           f"{len(upcoming)} upcoming, "

@@ -85,7 +85,29 @@ def nba_setup(model: NBAModel, db=None) -> None:
     _model = model
     _db    = db
     pred_log.set_db(db)   # share the same connection
+    try:
+        _refresh_nba_elo()
+    except Exception:
+        log.exception("NBA Elo result update failed during startup")
     log.info("NBA routes ready — model loaded: %s", model.loaded)
+
+
+def _refresh_nba_elo() -> None:
+    if not _model or not _model.loaded or _db is None:
+        return
+    baseline_ratings = _model.get_base_elo_ratings()
+    if not baseline_ratings:
+        log.warning("Skipping NBA Elo update because baseline ratings are unavailable")
+        return
+    from model_updates import refresh_nba_elo
+
+    update = refresh_nba_elo(_db, baseline_ratings)
+    _model.set_elo_ratings(update["ratings"], updated=update["accepted"])
+    if update.get("changed"):
+        log.info(
+            "NBA Elo update: %d completed regular-season games, active=%s",
+            update["sample_size"], update["accepted"],
+        )
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -183,16 +205,25 @@ async def nba_hub(request: Request):
     # Log pregame predictions for any game not yet in the DB
     if not showing_tomorrow:
         probs = {g["game_id"]: g["home_win_prob"] for g in games}
-        n = pred_log.bulk_log_pregame(games, probs)
+        n = pred_log.bulk_log_pregame(
+            games, probs,
+            _model.elo_rating_version if _model else "nba-elo-static-v0",
+        )
         if n:
             log.info("NBA: logged %d new pregame predictions", n)
+        results_changed = False
         for game in final:
             if game.get("home_score") is not None and game.get("away_score") is not None:
-                pred_log.log_result(
+                results_changed = pred_log.log_result(
                     str(game["game_id"]),
                     int(game["home_score"]),
                     int(game["away_score"]),
-                )
+                ) or results_changed
+        if results_changed:
+            try:
+                _refresh_nba_elo()
+            except Exception:
+                log.exception("NBA Elo result update failed after hub result logging")
 
     from datetime import timedelta
     d = datetime.now(EAT).date() + (timedelta(days=1) if showing_tomorrow else timedelta())
@@ -661,7 +692,11 @@ async def nba_live_poll(game_id: str):
 
     # When a game goes final, fill in the result
     if game_status == "final":
-        pred_log.log_result(game_id, home_score, away_score)
+        if pred_log.log_result(game_id, home_score, away_score):
+            try:
+                _refresh_nba_elo()
+            except Exception:
+                log.exception("NBA Elo result update failed after live result logging")
 
     return JSONResponse({
         # Scoreboard state

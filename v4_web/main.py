@@ -174,7 +174,8 @@ else:
 import asyncio
 from contextlib import asynccontextmanager
 from prediction_job import schedule_prediction_job
-from predictions import (init_db, log_pre_lineup, log_post_lineup,
+from predictions import (DB_PATH as FOOTBALL_PREDICTIONS_DB, init_db,
+                         log_pre_lineup, log_post_lineup,
                          log_result, get_all_predictions,
                          save_match_snapshot, get_match_snapshot)
 
@@ -182,6 +183,14 @@ from predictions import (init_db, log_pre_lineup, log_post_lineup,
 async def lifespan(app):
     """FastAPI lifespan — starts background jobs and warms caches on startup."""
     init_db()
+    if priors_db:
+        try:
+            from model_updates import refresh_football_ratings
+            refresh_football_ratings(FOOTBALL_PREDICTIONS_DB, priors_db)
+        except Exception:
+            print("[startup] Football rating evaluation failed")
+            import traceback
+            traceback.print_exc()
 
     # Warm FPL fixture cache so first page load is instant
     # Runs in a thread to avoid blocking the event loop
@@ -218,6 +227,8 @@ async def lifespan(app):
                 home_team_id  INTEGER,
                 away_team_id  INTEGER,
                 conference    TEXT,
+                game_time_utc TEXT,
+                model_version TEXT NOT NULL DEFAULT 'nba-elo-static-v0',
                 home_win_prob REAL,
                 away_win_prob REAL,
                 home_score    INTEGER,
@@ -227,6 +238,17 @@ async def lifespan(app):
                 created_at    TEXT    DEFAULT (datetime('now'))
             )
         """)
+        for column, definition in (
+            ("game_time_utc", "TEXT"),
+            ("model_version", "TEXT NOT NULL DEFAULT 'nba-elo-static-v0'"),
+        ):
+            try:
+                _nba_db.execute(
+                    f"ALTER TABLE predictions ADD COLUMN {column} {definition}"
+                )
+            except sqlite3.OperationalError as exc:
+                if "duplicate column name" not in str(exc).lower():
+                    raise
         _nba_db.execute("CREATE INDEX IF NOT EXISTS idx_pred_league ON predictions(league)")
         _nba_db.execute("CREATE INDEX IF NOT EXISTS idx_pred_game   ON predictions(game_id)")
         _nba_db.commit()

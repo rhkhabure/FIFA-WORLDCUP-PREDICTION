@@ -122,6 +122,16 @@ def init_db():
             conn.execute("ALTER TABLE predictions ADD COLUMN league TEXT DEFAULT 'pl'")
         except Exception:
             pass
+        for column, definition in (
+            ("pre_rating_lam_factor", "REAL NOT NULL DEFAULT 1.0"),
+            ("pre_rating_mu_factor", "REAL NOT NULL DEFAULT 1.0"),
+            ("rating_version", "TEXT NOT NULL DEFAULT 'dc-static-v0'"),
+        ):
+            try:
+                conn.execute(f"ALTER TABLE predictions ADD COLUMN {column} {definition}")
+            except sqlite3.OperationalError as exc:
+                if "duplicate column name" not in str(exc).lower():
+                    raise
         # Match snapshot table — stores everything needed to render match page
         # Persists across restarts so finished games always display correctly
         conn.execute("""
@@ -194,6 +204,9 @@ def log_pre_lineup(
     dc_home: float, dc_draw: float, dc_away: float,
     dc_lam: float, dc_mu: float,
     league: str = "pl",
+    rating_lam_factor: float = 1.0,
+    rating_mu_factor: float = 1.0,
+    rating_version: str = "dc-static-v0",
 ):
     """
     Insert snapshot 1 (pre-lineup DC prior).
@@ -214,21 +227,25 @@ def log_pre_lineup(
                 UPDATE predictions SET
                     pre_dc_home=?, pre_dc_draw=?, pre_dc_away=?,
                     pre_dc_lam=?, pre_dc_mu=?, pre_logged_at=?,
-                    league=?
+                    league=?, pre_rating_lam_factor=?, pre_rating_mu_factor=?,
+                    rating_version=?
                 WHERE match_id=?
             """, (dc_home, dc_draw, dc_away, dc_lam, dc_mu, now,
-                  league, match_id))
+                  league, rating_lam_factor, rating_mu_factor,
+                  rating_version, match_id))
         else:
             conn.execute("""
                 INSERT INTO predictions
                     (match_id, home_team, away_team, kickoff_utc, season,
                      league,
                      pre_dc_home, pre_dc_draw, pre_dc_away,
-                     pre_dc_lam, pre_dc_mu, pre_logged_at)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+                     pre_dc_lam, pre_dc_mu, pre_logged_at,
+                     pre_rating_lam_factor, pre_rating_mu_factor, rating_version)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """, (match_id, home_team, away_team, kickoff_utc, season,
                   league,
-                  dc_home, dc_draw, dc_away, dc_lam, dc_mu, now))
+                  dc_home, dc_draw, dc_away, dc_lam, dc_mu, now,
+                  rating_lam_factor, rating_mu_factor, rating_version))
         conn.commit()
 
 

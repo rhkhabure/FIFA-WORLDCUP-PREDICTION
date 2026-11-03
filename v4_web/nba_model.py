@@ -125,9 +125,11 @@ class NBAModel:
         self._scaler   = None
         self._T:       float = 1.0
         self._elo:     dict  = {}
+        self._base_elo: dict = {}
         self._elo_path = None
         self._config:  dict  = {}
         self.loaded:   bool  = False
+        self.elo_rating_version = "nba-elo-static-v0"
 
     # ── Setup ─────────────────────────────────────────────────────────────────
 
@@ -218,6 +220,7 @@ class NBAModel:
 
         with open(path, encoding="utf-8") as f:
             self._elo = {str(k): float(v) for k, v in json.load(f).items()}
+        self._base_elo = dict(self._elo)
         self._elo_path = path
         if len(self._elo) < 30:
             log.error("Elo file has only %d teams (expected 30): %s",
@@ -228,6 +231,17 @@ class NBAModel:
     def get_elo(self, team_id: str | int) -> float:
         """Return current Elo for a team ID. Falls back to league average."""
         return self._elo.get(str(team_id), float(ELO_START))
+
+    def get_base_elo_ratings(self) -> dict[str, float]:
+        """Return a copy of the artifact ratings used as the update baseline."""
+        return dict(self._base_elo)
+
+    def set_elo_ratings(self, ratings: dict[str, float], updated: bool) -> None:
+        """Apply validated Elo ratings without modifying the source artifact."""
+        self._elo = {str(team_id): float(value) for team_id, value in ratings.items()}
+        self.elo_rating_version = (
+            "nba-elo-result-updated-v1" if updated else "nba-elo-static-v0"
+        )
 
     def pregame_win_prob(self, home_elo: float, away_elo: float) -> float:
         """

@@ -63,7 +63,9 @@ def _game_exists(game_id: str) -> bool:
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
-def log_pregame(game: dict, home_win_prob: float) -> bool:
+def log_pregame(
+    game: dict, home_win_prob: float, model_version: str = "nba-elo-static-v0"
+) -> bool:
     """
     Insert a pregame prediction row when a game first appears on the hub.
     Safe to call multiple times — uses INSERT OR IGNORE so duplicates are skipped.
@@ -104,10 +106,10 @@ def log_pregame(game: dict, home_win_prob: float) -> bool:
     return _execute("""
         INSERT OR IGNORE INTO predictions
             (league, game_id, home_team, away_team,
-             home_team_id, away_team_id, conference,
+             home_team_id, away_team_id, conference, game_time_utc, model_version,
              home_win_prob, away_win_prob,
              home_score, away_score, correct, brier, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         "nba",
         game_id,
@@ -116,6 +118,8 @@ def log_pregame(game: dict, home_win_prob: float) -> bool:
         home_team_id,
         away_team_id,
         conference,
+        kickoff,
+        model_version,
         hp,
         away_win_prob,
         None,   # scores filled in by log_result()
@@ -160,7 +164,11 @@ def log_result(game_id: str, home_score: int, away_score: int) -> bool:
     """, (home_score, away_score, correct, brier, pred_id))
 
 
-def bulk_log_pregame(games: list[dict], probs: dict[str, float]) -> int:
+def bulk_log_pregame(
+    games: list[dict],
+    probs: dict[str, float],
+    model_version: str = "nba-elo-static-v0",
+) -> int:
     """
     Log multiple games at once. probs = {game_id: home_win_prob}.
     Returns count of newly inserted rows.
@@ -169,7 +177,7 @@ def bulk_log_pregame(games: list[dict], probs: dict[str, float]) -> int:
     for game in games:
         gid = game.get("game_id", "")
         hp  = probs.get(gid, 0.5)
-        if log_pregame(game, hp):
+        if log_pregame(game, hp, model_version):
             inserted += 1
     return inserted
 

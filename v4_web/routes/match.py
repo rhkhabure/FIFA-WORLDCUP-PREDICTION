@@ -172,8 +172,21 @@ def dc_pregame(home_team: str, away_team: str, league: str) -> list | None:
     gamma     = get_effective_gamma(gamma_cal)   # decayed for early season
     rho       = meta.get("rho_draw_correction",  0.0)
 
-    lam   = np.clip(h["alpha"] * a["beta"] * gamma, 1e-5, 15.0)
-    mu    = np.clip(a["alpha"] * h["beta"],          1e-5, 15.0)
+    from model_updates import get_football_match_factors
+    rating_league = next(
+        (cfg["ctx_key"] for cfg in MATCH_LEAGUES.values()
+         if cfg["priors"] == league),
+        "pl",
+    )
+    rating_lam_factor, rating_mu_factor = get_football_match_factors(
+        rating_league, home_key, away_key
+    )
+    lam   = np.clip(
+        h["alpha"] * a["beta"] * gamma * rating_lam_factor, 1e-5, 15.0
+    )
+    mu    = np.clip(
+        a["alpha"] * h["beta"] * rating_mu_factor, 1e-5, 15.0
+    )
     hp    = poisson.pmf(np.arange(9), lam)
     ap    = poisson.pmf(np.arange(9), mu)
     joint = np.outer(hp, ap)
