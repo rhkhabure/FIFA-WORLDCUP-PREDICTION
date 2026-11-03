@@ -143,7 +143,7 @@
                 {% if prior %}
                     <div class="flex flex-col items-center justify-end h-full">
                         <span class="text-sm font-mono font-bold mb-1"
-                              style="color:{{ home_colour }}">{{ prior[0] }}%</span>
+                              style="color:color-mix(in srgb, {{ home_colour }} 55%, var(--text-primary))">{{ prior[0] }}%</span>
                         <div class="w-14 rounded-sm transition-all duration-500"
                              style="height:{{ [prior[0],4]|max }}%;
                                     background:{{ home_colour }};opacity:0.85"></div>
@@ -157,7 +157,7 @@
                     </div>
                     <div class="flex flex-col items-center justify-end h-full">
                         <span class="text-sm font-mono font-bold mb-1"
-                              style="color:{{ away_colour }}">{{ prior[2] }}%</span>
+                              style="color:color-mix(in srgb, {{ away_colour }} 55%, var(--text-primary))">{{ prior[2] }}%</span>
                         <div class="w-14 rounded-sm transition-all duration-500"
                              style="height:{{ [prior[2],4]|max }}%;
                                     background:{{ away_colour }};opacity:0.85"></div>
@@ -190,7 +190,7 @@
             <div class="flex items-end justify-center w-full gap-6" style="height:80px">
                 <div class="flex flex-col items-center justify-end h-full">
                     <span class="text-sm font-mono font-bold mb-1"
-                          style="color:{{ home_colour }}">{{ lineup_prior[0] }}%</span>
+                          style="color:color-mix(in srgb, {{ home_colour }} 55%, var(--text-primary))">{{ lineup_prior[0] }}%</span>
                     <div class="w-14 rounded-sm transition-all duration-500"
                          style="height:{{ [lineup_prior[0],4]|max }}%;
                                 background:{{ home_colour }};opacity:0.85"></div>
@@ -204,7 +204,7 @@
                 </div>
                 <div class="flex flex-col items-center justify-end h-full">
                     <span class="text-sm font-mono font-bold mb-1"
-                          style="color:{{ away_colour }}">{{ lineup_prior[2] }}%</span>
+                          style="color:color-mix(in srgb, {{ away_colour }} 55%, var(--text-primary))">{{ lineup_prior[2] }}%</span>
                     <div class="w-14 rounded-sm transition-all duration-500"
                          style="height:{{ [lineup_prior[2],4]|max }}%;
                                 background:{{ away_colour }};opacity:0.85"></div>
@@ -218,21 +218,21 @@
                 <div class="flex justify-between text-[10px] font-mono">
                     <span class="text-slate-500">Adj. xG</span>
                     <span class="text-slate-300">
-                        <span style="color:{{ home_colour }}">{{ "%.2f"|format(adj_lam) }}</span>
+                        <span style="color:color-mix(in srgb, {{ home_colour }} 55%, var(--text-primary))">{{ "%.2f"|format(adj_lam) }}</span>
                         –
-                        <span style="color:{{ away_colour }}">{{ "%.2f"|format(adj_mu) }}</span>
+                        <span style="color:color-mix(in srgb, {{ away_colour }} 55%, var(--text-primary))">{{ "%.2f"|format(adj_mu) }}</span>
                     </span>
                 </div>
                 {% endif %}
                 {% if absent_home %}
                 <div class="text-[9px] font-mono">
-                    <span style="color:{{ home_colour }}" class="font-bold">OUT:</span>
+                    <span style="color:color-mix(in srgb, {{ home_colour }} 55%, var(--text-primary))" class="font-bold">OUT:</span>
                     <span class="text-rose-400">{{ absent_home|join(", ") }}</span>
                 </div>
                 {% endif %}
                 {% if absent_away %}
                 <div class="text-[9px] font-mono">
-                    <span style="color:{{ away_colour }}" class="font-bold">OUT:</span>
+                    <span style="color:color-mix(in srgb, {{ away_colour }} 55%, var(--text-primary))" class="font-bold">OUT:</span>
                     <span class="text-rose-400">{{ absent_away|join(", ") }}</span>
                 </div>
                 {% endif %}
@@ -246,7 +246,7 @@
                 </h3>
                 <div class="flex items-center gap-4 font-mono">
                     <div class="text-center">
-                        <div class="text-lg font-bold" style="color:{{ home_colour }}">
+                        <div class="text-lg font-bold" style="color:color-mix(in srgb, {{ home_colour }} 55%, var(--text-primary))">
                             {{ featured.odds_home }}
                         </div>
                         <div class="text-[10px] text-slate-500 uppercase">Home</div>
@@ -256,7 +256,7 @@
                         <div class="text-[10px] text-slate-500 uppercase">Draw</div>
                     </div>
                     <div class="text-center">
-                        <div class="text-lg font-bold" style="color:{{ away_colour }}">
+                        <div class="text-lg font-bold" style="color:color-mix(in srgb, {{ away_colour }} 55%, var(--text-primary))">
                             {{ featured.odds_away }}
                         </div>
                         <div class="text-[10px] text-slate-500 uppercase">Away</div>
@@ -314,7 +314,7 @@
                 {% if posterior %}
                     <div class="flex flex-col items-center justify-end h-full">
                         <span class="text-sm font-mono font-bold mb-1"
-                              style="color:{{ home_colour }}">{{ posterior[0] }}%</span>
+                              style="color:color-mix(in srgb, {{ home_colour }} 55%, var(--text-primary))">{{ posterior[0] }}%</span>
                         <div class="w-14 rounded-sm transition-all duration-700"
                              style="height:{{ [posterior[0],4]|max }}%;
                                     background:{{ home_colour }};opacity:0.75"></div>
@@ -328,7 +328,7 @@
                     </div>
                     <div class="flex flex-col items-center justify-end h-full">
                         <span class="text-sm font-mono font-bold mb-1"
-                              style="color:{{ away_colour }}">{{ posterior[2] }}%</span>
+                              style="color:color-mix(in srgb, {{ away_colour }} 55%, var(--text-primary))">{{ posterior[2] }}%</span>
                         <div class="w-14 rounded-sm transition-all duration-700"
                              style="height:{{ [posterior[2],4]|max }}%;
                                     background:{{ away_colour }};opacity:0.75"></div>
@@ -376,14 +376,14 @@
                         {% if featured.home_name %}
                         <a href="/team/{{ home_team_id }}"
                            class="flex items-center gap-1 hover:text-white transition"
-                           style="color:{{ home_colour }}">
+                           style="color:color-mix(in srgb, {{ home_colour }} 55%, var(--text-primary))">
                             <span class="w-1.5 h-1.5 rounded-full inline-block"
                                   style="background:{{ home_colour }}"></span>
                             {{ featured.home_name }} · {{ home_formation }}
                         </a>
                         <a href="/team/{{ away_team_id }}"
                            class="flex items-center gap-1 hover:text-white transition"
-                           style="color:{{ away_colour }}">
+                           style="color:color-mix(in srgb, {{ away_colour }} 55%, var(--text-primary))">
                             <span class="w-1.5 h-1.5 rounded-full inline-block"
                                   style="background:{{ away_colour }}"></span>
                             {{ featured.away_name }} · {{ away_formation }}
@@ -410,7 +410,7 @@
                 <!-- Home team gauges -->
                 <div class="mb-3">
                     <div class="text-[10px] font-bold uppercase tracking-widest mb-2 flex items-center gap-2"
-                         style="color:{{ home_colour }}">
+                         style="color:color-mix(in srgb, {{ home_colour }} 55%, var(--text-primary))">
                         {{ featured.home_name }}
                         {% if home_alpha_estimated %}
                         <span class="text-[8px] text-slate-500 font-normal normal-case
@@ -476,7 +476,7 @@
                     <!-- xG projected -->
                     <div class="flex justify-between text-[10px] font-mono mt-1 px-1">
                         <span class="text-slate-500">xG projected</span>
-                        <span class="font-bold" style="color:{{ home_colour }}">
+                        <span class="font-bold" style="color:color-mix(in srgb, {{ home_colour }} 55%, var(--text-primary))">
                             {{ "%.2f"|format(home_xg_proj) }}
                         </span>
                     </div>
@@ -488,7 +488,7 @@
                 <!-- Away team gauges -->
                 <div class="mb-3">
                     <div class="text-[10px] font-bold uppercase tracking-widest mb-2 flex items-center gap-2"
-                         style="color:{{ away_colour }}">
+                         style="color:color-mix(in srgb, {{ away_colour }} 55%, var(--text-primary))">
                         {{ featured.away_name }}
                         {% if away_alpha_estimated %}
                         <span class="text-[8px] text-slate-500 font-normal normal-case
@@ -551,7 +551,7 @@
                     </div>
                     <div class="flex justify-between text-[10px] font-mono mt-1 px-1">
                         <span class="text-slate-500">xG projected</span>
-                        <span class="font-bold" style="color:{{ away_colour }}">
+                        <span class="font-bold" style="color:color-mix(in srgb, {{ away_colour }} 55%, var(--text-primary))">
                             {{ "%.2f"|format(away_xg_proj) }}
                         </span>
                     </div>
@@ -588,13 +588,13 @@
                     </div>
                     <div id="xg-display" class="space-y-2 font-mono text-xs">
                         <div class="flex justify-between items-center">
-                            <span style="color:{{ home_colour }}" class="font-bold truncate">
+                            <span style="color:color-mix(in srgb, {{ home_colour }} 55%, var(--text-primary))" class="font-bold truncate">
                                 {{ featured.home_name if featured.home_name else "Home" }}
                             </span>
                             <span id="home-xg" class="text-slate-400">—</span>
                         </div>
                         <div class="flex justify-between items-center">
-                            <span style="color:{{ away_colour }}" class="font-bold truncate">
+                            <span style="color:color-mix(in srgb, {{ away_colour }} 55%, var(--text-primary))" class="font-bold truncate">
                                 {{ featured.away_name if featured.away_name else "Away" }}
                             </span>
                             <span id="away-xg" class="text-slate-400">—</span>

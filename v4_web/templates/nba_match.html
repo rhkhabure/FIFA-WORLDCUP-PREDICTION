@@ -338,10 +338,8 @@
                 </div>
 
                 <div style="position:relative;height:320px">
-                    <canvas id="wp-chart" role="img"
-                            aria-label="Win probability for {{ game.away_tricode }} and {{ game.home_tricode }} over the course of the game"></canvas>
                     <svg id="wp-chart-fallback" viewBox="0 0 720 320" role="img"
-                         aria-label="Simplified win probability chart" hidden></svg>
+                         aria-label="Win probability history for {{ game.away_tricode }} and {{ game.home_tricode }}"></svg>
                     {% if game.status == 'pre' %}
                     <div class="chart-overlay" id="js-pre-overlay">
                         <i class="ti ti-clock" style="font-size:26px;color:var(--league-primary)" aria-hidden="true"></i>
@@ -387,7 +385,6 @@
     </div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script>
 (function () {
     const CFG = {
@@ -531,19 +528,18 @@
         }
     }
 
-    // Start independently of Chart.js so chart load/runtime errors don't leave
-    // the court stuck in its initial loading state.
+    // Keep lineup polling independent from chart rendering.
     pollLineup();
     if (status !== 'final') lineupTimer = setInterval(pollLineup, 20000);
 
-    // ── Chart ────────────────────────────────────────────────────────
+    // ── SVG chart with optional canvas renderer ───────────────────────
     const QTR = [0, 720, 1440, 2160, 2880];
     function xLabel(t) {
         if (t < 2880) return 'Q' + (Math.floor(t / 720) + 1);
         return 'OT' + (Math.floor((t - 2880) / 300) + 1);
     }
     let chart = null;
-    try {
+    if ($('wp-chart')) try {
     chart = new Chart($('wp-chart'), {
         type: 'line',
         data: { datasets: [
@@ -579,9 +575,7 @@
         },
     });
     } catch (error) {
-        $('wp-chart').hidden = true;
-        $('wp-chart-fallback').hidden = false;
-        $('js-source').textContent = 'Simplified chart · standard chart unavailable';
+        $('js-source').textContent = 'Win probability chart · SVG renderer';
     }
 
     let fallbackPoints = [];
@@ -620,6 +614,28 @@
             label.textContent = `${value}%`;
             svg.append(label);
         });
+        [[0, 'Q1'], [720, 'Q2'], [1440, 'Q3'], [2160, 'Q4'], [2880, 'End']].forEach(([time, title]) => {
+            const label = document.createElementNS(ns, 'text');
+            label.setAttribute('x', String(x(time)));
+            label.setAttribute('y', '306');
+            label.setAttribute('text-anchor', time === 0 ? 'start' : time === 2880 ? 'end' : 'middle');
+            label.setAttribute('fill', '#475569');
+            label.setAttribute('font-size', '10');
+            label.textContent = title;
+            svg.append(label);
+        });
+        if (points.length === 1) {
+            for (const [field, colour] of [['away', CFG.awayCol], ['home', CFG.homeCol]]) {
+                const marker = document.createElementNS(ns, 'circle');
+                marker.setAttribute('cx', String(x(points[0].t)));
+                marker.setAttribute('cy', String(y(field === 'home'
+                    ? points[0].hp * 100 : (1 - points[0].hp) * 100)));
+                marker.setAttribute('r', '4');
+                marker.setAttribute('fill', colour);
+                svg.append(marker);
+            }
+            return;
+        }
         if (points.length < 2) return;
         for (const [field, colour] of [['away', CFG.awayCol], ['home', CFG.homeCol]]) {
             const path = document.createElementNS(ns, 'polyline');

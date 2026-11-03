@@ -20,9 +20,11 @@
   .nba-logo span{font-family:var(--font-mono);font-size:11px;font-weight:800;color:#fff}
   .elo-bar{height:5px;border-radius:99px;background:var(--border,#e2e8f0);overflow:hidden}
   .elo-bar>div{height:100%;border-radius:99px}
-  .form-pip{width:22px;height:22px;border-radius:6px;display:inline-flex;align-items:center;
-            justify-content:center;font-size:10px;font-weight:800}
-  .form-w{background:#DCFCE7;color:#166534} .form-l{background:#FEE2E2;color:#991B1B}
+  .form-pip{width:34px;height:34px;border-radius:9px;display:inline-flex;align-items:center;
+            justify-content:center;font-size:15px;font-weight:900;
+            color:var(--text-primary)}
+  .form-w{background:#DCFCE7;border:1px solid #86EFAC;color:#166534}
+  .form-l{background:#FEE2E2;border:1px solid #FCA5A5;color:#991B1B}
   .ok{color:#15803d;font-size:16px} .bad{color:#C8102E;font-size:16px}
   .prob-track{display:flex;height:5px;border-radius:99px;overflow:hidden;
               background:var(--border,#e2e8f0)}
@@ -49,7 +51,7 @@
   .team-record-value{font-size:22px;font-weight:900;line-height:1.1}
   .team-elo{text-align:right}
   .team-standing{font-size:11px;font-weight:700;color:var(--league-primary);margin-top:5px}
-  .standings-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+  .standings-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:12px}
   .standings-table{border-collapse:collapse;font-size:11px;width:100%;white-space:nowrap}
   .standings-table th{color:var(--text-muted,#64748b);font:700 9px var(--font-mono);
                       padding:6px 5px;text-align:right}
@@ -67,7 +69,6 @@
     .team-header-widgets{grid-column:auto;grid-template-columns:1fr}
     .team-elo{display:flex;align-items:center;gap:12px;text-align:left}
   }
-  @media(max-width:620px){.standings-grid{grid-template-columns:1fr}}
 </style>
 
 {% set col = team.primary %}
@@ -131,12 +132,12 @@
         <div class="tp-label">{{ 'Live game' if g.status == 'live' else 'Next game' }}</div>
         <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
           <div style="font-size:13px;font-weight:800">
-            {{ 'vs' if is_home else '@' }} <span style="color:{{ opp_col }}">{{ opp_tri }}</span>
+            {{ 'vs' if is_home else '@' }} <span style="color:color-mix(in srgb, {{ opp_col }} 55%, var(--text-primary))">{{ opp_tri }}</span>
             <div style="font-size:10px;font-weight:500;color:var(--text-muted,#64748b);margin-top:4px">
               {{ g.tip_off_eat if g.status == 'pre' else g.status_text }}
             </div>
           </div>
-          <div style="color:{{ col }};font:800 16px var(--font-mono)">{{ our_prob }}%</div>
+          <div style="color:color-mix(in srgb, {{ col }} 55%, var(--text-primary));font:800 16px var(--font-mono)">{{ our_prob }}%</div>
         </div>
         <div class="prob-track" style="height:6px;margin-top:8px">
           {% if is_home %}
@@ -157,7 +158,7 @@
     </div>
 
     <div class="team-elo">
-      <div style="font-size:32px;font-weight:900;color:{{ col }};font-family:var(--font-mono)">
+      <div style="font-size:32px;font-weight:900;color:color-mix(in srgb, {{ col }} 55%, var(--text-primary));font-family:var(--font-mono)">
         {{ elo|int }}
       </div>
       <div style="font-size:11px;color:var(--text-muted,#64748b)">Elo rating</div>
@@ -168,7 +169,7 @@
   </div>
 
   <div class="standings-grid">
-      {% for conference_name in ['East', 'West'] %}
+      {% set conference_name = team.conference %}
       <section class="tp-card" style="padding:0;overflow:hidden">
         <div style="padding:12px 14px;border-bottom:1px solid var(--border,#e2e8f0)">
           <div class="tp-label" style="margin:0">{{ 'Eastern' if conference_name == 'East' else 'Western' }} Conference standings</div>
@@ -182,11 +183,12 @@
               {% for row in rows %}
               <tr style="{% if row.team_id == team.team_id %}background:var(--league-tint);font-weight:800{% endif %}">
                 <td>{{ row.rank }}</td>
-                <td><span class="standings-team">
+                <td><a class="standings-team" href="/nba/team/{{ row.team_id }}"
+                       style="color:var(--text-primary);text-decoration:none">
                   <img src="https://cdn.nba.com/logos/nba/{{ row.team_id }}/global/L/logo.svg"
                        alt="" loading="lazy" onerror="this.hidden=true">
                   {{ row.tricode }}
-                </span></td>
+                </a></td>
                 <td>{{ row.wins }}</td><td>{{ row.losses }}</td>
                 <td>{{ "%.3f"|format(row.win_pct) }}</td>
               </tr>
@@ -200,7 +202,6 @@
         </div>
         {% endif %}
       </section>
-      {% endfor %}
   </div>
 
   <section class="tp-card">
