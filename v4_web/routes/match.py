@@ -636,8 +636,9 @@ async def match(request: Request):
             all_upcoming = get_upcoming_fixtures(max_fixtures=50)
         except Exception:
             pass
+    stored_predictions = get_all_predictions() if match_id else []
     recorded_prediction = next(
-        (p for p in get_all_predictions()
+        (p for p in stored_predictions
          if str(p["match_id"]) == str(match_id)
          and p.get("actual_result")
          and p.get("actual_hg") is not None
@@ -1559,12 +1560,39 @@ async def match(request: Request):
             print(f"[match] completed prediction lookup error: {e}")
         fixtures = recent_results + fixtures
 
+    vote_match_id = None
+    displayed_home = str(featured.get("home_name", "")).casefold()
+    displayed_away = str(featured.get("away_name", "")).casefold()
+    if displayed_home and displayed_away and active_ctx_key in (
+        "pl", "laliga", "bundesliga", "seriea"
+    ):
+        now_utc = datetime.now(timezone.utc)
+        for prediction in stored_predictions:
+            if (
+                prediction.get("league", "pl") != active_ctx_key
+                or prediction.get("actual_result")
+                or str(prediction.get("home_team", "")).casefold() != displayed_home
+                or str(prediction.get("away_team", "")).casefold() != displayed_away
+            ):
+                continue
+            try:
+                kickoff = datetime.fromisoformat(
+                    str(prediction.get("kickoff_utc", "")).replace("Z", "+00:00")
+                )
+                if kickoff.tzinfo is None or kickoff <= now_utc:
+                    continue
+            except (TypeError, ValueError):
+                continue
+            vote_match_id = str(prediction["match_id"])
+            break
+
     ctx = {
         "request"          : request,
         "current_league"   : active_name,
         **league_ctx(active_ctx_key),
         "featured"         : featured,
         "prior"            : prior,
+        "vote_match_id"    : vote_match_id,
         "posterior"        : posterior,
         "pitch_svg"        : pitch_svg,
         "timeline_svg"     : timeline_svg,
@@ -1592,6 +1620,12 @@ async def match(request: Request):
         "absent_away"             : absent_away,
         "home_team_id"            : _CREST_IDS.get(home_name if featured else "", 0),
         "away_team_id"            : _CREST_IDS.get(away_name if featured else "", 0),
+        "home_crest_url"          : (
+            get_crest_proxy_url(featured.get("home_name", "")) if featured else ""
+        ),
+        "away_crest_url"          : (
+            get_crest_proxy_url(featured.get("away_name", "")) if featured else ""
+        ),
     }
     if active_ctx_key != "pl":
         print(f"[match] {active_name} match_id={match_id} featured={bool(featured)} "

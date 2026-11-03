@@ -72,16 +72,16 @@
             All ({{ (pl_count or 0) + (ll_count or 0) + (sa_count or 0) + (bl_count or 0) }})
         </a>
         <a href="/history?league=pl" class="tab-btn {% if league_filter == 'pl' %}active{% endif %}">
-            🏴󠁧󠁢󠁥󠁮󠁧󠁿 PL ({{ pl_count or 0 }})
+            <i class="ti ti-ball-football" aria-hidden="true"></i> PL ({{ pl_count or 0 }})
         </a>
         <a href="/history?league=laliga" class="tab-btn {% if league_filter == 'laliga' %}active{% endif %}">
-            🇪🇸 La Liga ({{ ll_count or 0 }})
+            <i class="ti ti-ball-football" aria-hidden="true"></i> La Liga ({{ ll_count or 0 }})
         </a>
         <a href="/history?league=seriea" class="tab-btn {% if league_filter == 'seriea' %}active{% endif %}">
-            🇮🇹 Serie A ({{ sa_count or 0 }})
+            <i class="ti ti-ball-football" aria-hidden="true"></i> Serie A ({{ sa_count or 0 }})
         </a>
         <a href="/history?league=bundesliga" class="tab-btn {% if league_filter == 'bundesliga' %}active{% endif %}">
-            🇩🇪 Bundesliga ({{ bl_count or 0 }})
+            <i class="ti ti-ball-football" aria-hidden="true"></i> Bundesliga ({{ bl_count or 0 }})
         </a>
     </div>
 </div>
@@ -153,7 +153,7 @@
 {% if not stats or stats.total_finished == 0 %}
 <!-- No data -->
 <div class="stat-card" style="text-align:center;padding:48px">
-    <div style="font-size:48px;margin-bottom:12px">📋</div>
+    <i class="ti ti-clipboard-list" style="font-size:40px;margin-bottom:12px;color:var(--text-muted)" aria-hidden="true"></i>
     <div style="font-size:14px;font-weight:700;color:var(--text-primary);margin-bottom:6px">No results logged yet</div>
     <div style="font-size:11px;color:var(--text-muted)">
         {{ stats.total_logged if stats else 0 }} fixtures are being tracked.

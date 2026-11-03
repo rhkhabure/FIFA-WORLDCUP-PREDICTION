@@ -1,13 +1,13 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="space-y-3 max-w-screen-2xl mx-auto">
+<div class="football-match-page space-y-3 max-w-screen-2xl mx-auto">
 
     <!-- HEADER -->
     <div class="flex items-center justify-between font-bold uppercase" style="color:var(--text-primary)
                 tracking-wider text-sm">
         <div class="flex items-center gap-2">
-            <span class="text-xl" style="color:var(--league-gold)">⚽</span>
+            <i class="ti ti-ball-football text-xl" style="color:var(--league-gold)" aria-hidden="true"></i>
             {% if featured.home_name and featured.away_name %}
                 {{ current_league }}: {{ featured.home_name|upper }} vs {{ featured.away_name|upper }}
             {% else %}
@@ -27,6 +27,75 @@
             </span>
         {% endif %}
     </div>
+
+    {% if prior and featured.home_name and featured.away_name %}
+    {% set forecast_top = [prior[0], prior[1], prior[2]]|max %}
+    {% if forecast_top == prior[0] %}
+        {% set forecast_pick = featured.home_name %}
+    {% elif forecast_top == prior[1] %}
+        {% set forecast_pick = "Draw" %}
+    {% else %}
+        {% set forecast_pick = featured.away_name %}
+    {% endif %}
+    <section class="match-forecast-card" aria-label="Model forecast">
+        <div class="match-forecast-heading">
+            <div>
+                <div class="match-section-eyebrow">Model forecast</div>
+                <div class="match-forecast-pick">Most likely: {{ forecast_pick }} · {{ forecast_top|round(1) }}%</div>
+            </div>
+            <span class="model-source-label">Dixon–Coles</span>
+        </div>
+        <div class="match-teams-forecast">
+            <div class="match-team-identity">
+                {% if home_crest_url %}
+                <img class="match-team-crest" src="{{ home_crest_url }}" alt="" loading="lazy"
+                     onerror="this.hidden=true;this.nextElementSibling.hidden=false">
+                {% endif %}
+                <span class="match-team-initials" {% if home_crest_url %}hidden{% endif %}>{{ featured.home_name[:2]|upper }}</span>
+                <span>{{ featured.home_name }}</span>
+            </div>
+            <div class="match-outcome-probabilities">
+                <div><span>Home</span><strong>{{ prior[0] }}%</strong></div>
+                <div><span>Draw</span><strong>{{ prior[1] }}%</strong></div>
+                <div><span>Away</span><strong>{{ prior[2] }}%</strong></div>
+            </div>
+            <div class="match-team-identity match-team-away">
+                {% if away_crest_url %}
+                <img class="match-team-crest" src="{{ away_crest_url }}" alt="" loading="lazy"
+                     onerror="this.hidden=true;this.nextElementSibling.hidden=false">
+                {% endif %}
+                <span class="match-team-initials" {% if away_crest_url %}hidden{% endif %}>{{ featured.away_name[:2]|upper }}</span>
+                <span>{{ featured.away_name }}</span>
+            </div>
+        </div>
+    </section>
+    {% endif %}
+
+    {% if vote_match_id %}
+    <section class="fan-vote-card" data-fan-vote data-match-id="{{ vote_match_id }}"
+             aria-label="Fan prediction poll">
+        <div class="fan-vote-header">
+            <div>
+                <div class="match-section-eyebrow">Fan vote · separate from model</div>
+                <div class="fan-vote-question">Who do you think will win?</div>
+            </div>
+            <span class="fan-vote-total" data-vote-total>Loading votes…</span>
+        </div>
+        <div class="fan-vote-options">
+            <button type="button" data-vote-choice="H">{{ featured.home_name }}</button>
+            <button type="button" data-vote-choice="D">Draw</button>
+            <button type="button" data-vote-choice="A">{{ featured.away_name }}</button>
+        </div>
+        <div class="fan-vote-results" data-vote-results hidden>
+            <div><span>Home</span><strong data-vote-pct="H">0%</strong></div>
+            <div><span>Draw</span><strong data-vote-pct="D">0%</strong></div>
+            <div><span>Away</span><strong data-vote-pct="A">0%</strong></div>
+        </div>
+        <div class="fan-vote-message" data-vote-message role="status" aria-live="polite">
+            One vote per browser. Voting closes at kickoff.
+        </div>
+    </section>
+    {% endif %}
 
     <!-- FIXTURES STRIP -->
     {% if fixtures %}
@@ -530,8 +599,8 @@
                             </span>
                             <span id="away-xg" class="text-slate-400">—</span>
                         </div>
-                        <div id="xg-status" class="text-[9px] text-slate-600 text-right">
-                            Awaiting poll
+                        <div id="xg-status" class="match-data-status">
+                            Live data freshness: awaiting update
                         </div>
                     </div>
                 </div>
@@ -621,7 +690,7 @@
     // Only poll for live or finished matches with a valid match ID
     if (!matchId || !homeXgEl || !intervalSel) return;
     if (status === "Not Started") {
-        if (statusEl) statusEl.textContent = "Match not started";
+        if (statusEl) statusEl.textContent = "Live data freshness: waiting for kickoff";
         return;
     }
 
@@ -639,7 +708,7 @@
             const query = params.toString();
             const resp = await fetch(`/live/${matchId}${query ? '?' + query : ''}`);
             if (resp.status === 204) {
-                if (statusEl) statusEl.textContent = "FotMob key not configured";
+                if (statusEl) statusEl.textContent = "Live data freshness: unavailable (FotMob key not configured)";
                 return;
             }
             const data = await resp.json();
@@ -698,13 +767,13 @@
                 if (statusEl) {
                     const now = new Date().toLocaleTimeString("en-GB",
                         {hour: "2-digit", minute: "2-digit"});
-                    statusEl.textContent = `Updated ${now}`;
+                    statusEl.textContent = `Live data freshness: updated ${now}`;
                 }
             } else {
-                if (statusEl) statusEl.textContent = "No data yet";
+                if (statusEl) statusEl.textContent = "Live data freshness: no update received";
             }
         } catch (e) {
-            if (statusEl) statusEl.textContent = "Poll error";
+            if (statusEl) statusEl.textContent = "Live data freshness: stale (refresh failed)";
         }
     }
 
@@ -724,6 +793,101 @@
 
     // Start with the default selected value (5 min)
     startPolling(parseInt(intervalSel.value, 10));
+})();
+
+// ── Anonymous community poll ──────────────────────────────────────────────────
+(function () {
+    const poll = document.querySelector("[data-fan-vote]");
+    if (!poll) return;
+
+    const matchId = poll.dataset.matchId;
+    const voterKey = "football-fan-voter-id";
+    function createVoterId() {
+        if (crypto.randomUUID) return crypto.randomUUID();
+        const bytes = new Uint8Array(16);
+        crypto.getRandomValues(bytes);
+        bytes[6] = (bytes[6] & 0x0f) | 0x40;
+        bytes[8] = (bytes[8] & 0x3f) | 0x80;
+        const hex = Array.from(bytes, function (byte) {
+            return byte.toString(16).padStart(2, "0");
+        }).join("");
+        return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+    }
+    let voterId;
+    try {
+        voterId = localStorage.getItem(voterKey);
+        if (!voterId) {
+            voterId = createVoterId();
+            localStorage.setItem(voterKey, voterId);
+        }
+    } catch (error) {
+        voterId = createVoterId();
+    }
+
+    const totalEl = poll.querySelector("[data-vote-total]");
+    const resultsEl = poll.querySelector("[data-vote-results]");
+    const messageEl = poll.querySelector("[data-vote-message]");
+    const buttons = Array.from(poll.querySelectorAll("[data-vote-choice]"));
+    const endpoint = `/api/fan-vote/${encodeURIComponent(matchId)}`;
+
+    function render(data) {
+        const total = data.total || 0;
+        if (totalEl) totalEl.textContent = `${total} ${total === 1 ? "vote" : "votes"}`;
+        if (resultsEl) resultsEl.hidden = total === 0;
+        ["H", "D", "A"].forEach(function (choice) {
+            const value = total ? Math.round((data.counts[choice] / total) * 100) : 0;
+            const el = poll.querySelector(`[data-vote-pct="${choice}"]`);
+            if (el) el.textContent = `${value}%`;
+        });
+        if (data.has_voted) {
+            buttons.forEach(function (button) { button.disabled = true; });
+            if (messageEl) messageEl.textContent = "Your vote is included. Poll results are community opinion, not the model forecast.";
+        }
+        if (data.closed) {
+            buttons.forEach(function (button) { button.disabled = true; });
+            if (messageEl) messageEl.textContent = "Voting is closed for this match.";
+        }
+    }
+
+    async function refresh() {
+        const params = new URLSearchParams({voter_id: voterId});
+        const response = await fetch(`${endpoint}?${params}`);
+        if (!response.ok) throw new Error("Could not load poll results");
+        render(await response.json());
+    }
+
+    buttons.forEach(function (button) {
+        button.addEventListener("click", async function () {
+            buttons.forEach(function (item) { item.disabled = true; });
+            if (messageEl) messageEl.textContent = "Submitting your vote…";
+            try {
+                const response = await fetch(endpoint, {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({choice: button.dataset.voteChoice, voter_id: voterId})
+                });
+                const payload = await response.json();
+                if (!response.ok) {
+                    if (payload.detail && payload.detail.reason === "already_voted") {
+                        render(payload.detail);
+                    } else if (payload.detail === "poll_closed") {
+                        if (messageEl) messageEl.textContent = "Voting is closed for this match.";
+                    } else {
+                        throw new Error("Vote could not be submitted");
+                    }
+                    return;
+                }
+                render(payload);
+            } catch (error) {
+                buttons.forEach(function (item) { item.disabled = false; });
+                if (messageEl) messageEl.textContent = "Could not submit your vote. Please try again.";
+            }
+        });
+    });
+
+    refresh().catch(function () {
+        if (totalEl) totalEl.textContent = "Poll unavailable";
+    });
 })();
 </script>
 {% endblock %}

@@ -21,7 +21,7 @@
 </span>
 {%- endmacro %}
 
-{% macro prob_bar(g, height=6) -%}
+{% macro prob_bar(g, height=9) -%}
 {% set hp = (g.home_win_prob * 100) | round(0) | int %}
 <div class="prob-track" style="height:{{ height }}px">
     <div class="prob-away" style="width:{{ 100 - hp }}%;background:{{ g.away_colour }}"></div>
@@ -179,7 +179,7 @@
                     </div>
                 </div>
                 <div style="margin-top:12px">
-                    <div class="prob-track" style="height:7px">
+                    <div class="prob-track" style="height:10px">
                         <div class="js-away-bar" style="width:{{ (g.away_win_prob*100)|round(0) }}%;background:{{ g.away_colour }}"></div>
                         <div class="js-home-bar" style="width:{{ (g.home_win_prob*100)|round(0) }}%;background:{{ g.home_colour }}"></div>
                     </div>
@@ -264,7 +264,7 @@
                 {{ schedule_team_side(left_id, left_tri, left_colour, left_score, 'team-side-left', playing) }}
 
                 <div class="prob-col">
-                    {{ prob_bar(g, 5) }}
+                    {{ prob_bar(g, 9) }}
                     <div class="pick">
                         <span style="color:{{ fav_col }}">{{ fav_tri }} {{ fav_pct }}%</span>
                         <span style="color:var(--text-muted,#94a3b8);font-weight:400">Elo {{ g.home_elo|int }}–{{ g.away_elo|int }}</span>
@@ -323,7 +323,7 @@
                 <div class="time">{{ g.tip_off_eat or 'TBD' }}</div>
                 {{ schedule_team_side(left_id, left_tri, left_colour, left_score, 'team-side-left', false) }}
                 <div class="prob-col">
-                    {{ prob_bar(g, 5) }}
+                    {{ prob_bar(g, 9) }}
                     <div class="pick">
                         <span style="color:{{ fav_col }}">{{ fav_tri }} {{ fav_pct }}%</span>
                         <span style="color:var(--text-muted,#94a3b8);font-weight:400">Elo {{ g.home_elo|int }}–{{ g.away_elo|int }}</span>

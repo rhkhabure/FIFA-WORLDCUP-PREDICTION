@@ -264,3 +264,150 @@ body {
 .pred-h { background: var(--league-tint);  color: var(--league-primary); border-radius: 6px; padding: 3px 10px; font-weight: 700; font-size: 11px; }
 .pred-d { background: #F3F4F6; color: #374151; border-radius: 6px; padding: 3px 10px; font-weight: 700; font-size: 11px; }
 .pred-a { background: #FFF7ED; color: #9A3412; border-radius: 6px; padding: 3px 10px; font-weight: 700; font-size: 11px; }
+
+/* Football forecast and fan poll */
+.match-forecast-card,
+.fan-vote-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px;
+}
+.match-forecast-heading,
+.fan-vote-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+.match-section-eyebrow {
+    color: var(--text-muted);
+    font: 700 10px var(--font-mono);
+    letter-spacing: .1em;
+    text-transform: uppercase;
+}
+.match-forecast-pick,
+.fan-vote-question {
+    color: var(--text-primary);
+    font-size: 14px;
+    font-weight: 800;
+    margin-top: 4px;
+}
+.model-source-label {
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    color: var(--text-secondary);
+    font: 700 9px var(--font-mono);
+    padding: 4px 8px;
+    white-space: nowrap;
+}
+.match-teams-forecast {
+    align-items: center;
+    display: grid;
+    gap: 14px;
+    grid-template-columns: minmax(0, 1fr) minmax(190px, 1.15fr) minmax(0, 1fr);
+    margin-top: 16px;
+}
+.match-team-identity {
+    align-items: center;
+    display: flex;
+    gap: 8px;
+    min-width: 0;
+    font-size: 12px;
+    font-weight: 700;
+}
+.match-team-identity > span:last-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.match-team-away { justify-content: flex-end; text-align: right; }
+.match-team-crest,
+.match-team-initials {
+    flex: 0 0 32px;
+    height: 32px;
+    width: 32px;
+}
+.match-team-crest { object-fit: contain; }
+.match-team-initials {
+    align-items: center;
+    background: var(--league-tint);
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    color: var(--league-primary);
+    display: inline-flex;
+    font: 800 10px var(--font-mono);
+    justify-content: center;
+}
+.match-team-initials[hidden] { display: none; }
+.match-outcome-probabilities {
+    display: grid;
+    gap: 6px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    text-align: center;
+}
+.match-outcome-probabilities > div,
+.fan-vote-results > div {
+    background: var(--surface-2);
+    border-radius: 8px;
+    padding: 7px 4px;
+}
+.match-outcome-probabilities span,
+.fan-vote-results span {
+    color: var(--text-muted);
+    display: block;
+    font: 700 9px var(--font-mono);
+    text-transform: uppercase;
+}
+.match-outcome-probabilities strong,
+.fan-vote-results strong {
+    color: var(--text-primary);
+    display: block;
+    font: 800 13px var(--font-mono);
+    margin-top: 3px;
+}
+.fan-vote-total { color: var(--text-muted); font: 700 10px var(--font-mono); }
+.fan-vote-options,
+.fan-vote-results {
+    display: grid;
+    gap: 8px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin-top: 12px;
+}
+.fan-vote-options button {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-primary);
+    cursor: pointer;
+    font: 700 11px var(--font-sans);
+    min-height: 40px;
+    overflow-wrap: anywhere;
+    padding: 7px;
+}
+.fan-vote-options button:hover:not(:disabled),
+.fan-vote-options button:focus-visible {
+    border-color: var(--league-vivid);
+    outline: 2px solid var(--league-vivid);
+    outline-offset: 1px;
+}
+.fan-vote-options button:disabled { cursor: default; opacity: .6; }
+.fan-vote-message,
+.match-data-status {
+    color: var(--text-muted);
+    font: 10px var(--font-mono);
+    margin-top: 9px;
+    text-align: right;
+}
+
+@media (max-width: 600px) {
+    .match-forecast-card,
+    .fan-vote-card { padding: 12px; }
+    .match-teams-forecast {
+        gap: 10px 6px;
+        grid-template-columns: 1fr 1fr;
+    }
+    .match-outcome-probabilities { grid-column: 1 / -1; grid-row: 2; }
+    .match-team-identity { font-size: 10px; }
+    .match-team-crest,
+    .match-team-initials { flex-basis: 26px; height: 26px; width: 26px; }
+}

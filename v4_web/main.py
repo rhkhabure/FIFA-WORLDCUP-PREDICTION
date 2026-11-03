@@ -36,7 +36,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import uvicorn
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -197,6 +197,7 @@ print(
 import asyncio
 from contextlib import asynccontextmanager
 from prediction_job import schedule_prediction_job
+from fan_votes import cast_vote, get_vote_summary, init_fan_votes
 from predictions import (DB_PATH as FOOTBALL_PREDICTIONS_DB, init_db,
                          log_pre_lineup, log_post_lineup,
                          log_result, get_all_predictions,
@@ -208,6 +209,7 @@ async def lifespan(app):
     startup_started = time.perf_counter()
     phase_started = startup_started
     init_db()
+    init_fan_votes(FOOTBALL_PREDICTIONS_DB)
     print(
         "[startup] football database initialized in "
         f"{time.perf_counter() - phase_started:.2f}s"
@@ -364,6 +366,44 @@ async def health():
         "football_model_loaded": nn_model is not None,
         "nba_model_loaded": nba_model.loaded,
     })
+
+
+@app.get("/api/fan-vote/{match_id}")
+async def fan_vote_summary(match_id: str, request: Request):
+    voter_id = request.query_params.get("voter_id")
+    return await asyncio.to_thread(
+        get_vote_summary, FOOTBALL_PREDICTIONS_DB, match_id, voter_id
+    )
+
+
+@app.post("/api/fan-vote/{match_id}")
+async def submit_fan_vote(match_id: str, request: Request):
+    try:
+        body = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Expected a JSON vote payload") from exc
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="Expected a JSON vote payload")
+
+    result = await asyncio.to_thread(
+        cast_vote,
+        FOOTBALL_PREDICTIONS_DB,
+        match_id,
+        body.get("choice"),
+        body.get("voter_id"),
+    )
+    if result["reason"] in ("invalid_choice", "invalid_voter"):
+        raise HTTPException(status_code=422, detail=result["reason"])
+    if result["reason"] == "unknown_match":
+        raise HTTPException(status_code=404, detail="Match not found")
+    if result["reason"] in ("invalid_kickoff", "poll_closed"):
+        raise HTTPException(status_code=409, detail=result["reason"])
+    if result["reason"] == "already_voted":
+        raise HTTPException(
+            status_code=409,
+            detail={"reason": "already_voted", **result},
+        )
+    return result
 
 
 # ── League context helper ──────────────────────────────────────────
