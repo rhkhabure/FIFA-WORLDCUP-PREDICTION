@@ -223,6 +223,24 @@ def _get_nba_team_season_record(team_id: int, season: str) -> dict[str, int]:
     return record
 
 
+def _ordinal_label(rank: int) -> str:
+    """Format a conference rank as an ordinal label."""
+    suffix = "th" if 10 <= rank % 100 <= 20 else {
+        1: "st", 2: "nd", 3: "rd"
+    }.get(rank % 10, "th")
+    return f"{rank}{suffix}"
+
+
+def _get_team_standing(
+    standings: dict[str, list[dict]], team_id: int, conference: str
+) -> dict | None:
+    """Find a team's row in its conference table."""
+    return next(
+        (row for row in standings.get(conference, []) if row["team_id"] == team_id),
+        None,
+    )
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # PAGE ROUTES
 # ─────────────────────────────────────────────────────────────────────────────
@@ -609,6 +627,7 @@ async def nba_team_profile(request: Request, team_id: int):
     season = current_nba_season()
     roster = await run_in_threadpool(get_team_roster, team_id, season)
     standings = await run_in_threadpool(get_conference_standings)
+    team_standing = _get_team_standing(standings, team_id, t["conference"])
     historical_team_seasons = []
     team_history_unavailable = False
     try:
@@ -620,6 +639,12 @@ async def nba_team_profile(request: Request, team_id: int):
     # Recent games and the current-season record from the prediction history DB.
     recent = []
     team_record = _get_nba_team_season_record(team_id, season)
+    if team_standing:
+        team_record = {
+            "wins": team_standing["wins"],
+            "losses": team_standing["losses"],
+            "played": team_standing["wins"] + team_standing["losses"],
+        }
     if _db:
         try:
             cur = _db.cursor()
@@ -667,7 +692,12 @@ async def nba_team_profile(request: Request, team_id: int):
         request=request,
         name="nba_team.html",
         context={
-            "team":          {**t, "elo": round(elo, 0), "team_id": team_id},
+            "team":          {
+                **t,
+                "elo": round(elo, 0),
+                "team_id": team_id,
+                "standing_label": _ordinal_label(team_standing["rank"]) if team_standing else None,
+            },
             "recent":        recent,
             "team_record":   team_record,
             "upcoming":      [next_game] if next_game else [],
@@ -914,6 +944,7 @@ async def nba_curve(game_id: str, game_date: str = ""):
     series = build_snapshot_series(
         game_id, ht_id,
         home_elo=pre["home_elo"], away_elo=pre["away_elo"], is_playoffs=0,
+        game=game,
     )
     if series and _model and _model.loaded:
         preds = _model.predict_live_batch([s["snapshot"] for s in series])
@@ -927,6 +958,17 @@ async def nba_curve(game_id: str, game_date: str = ""):
                 "clock":  s["clock"],
                 "desc":   s["description"],
             })
+    elif game.get("status") == "final":
+        home_won = game.get("home_score", 0) > game.get("away_score", 0)
+        points.append({
+            "t": 2880,
+            "hp": 1.0 if home_won else 0.0,
+            "hs": game.get("home_score", 0),
+            "as": game.get("away_score", 0),
+            "period": 4,
+            "clock": "0:00",
+            "desc": "Final result · play-by-play unavailable",
+        })
 
     return JSONResponse({"points": points})
 

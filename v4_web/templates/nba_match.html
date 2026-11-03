@@ -62,6 +62,8 @@
     .chart-overlay { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center;
                      justify-content: center; text-align: center; background: rgba(255,255,255,0.68);
                      border-radius: 8px; }
+    #wp-chart-fallback { width: 100%; height: 100%; }
+    #wp-chart-fallback[hidden] { display: none; }
     .court-shell { overflow-x: auto; border-radius: 9px; background: #b87943; }
     .court-shell svg { display: block; width: 100%; min-width: 560px; height: auto; }
     .court-status { min-height: 16px; font-family: var(--font-mono); font-size: 10px;
@@ -338,6 +340,8 @@
                 <div style="position:relative;height:320px">
                     <canvas id="wp-chart" role="img"
                             aria-label="Win probability for {{ game.away_tricode }} and {{ game.home_tricode }} over the course of the game"></canvas>
+                    <svg id="wp-chart-fallback" viewBox="0 0 720 320" role="img"
+                         aria-label="Simplified win probability chart" hidden></svg>
                     {% if game.status == 'pre' %}
                     <div class="chart-overlay" id="js-pre-overlay">
                         <i class="ti ti-clock" style="font-size:26px;color:var(--league-primary)" aria-hidden="true"></i>
@@ -397,6 +401,8 @@
         poll:     {{ poll_interval | default(20000) }},
         tipUtc:   "{{ game.game_time_utc }}",
         pregame:  {{ game.home_win_prob }},
+        homeScore: {{ game.home_score | default(0) }},
+        awayScore: {{ game.away_score | default(0) }},
     };
     const $ = id => document.getElementById(id);
     let status = CFG.status;
@@ -536,7 +542,9 @@
         if (t < 2880) return 'Q' + (Math.floor(t / 720) + 1);
         return 'OT' + (Math.floor((t - 2880) / 300) + 1);
     }
-    const chart = new Chart($('wp-chart'), {
+    let chart = null;
+    try {
+    chart = new Chart($('wp-chart'), {
         type: 'line',
         data: { datasets: [
             { label: CFG.awayTri, data: [], borderColor: CFG.awayCol, backgroundColor: CFG.awayCol,
@@ -570,9 +578,75 @@
             },
         },
     });
-    function ax_max() { return chart.options.scales.x.max; }
+    } catch (error) {
+        $('wp-chart').hidden = true;
+        $('wp-chart-fallback').hidden = false;
+        $('js-source').textContent = 'Simplified chart · standard chart unavailable';
+    }
+
+    let fallbackPoints = [];
+    function baselinePoints() {
+        const points = [{ t: 0, hp: CFG.pregame }];
+        if (status === 'pre') points.push({ t: 2880, hp: CFG.pregame });
+        if (status === 'final') {
+            points.push({ t: 2880, hp: CFG.homeScore > CFG.awayScore ? 1 : 0 });
+        }
+        return points;
+    }
+
+    function drawFallback(points) {
+        const svg = $('wp-chart-fallback');
+        if (!svg || svg.hidden) return;
+        svg.replaceChildren();
+        const ns = 'http://www.w3.org/2000/svg';
+        const maxT = Math.max(2880, ...points.map(point => point.t));
+        const x = t => 48 + (t / maxT) * 650;
+        const y = pct => 20 + ((100 - pct) / 100) * 260;
+        [0, 25, 50, 75, 100].forEach(value => {
+            const line = document.createElementNS(ns, 'line');
+            line.setAttribute('x1', '48');
+            line.setAttribute('x2', '698');
+            line.setAttribute('y1', String(y(value)));
+            line.setAttribute('y2', String(y(value)));
+            line.setAttribute('stroke', value === 50 ? '#94a3b8' : '#e2e8f0');
+            line.setAttribute('stroke-dasharray', value === 50 ? '0' : '3 5');
+            svg.append(line);
+            const label = document.createElementNS(ns, 'text');
+            label.setAttribute('x', '40');
+            label.setAttribute('y', String(y(value) + 4));
+            label.setAttribute('text-anchor', 'end');
+            label.setAttribute('fill', '#64748b');
+            label.setAttribute('font-size', '10');
+            label.textContent = `${value}%`;
+            svg.append(label);
+        });
+        if (points.length < 2) return;
+        for (const [field, colour] of [['away', CFG.awayCol], ['home', CFG.homeCol]]) {
+            const path = document.createElementNS(ns, 'polyline');
+            path.setAttribute('fill', 'none');
+            path.setAttribute('stroke', colour);
+            path.setAttribute('stroke-width', '3');
+            path.setAttribute('stroke-linecap', 'round');
+            path.setAttribute('stroke-linejoin', 'round');
+            path.setAttribute('points', points.map(point =>
+                `${x(point.t)},${y(field === 'home' ? point.hp * 100 : (1 - point.hp) * 100)}`
+            ).join(' '));
+            svg.append(path);
+        }
+    }
+
+    function renderFallback(points) {
+        if (chart) {
+            chart.data.datasets.forEach(dataset => dataset.data = []);
+            points.forEach(point => pushPoint(point.t, point.hp, {}));
+            chart.update();
+        } else {
+            drawFallback(points);
+        }
+    }
 
     function setX(maxT) {
+        if (!chart) return;
         // Extend the axis in 5-minute steps when the game goes to overtime
         let max = 2880;
         while (max < maxT) max += 300;
@@ -583,6 +657,13 @@
     }
 
     function pushPoint(t, hp, meta) {
+        if (!chart) {
+            const last = fallbackPoints[fallbackPoints.length - 1];
+            if (last && Math.abs(last.t - t) < 1) last.hp = hp;
+            else if (!last || t > last.t) fallbackPoints.push({ t, hp });
+            drawFallback(fallbackPoints);
+            return;
+        }
         const [away, home] = chart.data.datasets;
         const last = home.data[home.data.length - 1];
         const y = hp * 100;
@@ -606,31 +687,50 @@
     async function loadCurve() {
         try {
             const r = await fetch(`/nba/curve/${CFG.gameId}?game_date=${encodeURIComponent(CFG.gameTimeUtc.slice(0, 10))}`);
-            if (!r.ok) return;
+            if (!r.ok) {
+                $('js-source').textContent = `History unavailable (HTTP ${r.status})`;
+                fallbackPoints = baselinePoints();
+                renderFallback(fallbackPoints);
+                return;
+            }
             const { points } = await r.json();
-            chart.data.datasets.forEach(d => d.data = []);
             const plottedPoints = [...points];
             if (status === 'pre' && plottedPoints.length === 1) {
                 plottedPoints.push({...plottedPoints[0], t: 2880, desc: 'Pregame Elo projection'});
             }
-            plottedPoints.forEach(p => pushPoint(p.t, p.hp,
-                { hs: p.hs, as: p.as, clock: p.clock, desc: p.desc }));
-            chart.update();
+            fallbackPoints = plottedPoints.map(point => ({ t: point.t, hp: point.hp }));
+            if (chart) {
+                chart.data.datasets.forEach(d => d.data = []);
+                plottedPoints.forEach(p => pushPoint(p.t, p.hp,
+                    { hs: p.hs, as: p.as, clock: p.clock, desc: p.desc }));
+                chart.update();
+            } else {
+                drawFallback(fallbackPoints);
+            }
             const lastP = plottedPoints[plottedPoints.length - 1];
             if (lastP && status !== 'pre') showNow(lastP.hp, status === 'final' ? 'final' : 'live model');
             $('js-source').textContent = status === 'pre'
                 ? 'Pregame Elo projection · live tracking starts at tip-off'
                 : points.length > 1
                     ? `${points.length - 1} scoring plays rebuilt from play-by-play`
-                    : 'Pregame Elo';
-        } catch (e) { $('js-source').textContent = 'History unavailable'; }
+                    : status === 'final'
+                        ? 'Final result · play-by-play unavailable'
+                        : 'Live updates are loading';
+        } catch (error) {
+            $('js-source').textContent = 'History unavailable · retrying with live updates';
+            fallbackPoints = baselinePoints();
+            renderFallback(fallbackPoints);
+        }
     }
 
     // ── Live poll ────────────────────────────────────────────────────
     async function poll() {
         try {
             const r = await fetch(`/nba/live/${CFG.gameId}?game_date=${encodeURIComponent(CFG.gameTimeUtc.slice(0, 10))}`);
-            if (!r.ok) return;
+            if (!r.ok) {
+                $('js-source').textContent = `Live data unavailable (HTTP ${r.status}) · retrying`;
+                return;
+            }
             const d = await r.json();
 
             if (status === 'pre' && d.status !== 'pre') { location.reload(); return; }
@@ -671,12 +771,14 @@
             $('js-status').innerHTML = '<span class="live-dot"></span> ' + d.status_text;
             pushPoint(d.elapsed_sec, d.home_win_prob,
                 { hs: d.home_score, as: d.away_score, clock: d.status_text, desc: 'Live poll' });
-            chart.update();
+            if (chart) chart.update();
             showNow(d.home_win_prob, d.source === 'neural_net' ? 'live model' : 'pregame fallback');
             $('js-source').textContent = d.source === 'neural_net'
                 ? 'Neural net · updating every ' + Math.round(CFG.poll / 1000) + 's'
                 : 'Model unavailable — Elo fallback';
-        } catch (e) { /* keep last values on network error */ }
+        } catch (error) {
+            $('js-source').textContent = 'Live data unavailable · retrying';
+        }
     }
 
     // ── Pre-game countdown ───────────────────────────────────────────
@@ -690,10 +792,9 @@
     }
 
     // ── Boot ─────────────────────────────────────────────────────────
-    loadCurve().then(() => {
-        poll();
-        if (status !== 'final') timer = setInterval(poll, CFG.poll);
-    });
+    loadCurve();
+    poll();
+    if (status !== 'final') timer = setInterval(poll, CFG.poll);
     if (status === 'pre') { countdown(); setInterval(countdown, 1000); }
 })();
 </script>

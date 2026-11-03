@@ -27,6 +27,8 @@ from urllib.request import Request, urlopen
 import json
 from typing import Any
 
+from constants import nba_team
+
 log = logging.getLogger(__name__)
 
 # ── TTL constants (seconds) ───────────────────────────────────────────────────
@@ -38,6 +40,7 @@ TTL_PLAYER_PROFILE = 21600  # player bio and headline stats
 TTL_LINEUP_FALLBACK = 30  # ESPN scoreboard/box-score fallback
 TTL_PREGAME = 60    # scoreboard before tip-off
 TTL_STANDINGS = 21600
+TTL_HISTORICAL = 21600
 
 EAT_TZ = timezone(timedelta(hours=3))
 
@@ -719,7 +722,145 @@ def get_live_game(game_id: str, game_date: str = "") -> dict:
 # SECTION 3 — Play-by-play
 # ─────────────────────────────────────────────────────────────────────────────
 
-def get_live_pbp(game_id: str) -> list[dict]:
+def _espn_team_code(code: str) -> str:
+    return {
+        "GS": "GSW",
+        "NY": "NYK",
+        "NO": "NOP",
+        "WSH": "WAS",
+        "UTAH": "UTA",
+        "SA": "SAS",
+    }.get(code.upper(), code.upper())
+
+
+def _get_espn_game_plays(
+    game: dict,
+) -> tuple[list[dict], dict[str, int], bool]:
+    """Fetch ESPN play-by-play for a game when the NBA live feed is unavailable."""
+    game_id = str(game.get("game_id", ""))
+    key = f"espn_plays_{game_id}"
+    cached = _get(key)
+    if cached is not None:
+        return cached
+
+    try:
+        tip = datetime.fromisoformat(
+            game.get("game_time_utc", "").replace("Z", "+00:00")
+        )
+        if tip.tzinfo is None:
+            raise ValueError("game tip-off time must include a timezone")
+        home_code = _espn_team_code(game.get("home_tricode", ""))
+        away_code = _espn_team_code(game.get("away_tricode", ""))
+        expected = {home_code, away_code}
+        candidates: dict[str, dict] = {}
+
+        for date in (tip.date(), tip.date() - timedelta(days=1)):
+            url = (
+                "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?"
+                + urlencode({"dates": date.strftime("%Y%m%d")})
+            )
+            request = Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            with urlopen(request, timeout=8) as response:
+                scoreboard = json.loads(response.read())
+            for event in scoreboard.get("events", []):
+                competition = (event.get("competitions") or [{}])[0]
+                competitors = competition.get("competitors", [])
+                codes = {
+                    _espn_team_code(item.get("team", {}).get("abbreviation", ""))
+                    for item in competitors
+                }
+                if codes == expected and event.get("id"):
+                    candidates[event["id"]] = event
+
+        if not candidates:
+            raise LookupError(f"ESPN event not found for NBA game {game_id}")
+        event = min(
+            candidates.values(),
+            key=lambda item: abs(
+                (
+                    datetime.fromisoformat(item["date"].replace("Z", "+00:00"))
+                    - tip
+                ).total_seconds()
+            ),
+        )
+        competition = (event.get("competitions") or [{}])[0]
+        team_ids = {}
+        espn_home_code = home_code
+        for competitor in competition.get("competitors", []):
+            code = _espn_team_code(
+                competitor.get("team", {}).get("abbreviation", "")
+            )
+            if competitor.get("homeAway") == "home":
+                espn_home_code = code
+            if code == home_code:
+                team_ids[str(competitor.get("id", ""))] = int(game["home_team_id"])
+            elif code == away_code:
+                team_ids[str(competitor.get("id", ""))] = int(game["away_team_id"])
+
+        summary_url = (
+            "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?"
+            + urlencode({"event": event["id"]})
+        )
+        request = Request(summary_url, headers={"User-Agent": "Mozilla/5.0"})
+        with urlopen(request, timeout=8) as response:
+            summary = json.loads(response.read())
+        result = (summary.get("plays", []), team_ids, espn_home_code != home_code)
+        if not result[0]:
+            raise LookupError(f"ESPN play-by-play is empty for NBA game {game_id}")
+        ttl = TTL_LIVE if game.get("status") == "live" else TTL_HISTORICAL
+        _set(key, result, ttl)
+        return result
+    except Exception as exc:
+        log.warning("ESPN play-by-play fallback failed for %s: %s", game_id, exc)
+        return [], {}
+
+
+def _normalize_espn_plays(
+    plays: list[dict],
+    team_ids: dict[str, int],
+    home_team_id: int,
+    scores_reversed: bool = False,
+) -> list[dict]:
+    """Convert ESPN events to the shared play-by-play shape used by the model."""
+    actions = []
+    last_home = last_away = 0
+    for play in plays:
+        try:
+            espn_home_score = int(play.get("homeScore") or 0)
+            espn_away_score = int(play.get("awayScore") or 0)
+            home_score, away_score = (
+                (espn_away_score, espn_home_score)
+                if scores_reversed else (espn_home_score, espn_away_score)
+            )
+            period = int((play.get("period") or {}).get("number") or 1)
+        except (TypeError, ValueError):
+            continue
+        team_id = team_ids.get(str((play.get("team") or {}).get("id", "")))
+        if team_id is None:
+            if home_score != last_home:
+                team_id = home_team_id
+            elif away_score != last_away:
+                team_id = next(
+                    (candidate for candidate in team_ids.values()
+                     if candidate != home_team_id),
+                    None,
+                )
+        kind = str((play.get("type") or {}).get("text", ""))
+        actions.append({
+            "actionType": "foul" if "foul" in kind.lower() else kind,
+            "subType": "",
+            "description": play.get("text") or play.get("shortDescription", ""),
+            "teamId": team_id,
+            "period": period,
+            "clock": str((play.get("clock") or {}).get("displayValue", "")),
+            "scoreHome": home_score,
+            "scoreAway": away_score,
+        })
+        last_home, last_away = home_score, away_score
+    return actions
+
+
+def get_live_pbp(game_id: str, game: dict | None = None) -> list[dict]:
     """
     Returns the raw play-by-play action list for a live game.
     Each action is a dict with keys: actionNumber, clock, period,
@@ -737,6 +878,18 @@ def get_live_pbp(game_id: str) -> list[dict]:
         return acts
     except Exception as exc:
         log.warning("PBP fetch failed for %s: %s", game_id, exc)
+        if game:
+            plays, team_ids, scores_reversed = _get_espn_game_plays(game)
+            actions = _normalize_espn_plays(
+                plays,
+                team_ids,
+                int(game.get("home_team_id") or 0),
+                scores_reversed,
+            )
+            if actions:
+                ttl = TTL_LIVE if game.get("status") == "live" else TTL_HISTORICAL
+                _set(key, actions, ttl)
+                return actions
         stale = _get_stale(key)
         return stale if stale is not None else []
 
@@ -795,7 +948,7 @@ def build_live_snapshot(
     if not game:
         return {}
 
-    pbp = get_live_pbp(game_id)
+    pbp = get_live_pbp(game_id, game)
     if not pbp:
         # Return a partial snapshot using only scoreboard data
         return _snapshot_from_scoreboard(game, home_elo, away_elo,
@@ -984,6 +1137,7 @@ def build_snapshot_series(
     home_elo: float = 1500.0,
     away_elo: float = 1500.0,
     is_playoffs: int = 0,
+    game: dict | None = None,
 ) -> list[dict]:
     """
     One feature snapshot per scoring play, for rebuilding the full win
@@ -991,7 +1145,7 @@ def build_snapshot_series(
         {"elapsed_sec", "period", "clock", "home_score", "away_score",
          "description", "snapshot": {...16-feature dict...}}
     """
-    pbp = get_live_pbp(game_id)
+    pbp = get_live_pbp(game_id, game)
     out = []
     for st in _walk_pbp(pbp, home_team_id):
         per        = st["period"]

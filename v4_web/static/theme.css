@@ -424,4 +424,10 @@ body {
     max-width: 720px;
     width: 100%;
 }
+.nba-fan-vote-card .fan-vote-options {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.nba-fan-vote-card .fan-vote-results {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
 .nba-fan-vote-card .fan-vote-message { text-align: center; }
