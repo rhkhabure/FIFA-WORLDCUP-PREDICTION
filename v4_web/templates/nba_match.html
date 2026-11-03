@@ -60,7 +60,7 @@
     @media (max-width: 960px) { .m-grid { grid-template-columns: minmax(0, 1fr); } }
 
     .chart-overlay { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center;
-                     justify-content: center; text-align: center; background: rgba(255,255,255,0.86);
+                     justify-content: center; text-align: center; background: rgba(255,255,255,0.68);
                      border-radius: 8px; }
     .court-shell { overflow-x: auto; border-radius: 9px; background: #b87943; }
     .court-shell svg { display: block; width: 100%; min-width: 560px; height: auto; }
@@ -74,7 +74,7 @@
     <div style="font-size:15px;font-weight:800;margin-top:10px">Game not on today's scoreboard</div>
     <div class="m-muted" style="font-size:12px;margin-top:6px">
         {% if game_id %}<code>{{ game_id }}</code> isn't scheduled today.{% else %}There are no NBA games today.{% endif %}
-        The match page covers today's games only for now.
+        Open a scheduled game from today or the upcoming fixture widget.
     </div>
     <a href="/nba" style="display:inline-block;margin-top:14px;font-size:12px;font-weight:700;
        color:var(--league-primary)">← Back to the NBA hub</a>
@@ -168,6 +168,31 @@
             </div>
         </div>
     </div>
+
+    {% if game.status == 'pre' %}
+    <section class="fan-vote-card nba-fan-vote-card" data-nba-fan-vote
+             data-game-id="{{ game.game_id }}" data-game-date="{{ game_date }}"
+             aria-label="NBA fan poll">
+        <div class="fan-vote-header">
+            <div>
+                <div class="match-section-eyebrow">Fan vote · separate from model</div>
+                <div class="fan-vote-question">Who wins?</div>
+            </div>
+            <span class="fan-vote-total" data-vote-total>Loading votes…</span>
+        </div>
+        <div class="fan-vote-options">
+            <button type="button" data-vote-choice="A">{{ game.away_tricode }}</button>
+            <button type="button" data-vote-choice="H">{{ game.home_tricode }}</button>
+        </div>
+        <div class="fan-vote-results" data-vote-results hidden>
+            <div><span>{{ game.away_tricode }}</span><strong data-vote-pct="A">0%</strong></div>
+            <div><span>{{ game.home_tricode }}</span><strong data-vote-pct="H">0%</strong></div>
+        </div>
+        <div class="fan-vote-message" data-vote-message role="status" aria-live="polite">
+            One vote per browser. Voting closes at tip-off.
+        </div>
+    </section>
+    {% endif %}
 
     <section class="m-card">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px">
@@ -333,7 +358,7 @@
             <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px">
                 <div class="ind">
                     <div class="k">Last scored</div>
-                    <div class="v" id="js-poss">—</div>
+                    <div class="v" id="js-poss">{{ 'Not started' if game.status == 'pre' else '—' }}</div>
                 </div>
                 <div class="ind">
                     <div class="k">In the bonus</div>
@@ -341,11 +366,11 @@
                 </div>
                 <div class="ind">
                     <div class="k">Elo weight</div>
-                    <div class="v" id="js-elo-weight">—</div>
+                    <div class="v" id="js-elo-weight">{{ '1.00' if game.status == 'pre' else '—' }}</div>
                 </div>
                 <div class="ind">
                     <div class="k">Confidence</div>
-                    <div class="v" id="js-conf">—</div>
+                    <div class="v" id="js-conf">{{ 'Pregame' if game.status == 'pre' else '—' }}</div>
                 </div>
             </div>
 
@@ -580,25 +605,31 @@
 
     async function loadCurve() {
         try {
-            const r = await fetch(`/nba/curve/${CFG.gameId}`);
+            const r = await fetch(`/nba/curve/${CFG.gameId}?game_date=${encodeURIComponent(CFG.gameTimeUtc.slice(0, 10))}`);
             if (!r.ok) return;
             const { points } = await r.json();
             chart.data.datasets.forEach(d => d.data = []);
-            points.forEach(p => pushPoint(p.t, p.hp,
+            const plottedPoints = [...points];
+            if (status === 'pre' && plottedPoints.length === 1) {
+                plottedPoints.push({...plottedPoints[0], t: 2880, desc: 'Pregame Elo projection'});
+            }
+            plottedPoints.forEach(p => pushPoint(p.t, p.hp,
                 { hs: p.hs, as: p.as, clock: p.clock, desc: p.desc }));
             chart.update();
-            const lastP = points[points.length - 1];
+            const lastP = plottedPoints[plottedPoints.length - 1];
             if (lastP && status !== 'pre') showNow(lastP.hp, status === 'final' ? 'final' : 'live model');
-            $('js-source').textContent = points.length > 1
-                ? `${points.length - 1} scoring plays rebuilt from play-by-play`
-                : 'Pregame Elo';
+            $('js-source').textContent = status === 'pre'
+                ? 'Pregame Elo projection · live tracking starts at tip-off'
+                : points.length > 1
+                    ? `${points.length - 1} scoring plays rebuilt from play-by-play`
+                    : 'Pregame Elo';
         } catch (e) { $('js-source').textContent = 'History unavailable'; }
     }
 
     // ── Live poll ────────────────────────────────────────────────────
     async function poll() {
         try {
-            const r = await fetch(`/nba/live/${CFG.gameId}`);
+            const r = await fetch(`/nba/live/${CFG.gameId}?game_date=${encodeURIComponent(CFG.gameTimeUtc.slice(0, 10))}`);
             if (!r.ok) return;
             const d = await r.json();
 
@@ -667,4 +698,103 @@
 })();
 </script>
 {% endif %}
+<script>
+(function () {
+    const poll = document.querySelector("[data-nba-fan-vote]");
+    if (!poll) return;
+    const matchId = poll.dataset.gameId;
+    const gameDate = poll.dataset.gameDate;
+    const key = "football-fan-voter-id";
+    function createVoterId() {
+        if (crypto.randomUUID) return crypto.randomUUID();
+        const bytes = new Uint8Array(16);
+        crypto.getRandomValues(bytes);
+        bytes[6] = (bytes[6] & 0x0f) | 0x40;
+        bytes[8] = (bytes[8] & 0x3f) | 0x80;
+        const hex = Array.from(bytes, function (byte) {
+            return byte.toString(16).padStart(2, "0");
+        }).join("");
+        return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+    }
+    let voterId;
+    try {
+        voterId = localStorage.getItem(key);
+        if (!voterId) {
+            voterId = createVoterId();
+            localStorage.setItem(key, voterId);
+        }
+    } catch (error) {
+        voterId = createVoterId();
+    }
+
+    const totalEl = poll.querySelector("[data-vote-total]");
+    const resultsEl = poll.querySelector("[data-vote-results]");
+    const messageEl = poll.querySelector("[data-vote-message]");
+    const buttons = Array.from(poll.querySelectorAll("[data-vote-choice]"));
+    const endpoint = `/nba/api/fan-vote/${encodeURIComponent(matchId)}`;
+    const params = new URLSearchParams({game_date: gameDate, voter_id: voterId});
+
+    function render(data) {
+        const total = data.total || 0;
+        if (totalEl) totalEl.textContent = `${total} ${total === 1 ? "vote" : "votes"}`;
+        if (resultsEl) resultsEl.hidden = total === 0;
+        ["A", "H"].forEach(function (choice) {
+            const pct = total ? Math.round((data.counts[choice] / total) * 100) : 0;
+            const el = poll.querySelector(`[data-vote-pct="${choice}"]`);
+            if (el) el.textContent = `${pct}%`;
+        });
+        if (data.has_voted || data.closed) {
+            buttons.forEach(function (button) { button.disabled = true; });
+            if (messageEl) messageEl.textContent = data.closed
+                ? "Voting is closed for this game."
+                : "Your vote is included; poll results are community opinion.";
+        }
+    }
+
+    async function refresh() {
+        const response = await fetch(`${endpoint}?${params}`);
+        if (!response.ok) throw new Error("Could not load poll results");
+        render(await response.json());
+    }
+
+    buttons.forEach(function (button) {
+        button.addEventListener("click", async function () {
+            buttons.forEach(function (item) { item.disabled = true; });
+            if (messageEl) messageEl.textContent = "Submitting your vote…";
+            try {
+                const response = await fetch(endpoint, {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({
+                        choice: button.dataset.voteChoice,
+                        voter_id: voterId,
+                        game_date: gameDate
+                    })
+                });
+                const payload = await response.json();
+                if (!response.ok) {
+                    if (payload.detail?.reason === "already_voted") {
+                        render(payload.detail);
+                        return;
+                    }
+                    if (payload.detail === "poll_closed") {
+                        if (messageEl) messageEl.textContent = "Voting is closed for this game.";
+                        return;
+                    }
+                    throw new Error("Vote could not be submitted");
+                }
+                render(payload);
+            } catch (error) {
+                buttons.forEach(function (item) { item.disabled = false; });
+                if (messageEl) messageEl.textContent = "Could not submit your vote. Please try again.";
+            }
+        });
+    });
+
+    refresh().catch(function () {
+        if (totalEl) totalEl.textContent = "Poll unavailable";
+    });
+})();
+</script>
+
 {% endblock %}

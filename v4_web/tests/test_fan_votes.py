@@ -9,7 +9,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from fan_votes import cast_vote, get_vote_summary, init_fan_votes
+from fan_votes import (
+    cast_nba_vote,
+    cast_vote,
+    get_nba_vote_summary,
+    get_vote_summary,
+    init_fan_votes,
+    init_nba_fan_votes,
+)
 
 
 class FanVoteTests(unittest.TestCase):
@@ -35,6 +42,7 @@ class FanVoteTests(unittest.TestCase):
             )
             db.commit()
         init_fan_votes(self.db_path)
+        init_nba_fan_votes(self.db_path)
         self.now = datetime.now(timezone.utc)
 
     def tearDown(self):
@@ -96,6 +104,49 @@ class FanVoteTests(unittest.TestCase):
 
         self.assertFalse(result["accepted"])
         self.assertEqual(result["reason"], "poll_closed")
+
+    def test_nba_poll_accepts_one_home_or_away_vote(self):
+        voter = str(uuid.uuid4())
+        future_kickoff = (self.now + timedelta(hours=2)).isoformat()
+        first = cast_nba_vote(
+            self.db_path, "nba-1", "A", voter, "pre", future_kickoff, now=self.now
+        )
+        duplicate = cast_nba_vote(
+            self.db_path, "nba-1", "H", voter, "pre", future_kickoff, now=self.now
+        )
+
+        self.assertTrue(first["accepted"])
+        self.assertEqual(first["counts"], {"H": 0, "A": 1})
+        self.assertEqual(duplicate["reason"], "already_voted")
+        self.assertTrue(
+            get_nba_vote_summary(self.db_path, "nba-1", voter)["has_voted"]
+        )
+
+    def test_nba_poll_closes_at_tipoff_and_rejects_draws(self):
+        voter = str(uuid.uuid4())
+        future_kickoff = (self.now + timedelta(hours=2)).isoformat()
+        past_kickoff = (self.now - timedelta(seconds=1)).isoformat()
+        self.assertEqual(
+            cast_nba_vote(
+                self.db_path, "nba-2", "D", voter, "pre",
+                future_kickoff, now=self.now,
+            )["reason"],
+            "invalid_choice",
+        )
+        self.assertEqual(
+            cast_nba_vote(
+                self.db_path, "nba-2", "H", voter, "live",
+                future_kickoff, now=self.now,
+            )["reason"],
+            "poll_closed",
+        )
+        self.assertEqual(
+            cast_nba_vote(
+                self.db_path, "nba-2", "H", voter, "pre",
+                past_kickoff, now=self.now,
+            )["reason"],
+            "poll_closed",
+        )
 
 
 if __name__ == "__main__":

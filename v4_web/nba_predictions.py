@@ -182,29 +182,37 @@ def bulk_log_pregame(
     return inserted
 
 
-def get_stats() -> dict:
-    """Return prediction accuracy stats for the /nba/history page."""
+def get_stats(conference: str = "all") -> dict:
+    """Return prediction accuracy stats for the requested conference."""
     if _db is None:
         return {"total": 0, "correct": 0, "accuracy": 0.0, "avg_brier": None}
+    where = "league='nba'"
+    params: tuple = ()
+    if conference in ("East", "West"):
+        where += " AND conference=?"
+        params = (conference,)
     try:
         total   = _db.execute(
-            "SELECT COUNT(*) FROM predictions WHERE league='nba'"
+            f"SELECT COUNT(*) FROM predictions WHERE {where}", params
         ).fetchone()[0]
         correct = _db.execute(
-            "SELECT SUM(correct) FROM predictions WHERE league='nba' AND correct IS NOT NULL"
+            f"SELECT SUM(correct) FROM predictions WHERE {where} AND correct IS NOT NULL",
+            params,
         ).fetchone()[0] or 0
         avg_b   = _db.execute(
-            "SELECT AVG(brier) FROM predictions WHERE league='nba' AND brier IS NOT NULL"
+            f"SELECT AVG(brier) FROM predictions WHERE {where} AND brier IS NOT NULL",
+            params,
         ).fetchone()[0]
         played  = _db.execute(
-            "SELECT COUNT(*) FROM predictions WHERE league='nba' AND correct IS NOT NULL"
+            f"SELECT COUNT(*) FROM predictions WHERE {where} AND correct IS NOT NULL",
+            params,
         ).fetchone()[0]
         return {
             "total":     total,
             "correct":   correct,
             "played":    played,
             "accuracy":  round(correct / played * 100, 1) if played else 0.0,
-            "avg_brier": round(avg_b, 4) if avg_b else None,
+            "avg_brier": round(avg_b, 4) if avg_b is not None else None,
         }
     except Exception as exc:
         log.warning("get_stats error: %s", exc)

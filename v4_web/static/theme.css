@@ -411,3 +411,17 @@ body {
     .match-team-crest,
     .match-team-initials { flex-basis: 26px; height: 26px; width: 26px; }
 }
+
+.nba-fan-vote-card .fan-vote-header {
+    align-items: center;
+    flex-direction: column;
+    text-align: center;
+}
+.nba-fan-vote-card .fan-vote-options,
+.nba-fan-vote-card .fan-vote-results {
+    margin-left: auto;
+    margin-right: auto;
+    max-width: 720px;
+    width: 100%;
+}
+.nba-fan-vote-card .fan-vote-message { text-align: center; }

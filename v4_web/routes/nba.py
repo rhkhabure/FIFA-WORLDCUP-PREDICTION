@@ -24,7 +24,7 @@ import logging
 import re
 import sqlite3
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -43,6 +43,9 @@ from constants import (
 from nba_api_client import (
     get_today_scoreboard,
     get_tomorrow_scoreboard,
+    get_next_team_game,
+    get_scheduled_game,
+    get_conference_standings,
     get_live_game,
     get_live_pbp,
     get_box_score,
@@ -65,6 +68,11 @@ from historical_nba import (
     get_player_shot_profile,
     get_team_seasons,
 )
+from fan_votes import (
+    cast_nba_vote,
+    get_nba_vote_summary,
+    init_nba_fan_votes,
+)
 import nba_predictions as pred_log
 
 log = logging.getLogger(__name__)
@@ -77,14 +85,21 @@ templates = Jinja2Templates(
 # ── Module-level refs (set by nba_setup() from main.py lifespan) ─────────────
 _model: NBAModel | None = None
 _db    = None   # predictions SQLite connection (same as football, league='nba')
+_db_path: str | None = None
 
 
 def nba_setup(model: NBAModel, db=None) -> None:
     """Called once from main.py lifespan after model is loaded."""
-    global _model, _db
+    global _model, _db, _db_path
     _model = model
     _db    = db
+    _db_path = None
     pred_log.set_db(db)   # share the same connection
+    if db is not None:
+        db_row = db.execute("PRAGMA database_list").fetchone()
+        if db_row and db_row[2]:
+            _db_path = str(db_row[2])
+            init_nba_fan_votes(_db_path)
     try:
         _refresh_nba_elo()
     except Exception:
@@ -145,6 +160,14 @@ def _enrich_game(game: dict) -> dict:
     }
 
 
+def _is_future_game(game_time_utc: str, now: datetime) -> bool:
+    try:
+        tip = datetime.fromisoformat(game_time_utc.replace("Z", "+00:00"))
+    except (AttributeError, ValueError):
+        return False
+    return tip.tzinfo is not None and tip.astimezone(timezone.utc) > now
+
+
 def _get_nba_history(limit: int = 50, conference: str = "all") -> list[dict]:
     """Pull recent NBA predictions from the shared predictions DB."""
     if _db is None:
@@ -157,22 +180,47 @@ def _get_nba_history(limit: int = 50, conference: str = "all") -> list[dict]:
                 "ORDER BY created_at DESC LIMIT ?", (limit,)
             )
         else:
-            team_ids = [
-                team_id for team_id, team in NBA_TEAMS.items()
-                if team.get("conference") == conference
-            ]
-            placeholders = ",".join("?" for _ in team_ids)
             cur.execute(
                 "SELECT * FROM predictions WHERE league='nba' "
-                f"AND home_team_id IN ({placeholders}) "
+                "AND conference=? "
                 "ORDER BY created_at DESC LIMIT ?",
-                (*team_ids, limit)
+                (conference, limit)
             )
         cols = [d[0] for d in cur.description]
         return [dict(zip(cols, row)) for row in cur.fetchall()]
     except Exception as exc:
         log.warning("NBA history DB error: %s", exc)
         return []
+
+
+def _get_nba_team_season_record(team_id: int, season: str) -> dict[str, int]:
+    """Return the team's actual logged wins and losses for the NBA season."""
+    record = {"wins": 0, "losses": 0, "played": 0}
+    if _db is None:
+        return record
+    try:
+        season_start = f"{season[:4]}-09-01"
+        season_end = f"{int(season[:4]) + 1}-09-01"
+        rows = _db.execute(
+            "SELECT home_team_id, home_score, away_score "
+            "FROM predictions WHERE league='nba' "
+            "AND (home_team_id=? OR away_team_id=?) "
+            "AND home_score IS NOT NULL AND away_score IS NOT NULL "
+            "AND COALESCE(NULLIF(substr(game_time_utc, 1, 10), ''), "
+            "substr(created_at, 1, 10)) >= ? "
+            "AND COALESCE(NULLIF(substr(game_time_utc, 1, 10), ''), "
+            "substr(created_at, 1, 10)) < ?",
+            (team_id, team_id, season_start, season_end),
+        ).fetchall()
+        record["played"] = len(rows)
+        record["wins"] = sum(
+            (home_score > away_score) == (home_team_id == team_id)
+            for home_team_id, home_score, away_score in rows
+        )
+        record["losses"] = record["played"] - record["wins"]
+    except Exception as exc:
+        log.warning("NBA team season record error for %s: %s", team_id, exc)
+    return record
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -250,7 +298,11 @@ async def nba_hub(request: Request):
 
 
 @router.get("/match", response_class=HTMLResponse)
-async def nba_match(request: Request, game_id: str = ""):
+async def nba_match(
+    request: Request,
+    game_id: str = "",
+    game_date: str = "",
+):
     """
     /nba/match?game_id=... — live match page.
     Left panel: pregame analysis.
@@ -270,6 +322,12 @@ async def nba_match(request: Request, game_id: str = ""):
         )
 
     game = next((g for g in all_games if g["game_id"] == game_id), {})
+    if not game and game_id and game_date:
+        game = await run_in_threadpool(
+            get_scheduled_game,
+            game_id,
+            game_date=game_date,
+        ) or {}
     if not game:
         return templates.TemplateResponse(
             request=request,
@@ -295,6 +353,7 @@ async def nba_match(request: Request, game_id: str = ""):
         context={
             "game":           enriched,
             "game_id":        game_id,
+            "game_date":      game.get("game_time_utc", "")[:10],
             "home_team":      ht,
             "away_team":      at,
             "home_form":      home_form,
@@ -399,13 +458,92 @@ async def nba_lineup(
     })
 
 
+def _find_nba_game(game_id: str, game_date: str = "") -> dict | None:
+    if game_date:
+        return get_scheduled_game(game_id, game_date=game_date)
+    for game in (*get_today_scoreboard(), *get_tomorrow_scoreboard()):
+        if str(game.get("game_id", "")) == game_id:
+            return game
+    return None
+
+
+@router.get("/api/fan-vote/{game_id}")
+async def nba_fan_vote_summary(
+    game_id: str,
+    game_date: str = "",
+    voter_id: str = "",
+):
+    if not _db_path:
+        raise HTTPException(status_code=503, detail="NBA polls are unavailable")
+    game = await run_in_threadpool(_find_nba_game, game_id, game_date)
+    if not game:
+        raise HTTPException(status_code=404, detail="Game not found")
+    closed = game.get("status") != "pre"
+    if not closed:
+        try:
+            tip = datetime.fromisoformat(
+                game.get("game_time_utc", "").replace("Z", "+00:00")
+            )
+            closed = tip.tzinfo is None or tip <= datetime.now(tip.tzinfo)
+        except (AttributeError, ValueError):
+            closed = True
+    return await run_in_threadpool(
+        get_nba_vote_summary,
+        _db_path,
+        game_id,
+        voter_id or None,
+        closed=closed,
+    )
+
+
+@router.post("/api/fan-vote/{game_id}")
+async def nba_submit_fan_vote(game_id: str, request: Request):
+    if not _db_path:
+        raise HTTPException(status_code=503, detail="NBA polls are unavailable")
+    try:
+        body = await request.json()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Expected a JSON vote payload") from exc
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="Expected a JSON vote payload")
+
+    game_date = body.get("game_date", "")
+    if not isinstance(game_date, str):
+        raise HTTPException(status_code=422, detail="Invalid game date")
+    game = await run_in_threadpool(_find_nba_game, game_id, game_date)
+    if not game:
+        raise HTTPException(status_code=404, detail="Game not found")
+
+    result = await run_in_threadpool(
+        cast_nba_vote,
+        _db_path,
+        game_id,
+        body.get("choice"),
+        body.get("voter_id"),
+        game.get("status", ""),
+        game.get("game_time_utc", ""),
+    )
+    if result["reason"] in ("invalid_choice", "invalid_voter"):
+        raise HTTPException(status_code=422, detail=result["reason"])
+    if result["reason"] in ("invalid_kickoff", "poll_closed"):
+        raise HTTPException(status_code=409, detail=result["reason"])
+    if result["reason"] == "already_voted":
+        raise HTTPException(
+            status_code=409,
+            detail={"reason": "already_voted", **result},
+        )
+    return result
+
+
 @router.get("/history", response_class=HTMLResponse)
 async def nba_history(request: Request, conference: str = "all"):
     """
     /nba/history — prediction accuracy tracker.
     """
     rows  = _get_nba_history(limit=100, conference=conference)
-    stats = pred_log.get_stats()
+    if conference not in ("all", "East", "West"):
+        conference = "all"
+    stats = pred_log.get_stats(conference)
 
     total     = stats["total"]
     correct   = stats["correct"]
@@ -470,6 +608,7 @@ async def nba_team_profile(request: Request, team_id: int):
     elo = _model.get_elo(team_id) if _model else 1500.0
     season = current_nba_season()
     roster = await run_in_threadpool(get_team_roster, team_id, season)
+    standings = await run_in_threadpool(get_conference_standings)
     historical_team_seasons = []
     team_history_unavailable = False
     try:
@@ -478,8 +617,9 @@ async def nba_team_profile(request: Request, team_id: int):
         log.error("NBA historical team data unavailable for %s: %s", team_id, exc)
         team_history_unavailable = True
 
-    # Recent games from history DB involving this team
+    # Recent games and the current-season record from the prediction history DB.
     recent = []
+    team_record = _get_nba_team_season_record(team_id, season)
     if _db:
         try:
             cur = _db.cursor()
@@ -491,15 +631,37 @@ async def nba_team_profile(request: Request, team_id: int):
             )
             cols   = [d[0] for d in cur.description]
             recent = [dict(zip(cols, row)) for row in cur.fetchall()]
+            for game in recent:
+                if game.get("home_score") is None or game.get("away_score") is None:
+                    game["team_won"] = None
+                    continue
+                home_won = game["home_score"] > game["away_score"]
+                game["team_won"] = int(home_won == (game.get("home_team_id") == team_id))
         except Exception as exc:
             log.warning("Team history error: %s", exc)
 
-    # Upcoming games from today's schedule
-    all_games = get_today_scoreboard()
-    upcoming  = [
-        _enrich_game(g) for g in all_games
-        if g.get("home_team_id") == team_id or g.get("away_team_id") == team_id
+    # Prefer the next scheduled fixture; a team's latest final must not hide it.
+    now_utc = datetime.now(timezone.utc)
+    today_and_tomorrow = [*get_today_scoreboard(), *get_tomorrow_scoreboard()]
+    team_games = [
+        game for game in today_and_tomorrow
+        if team_id in (game.get("home_team_id"), game.get("away_team_id"))
     ]
+    next_raw = next((
+        game for game in sorted(team_games, key=lambda g: g.get("game_time_utc", ""))
+        if game.get("status") == "pre"
+        and _is_future_game(game.get("game_time_utc", ""), now_utc)
+    ), None)
+    if not next_raw:
+        next_raw = await run_in_threadpool(get_next_team_game, team_id)
+    if not next_raw:
+        next_raw = next(
+            (game for game in team_games if game.get("status") == "live"),
+            None,
+        )
+    next_game = _enrich_game(next_raw) if next_raw else None
+    if next_game:
+        next_game["game_date"] = str(next_game.get("game_time_utc") or "")[:10]
 
     return templates.TemplateResponse(
         request=request,
@@ -507,7 +669,9 @@ async def nba_team_profile(request: Request, team_id: int):
         context={
             "team":          {**t, "elo": round(elo, 0), "team_id": team_id},
             "recent":        recent,
-            "upcoming":      upcoming,
+            "team_record":   team_record,
+            "upcoming":      [next_game] if next_game else [],
+            "standings":     standings,
             "roster":        roster,
             "roster_season": season,
             "historical_seasons": historical_team_seasons,
@@ -629,7 +793,7 @@ async def nba_player_profile(request: Request, player_id: int):
 # ─────────────────────────────────────────────────────────────────────────────
 
 @router.get("/live/{game_id}")
-async def nba_live_poll(game_id: str):
+async def nba_live_poll(game_id: str, game_date: str = ""):
     """
     /nba/live/{game_id} — live poll endpoint.
     Called by Chart.js every 20 seconds from nba_match.html.
@@ -652,7 +816,7 @@ async def nba_live_poll(game_id: str):
             "source":         str,
         }
     """
-    game = get_live_game(game_id)
+    game = await run_in_threadpool(get_live_game, game_id, game_date)
     if not game:
         return JSONResponse({"error": "game not found"}, status_code=404)
 
@@ -723,7 +887,7 @@ async def nba_live_poll(game_id: str):
 
 
 @router.get("/curve/{game_id}")
-async def nba_curve(game_id: str):
+async def nba_curve(game_id: str, game_date: str = ""):
     """
     /nba/curve/{game_id} — full win-probability history for the chart.
     Called once when nba_match.html loads (and once more at the final buzzer),
@@ -732,7 +896,7 @@ async def nba_curve(game_id: str):
     One point per scoring play, plus a tip-off point at the pregame Elo prob.
     Returns: {"points": [{"t", "hp", "hs", "as", "period", "clock", "desc"}]}
     """
-    game = get_live_game(game_id)
+    game = await run_in_threadpool(get_live_game, game_id, game_date)
     if not game:
         return JSONResponse({"error": "game not found"}, status_code=404)
 

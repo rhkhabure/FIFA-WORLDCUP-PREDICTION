@@ -40,13 +40,26 @@
                  color:white;font-weight:800;font-size:12px;flex:none}
   .player-avatar img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
                      object-position:top}
+  .team-overview{display:grid;grid-template-columns:minmax(280px,.8fr) minmax(0,2fr);
+                 gap:16px;align-items:start}
+  .team-overview-stack{display:flex;flex-direction:column;gap:12px}
+  .standings-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+  .standings-table{border-collapse:collapse;font-size:11px;width:100%;white-space:nowrap}
+  .standings-table th{color:var(--text-muted,#64748b);font:700 9px var(--font-mono);
+                      padding:6px 5px;text-align:right}
+  .standings-table th:nth-child(2),.standings-table td:nth-child(2){text-align:left}
+  .standings-table td{border-top:1px solid var(--border,#e2e8f0);padding:6px 5px;text-align:right}
+  .standings-team{display:flex;align-items:center;gap:6px;font-weight:700}
+  .standings-team img{height:18px;object-fit:contain;width:18px}
+  @media(max-width:900px){.team-overview{grid-template-columns:1fr}}
+  @media(max-width:620px){.standings-grid{grid-template-columns:1fr}}
 </style>
 
 {% set col = team.primary %}
 {% set elo = team.elo %}
 {% set bar_pct = [[(elo - 1300) / 4, 3]|max, 100]|min %}
 
-<div style="max-width:960px;margin:0 auto;display:flex;flex-direction:column;gap:16px">
+<div style="max-width:1600px;margin:0 auto;display:flex;flex-direction:column;gap:16px">
 
   <!-- ── Header ──────────────────────────────────────────────────── -->
   <div class="tp-card" style="border-left:5px solid {{ col }}">
@@ -73,6 +86,120 @@
           <div style="width:{{ bar_pct }}%;background:{{ col }}"></div>
         </div>
       </div>
+    </div>
+  </div>
+
+  {% set completed_recent = recent|selectattr('team_won','ne',none)|list %}
+  {% set played = completed_recent|length %}
+  <div class="team-overview">
+    <div class="team-overview-stack">
+      <div class="tp-card">
+        <div class="tp-label">Season record (logged)</div>
+        <div style="font-size:36px;font-weight:900;line-height:1">
+          {{ team_record.wins }} – {{ team_record.losses }}
+        </div>
+        <div style="font-size:11px;color:var(--text-muted,#64748b);margin-top:4px">
+          {{ "%.0f"|format(team_record.wins/team_record.played*100) if team_record.played else 0 }}% win rate · {{ team_record.played }} games logged
+        </div>
+      </div>
+
+      <div class="tp-card">
+        <div class="tp-label">Recent form · last 10 completed</div>
+        {% if completed_recent %}
+        <div style="display:flex;gap:5px;flex-wrap:wrap">
+          {% for r in completed_recent %}
+          {% set won = r.team_won == 1 %}
+          <span class="form-pip {{ 'form-w' if won else 'form-l' }}"
+                title="{{ 'W' if won else 'L' }}">{{ 'W' if won else 'L' }}</span>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div style="font-size:11px;color:var(--text-muted,#64748b)">No completed games logged yet.</div>
+        {% endif %}
+      </div>
+
+      {% if upcoming %}
+      {% set g = upcoming[0] %}
+      {% set is_home = g.home_team_id == team.team_id %}
+      {% set opp_tri = g.away_tricode if is_home else g.home_tricode %}
+      {% set opp_col = g.away_colour if is_home else g.home_colour %}
+      {% set our_prob = ((g.home_win_prob if is_home else 1-g.home_win_prob)*100)|round(0)|int %}
+      <a class="tp-card" href="/nba/match?game_id={{ g.game_id }}&game_date={{ g.game_date }}"
+         style="display:block;text-decoration:none;color:inherit">
+        <div class="tp-label">{{ 'Live game' if g.status == 'live' else 'Next game' }}</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+          <div style="font-size:13px;font-weight:800">
+            {{ 'vs' if is_home else '@' }} <span style="color:{{ opp_col }}">{{ opp_tri }}</span>
+            <div style="font-size:10px;font-weight:500;color:var(--text-muted,#64748b);margin-top:4px">
+              {{ g.tip_off_eat if g.status == 'pre' else g.status_text }}
+            </div>
+          </div>
+          <div style="color:{{ col }};font:800 18px var(--font-mono)">{{ our_prob }}%</div>
+        </div>
+        <div class="prob-track" style="height:8px;margin-top:10px">
+          {% if is_home %}
+          <div style="width:{{ 100-our_prob }}%;background:{{ opp_col }}"></div>
+          <div style="width:{{ our_prob }}%;background:{{ col }}"></div>
+          {% else %}
+          <div style="width:{{ our_prob }}%;background:{{ col }}"></div>
+          <div style="width:{{ 100-our_prob }}%;background:{{ opp_col }}"></div>
+          {% endif %}
+        </div>
+      </a>
+      {% else %}
+      <div class="tp-card">
+        <div class="tp-label">Next game</div>
+        <div style="font-size:11px;color:var(--text-muted,#64748b)">
+          No scheduled game found in the next two weeks.
+        </div>
+      </div>
+      {% endif %}
+
+      <div class="tp-card">
+        <div class="tp-label">Elo context</div>
+        <div style="display:flex;justify-content:space-between;font-size:12px">
+          <span>Team rating</span><strong style="font-family:var(--font-mono)">{{ elo|int }}</strong>
+        </div>
+        <div style="font-size:11px;color:var(--text-muted,#64748b);margin-top:8px;line-height:1.5">
+          Elo estimates team strength; home advantage is included in pregame win probabilities.
+        </div>
+      </div>
+    </div>
+
+    <div class="standings-grid">
+      {% for conference_name in ['East', 'West'] %}
+      <section class="tp-card" style="padding:0;overflow:hidden">
+        <div style="padding:12px 14px;border-bottom:1px solid var(--border,#e2e8f0)">
+          <div class="tp-label" style="margin:0">{{ 'Eastern' if conference_name == 'East' else 'Western' }} Conference standings</div>
+        </div>
+        {% set rows = standings.get(conference_name, []) %}
+        {% if rows %}
+        <div style="overflow-x:auto;padding:0 10px 8px">
+          <table class="standings-table">
+            <thead><tr><th>#</th><th>Team</th><th>W</th><th>L</th><th>PCT</th></tr></thead>
+            <tbody>
+              {% for row in rows %}
+              <tr style="{% if row.team_id == team.team_id %}background:var(--league-tint);font-weight:800{% endif %}">
+                <td>{{ row.rank }}</td>
+                <td><span class="standings-team">
+                  <img src="https://cdn.nba.com/logos/nba/{{ row.team_id }}/global/L/logo.svg"
+                       alt="" loading="lazy" onerror="this.hidden=true">
+                  {{ row.tricode }}
+                </span></td>
+                <td>{{ row.wins }}</td><td>{{ row.losses }}</td>
+                <td>{{ "%.3f"|format(row.win_pct) }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div style="padding:16px;font-size:11px;color:var(--text-muted,#64748b)">
+          Standings are temporarily unavailable.
+        </div>
+        {% endif %}
+      </section>
+      {% endfor %}
     </div>
   </div>
 
@@ -154,8 +281,59 @@
     {% endif %}
   </section>
 
+  <section class="tp-card" style="padding:0;overflow:hidden">
+    <div style="padding:12px 14px;border-bottom:1.5px solid var(--border,#e2e8f0)">
+      <div class="tp-label" style="margin:0">Recent predictions</div>
+    </div>
+    {% if not recent %}
+    <div style="padding:20px;text-align:center;color:var(--text-muted,#64748b);font-size:12px">
+      No predictions on record yet for this team.
+    </div>
+    {% else %}
+    {% for r in recent %}
+    {% set hw = r.home_win_prob if r.home_win_prob else 0.5 %}
+    {% set fav_home = hw >= 0.5 %}
+    {% set fav_pct = ((hw if fav_home else 1-hw)*100)|round(0)|int %}
+    {% set fav_tri = r.home_team if fav_home else r.away_team %}
+    <div class="game-row">
+      <div>
+        <div style="font-size:12px;font-weight:700">
+          {{ r.away_team }} <span style="color:var(--text-muted,#64748b);font-weight:400">@</span> {{ r.home_team }}
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;margin-top:4px">
+          <div class="prob-track" style="width:70px">
+            <div style="width:{{ 100-fav_pct }}%;background:#94a3b8"></div>
+            <div style="width:{{ fav_pct }}%;background:{{ col }}"></div>
+          </div>
+          <span style="font-size:10px;font-family:var(--font-mono);color:var(--text-muted,#64748b)">
+            {{ fav_tri }} {{ fav_pct }}%
+          </span>
+        </div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-family:var(--font-mono);font-size:12px;font-weight:700">
+          {% if r.away_score is not none %}{{ r.away_score }}–{{ r.home_score }}{% else %}—{% endif %}
+        </div>
+        <div style="font-size:10px;color:var(--text-muted,#64748b)">
+          {{ r.created_at[:10] if r.created_at else '' }}
+        </div>
+      </div>
+      <div>
+        {% if r.correct == 1 %}
+        <i class="ti ti-circle-check ok" aria-label="Correct"></i>
+        {% elif r.correct == 0 %}
+        <i class="ti ti-circle-x bad" aria-label="Wrong"></i>
+        {% else %}
+        <span style="color:var(--text-muted,#64748b)">—</span>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+    {% endif %}
+  </section>
+
   <!-- ── Two-column body ─────────────────────────────────────────── -->
-  <div style="display:grid;grid-template-columns:260px minmax(0,1fr);gap:16px;align-items:start">
+  <div hidden>
 
     <!-- LEFT -->
     <div style="display:flex;flex-direction:column;gap:12px">
@@ -273,11 +451,13 @@
         {% endif %}
       </div>
 
-      <!-- Upcoming games from today's scoreboard -->
+      <!-- Next scheduled game -->
       {% if upcoming %}
       <div class="tp-card" style="padding:0;overflow:hidden">
         <div style="padding:12px 14px;border-bottom:1.5px solid var(--border,#e2e8f0)">
-          <div class="tp-label" style="margin:0">Today's game</div>
+          <div class="tp-label" style="margin:0">
+            {{ 'Live game' if upcoming[0].status == 'live' else 'Next game' }}
+          </div>
         </div>
         {% for g in upcoming %}
         {% set is_home = g.home_team_id == team.team_id %}
@@ -285,7 +465,7 @@
         {% set opp_col = g.away_colour if is_home else g.home_colour %}
         {% set hp = g.home_win_prob %}
         {% set our_prob = ((hp if is_home else 1-hp)*100)|round(0)|int %}
-        <a href="/nba/match?game_id={{ g.game_id }}"
+        <a href="/nba/match?game_id={{ g.game_id }}&game_date={{ g.game_date }}"
            style="display:block;padding:12px 14px;text-decoration:none;color:inherit">
           <div style="display:flex;justify-content:space-between;align-items:center">
             <div>
@@ -301,7 +481,9 @@
               <span style="font-size:14px;font-weight:900;color:{{ col }}">
                 {{ our_prob }}%
               </span>
-              <div style="font-size:10px;color:var(--text-muted,#64748b)">our win prob</div>
+              <div style="font-size:10px;color:var(--text-muted,#64748b)">
+                {{ 'our win prob' if g.status == 'pre' else g.status_text }}
+              </div>
             </div>
           </div>
           <div class="prob-track" style="height:6px;margin-top:8px">
@@ -314,7 +496,38 @@
             {% endif %}
           </div>
         </a>
+        {% if g.status == 'pre' %}
+        <section class="fan-vote-card nba-fan-vote-card" data-nba-fan-vote
+                 data-game-id="{{ g.game_id }}" data-game-date="{{ g.game_date }}"
+                 aria-label="NBA fan poll">
+          <div class="fan-vote-header">
+            <div>
+              <div class="match-section-eyebrow">Fan vote · separate from model</div>
+              <div class="fan-vote-question">Who wins?</div>
+            </div>
+            <span class="fan-vote-total" data-vote-total>Loading votes…</span>
+          </div>
+          <div class="fan-vote-options">
+            <button type="button" data-vote-choice="A">{{ g.away_tricode }}</button>
+            <button type="button" data-vote-choice="H">{{ g.home_tricode }}</button>
+          </div>
+          <div class="fan-vote-results" data-vote-results hidden>
+            <div><span>{{ g.away_tricode }}</span><strong data-vote-pct="A">0%</strong></div>
+            <div><span>{{ g.home_tricode }}</span><strong data-vote-pct="H">0%</strong></div>
+          </div>
+          <div class="fan-vote-message" data-vote-message role="status" aria-live="polite">
+            One vote per browser. Voting closes at tip-off.
+          </div>
+        </section>
+        {% endif %}
         {% endfor %}
+      </div>
+      {% else %}
+      <div class="tp-card">
+        <div class="tp-label">Next game</div>
+        <div style="font-size:12px;color:var(--text-muted,#64748b)">
+          No scheduled game found in the next two weeks.
+        </div>
       </div>
       {% endif %}
 
@@ -325,4 +538,103 @@
     </div>
   </div>
 </div>
+
+<script>
+(function () {
+    const poll = document.querySelector("[data-nba-fan-vote]");
+    if (!poll) return;
+    const matchId = poll.dataset.gameId;
+    const gameDate = poll.dataset.gameDate;
+    const key = "football-fan-voter-id";
+    function createVoterId() {
+        if (crypto.randomUUID) return crypto.randomUUID();
+        const bytes = new Uint8Array(16);
+        crypto.getRandomValues(bytes);
+        bytes[6] = (bytes[6] & 0x0f) | 0x40;
+        bytes[8] = (bytes[8] & 0x3f) | 0x80;
+        const hex = Array.from(bytes, function (byte) {
+            return byte.toString(16).padStart(2, "0");
+        }).join("");
+        return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+    }
+    let voterId;
+    try {
+        voterId = localStorage.getItem(key);
+        if (!voterId) {
+            voterId = createVoterId();
+            localStorage.setItem(key, voterId);
+        }
+    } catch (error) {
+        voterId = createVoterId();
+    }
+
+    const totalEl = poll.querySelector("[data-vote-total]");
+    const resultsEl = poll.querySelector("[data-vote-results]");
+    const messageEl = poll.querySelector("[data-vote-message]");
+    const buttons = Array.from(poll.querySelectorAll("[data-vote-choice]"));
+    const endpoint = `/nba/api/fan-vote/${encodeURIComponent(matchId)}`;
+    const params = new URLSearchParams({game_date: gameDate, voter_id: voterId});
+
+    function render(data) {
+        const total = data.total || 0;
+        if (totalEl) totalEl.textContent = `${total} ${total === 1 ? "vote" : "votes"}`;
+        if (resultsEl) resultsEl.hidden = total === 0;
+        ["A", "H"].forEach(function (choice) {
+            const pct = total ? Math.round((data.counts[choice] / total) * 100) : 0;
+            const el = poll.querySelector(`[data-vote-pct="${choice}"]`);
+            if (el) el.textContent = `${pct}%`;
+        });
+        if (data.has_voted || data.closed) {
+            buttons.forEach(function (button) { button.disabled = true; });
+            if (messageEl) messageEl.textContent = data.closed
+                ? "Voting is closed for this game."
+                : "Your vote is included; poll results are community opinion.";
+        }
+    }
+
+    async function refresh() {
+        const response = await fetch(`${endpoint}?${params}`);
+        if (!response.ok) throw new Error("Could not load poll results");
+        render(await response.json());
+    }
+
+    buttons.forEach(function (button) {
+        button.addEventListener("click", async function () {
+            buttons.forEach(function (item) { item.disabled = true; });
+            if (messageEl) messageEl.textContent = "Submitting your vote…";
+            try {
+                const response = await fetch(endpoint, {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({
+                        choice: button.dataset.voteChoice,
+                        voter_id: voterId,
+                        game_date: gameDate
+                    })
+                });
+                const payload = await response.json();
+                if (!response.ok) {
+                    if (payload.detail?.reason === "already_voted") {
+                        render(payload.detail);
+                        return;
+                    }
+                    if (payload.detail === "poll_closed") {
+                        if (messageEl) messageEl.textContent = "Voting is closed for this game.";
+                        return;
+                    }
+                    throw new Error("Vote could not be submitted");
+                }
+                render(payload);
+            } catch (error) {
+                buttons.forEach(function (item) { item.disabled = false; });
+                if (messageEl) messageEl.textContent = "Could not submit your vote. Please try again.";
+            }
+        });
+    });
+
+    refresh().catch(function () {
+        if (totalEl) totalEl.textContent = "Poll unavailable";
+    });
+})();
+</script>
 {% endblock %}

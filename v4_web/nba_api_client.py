@@ -37,6 +37,7 @@ TTL_TEAM_ROSTER = 21600  # roster changes infrequently
 TTL_PLAYER_PROFILE = 21600  # player bio and headline stats
 TTL_LINEUP_FALLBACK = 30  # ESPN scoreboard/box-score fallback
 TTL_PREGAME = 60    # scoreboard before tip-off
+TTL_STANDINGS = 21600
 
 EAT_TZ = timezone(timedelta(hours=3))
 
@@ -302,6 +303,143 @@ def get_tomorrow_scoreboard() -> list[dict]:
     return games
 
 
+def get_next_team_game(
+    team_id: int,
+    *,
+    days_ahead: int = 14,
+    now: datetime | None = None,
+) -> dict | None:
+    """Find a team's next scheduled game within the date-specific scoreboards."""
+    now = now or datetime.now(EAT_TZ)
+    if now.tzinfo is None:
+        raise ValueError("now must be timezone-aware")
+    now_utc = now.astimezone(timezone.utc)
+
+    for offset in range(days_ahead + 1):
+        target_date = now.astimezone(EAT_TZ).date() + timedelta(days=offset)
+        candidates: dict[str, dict] = {}
+        for nba_date in (target_date, target_date - timedelta(days=1)):
+            date_str = f"{nba_date.month:02d}/{nba_date.day:02d}/{nba_date.year}"
+            for game in get_scoreboard_by_date(date_str):
+                if team_id not in (game.get("home_team_id"), game.get("away_team_id")):
+                    continue
+                game_id = str(game.get("game_id", ""))
+                if not game_id or game.get("status") != "pre":
+                    continue
+                try:
+                    tip = datetime.fromisoformat(
+                        game.get("game_time_utc", "").replace("Z", "+00:00")
+                    )
+                    if tip.tzinfo is None or tip.astimezone(timezone.utc) <= now_utc:
+                        continue
+                    if tip.astimezone(EAT_TZ).date() == target_date:
+                        candidates[game_id] = game
+                except (AttributeError, TypeError, ValueError):
+                    log.warning("Skipping NBA game with invalid tip time: %r", game)
+        if candidates:
+            return min(candidates.values(), key=lambda game: game["game_time_utc"])
+    return None
+
+
+def get_scheduled_game(
+    game_id: str,
+    *,
+    game_date: str = "",
+    days_ahead: int = 14,
+    now: datetime | None = None,
+) -> dict | None:
+    """Look up a game by NBA game ID, using a supplied date or a short horizon."""
+    now = now or datetime.now(EAT_TZ)
+    if now.tzinfo is None:
+        raise ValueError("now must be timezone-aware")
+    now_eat = now.astimezone(EAT_TZ)
+
+    if game_date:
+        try:
+            start_date = datetime.strptime(game_date, "%Y-%m-%d").date()
+        except ValueError:
+            return None
+        nba_dates = (
+            start_date - timedelta(days=1),
+            start_date,
+            start_date + timedelta(days=1),
+        )
+    else:
+        nba_dates = tuple(
+            now_eat.date() + timedelta(days=offset)
+            for offset in range(-1, days_ahead + 1)
+        )
+
+    seen_dates: set[str] = set()
+    for nba_date in nba_dates:
+        for date in (nba_date, nba_date - timedelta(days=1)):
+            date_str = f"{date.month:02d}/{date.day:02d}/{date.year}"
+            if date_str in seen_dates:
+                continue
+            seen_dates.add(date_str)
+            for game in get_scoreboard_by_date(date_str):
+                if str(game.get("game_id", "")) == str(game_id):
+                    return game
+    return None
+
+
+def get_conference_standings() -> dict[str, list[dict]]:
+    """Return cached current NBA standings grouped and ranked by conference."""
+    key = f"conference_standings_{current_nba_season()}"
+    cached = _get(key)
+    if cached is not None:
+        return cached
+    try:
+        from nba_api.stats.endpoints import leaguestandingsv3
+
+        response = leaguestandingsv3.LeagueStandingsV3(
+            league_id="00",
+            season=current_nba_season(),
+            season_type="Regular Season",
+            timeout=10,
+        )
+        source = getattr(response, "standings", None)
+        if source is None:
+            raise RuntimeError("NBA standings response is missing its standings dataset")
+
+        grouped = {"East": [], "West": []}
+        for row in _records(source):
+            conference = str(row.get("Conference") or row.get("CONFERENCE") or "")
+            if conference not in grouped:
+                continue
+            team_id = row.get("TeamID", row.get("TEAM_ID"))
+            team = nba_team(int(team_id)) if team_id is not None else {}
+            if not team:
+                continue
+
+            def value(*keys, default=None):
+                return next(
+                    (row[name] for name in keys if row.get(name) is not None),
+                    default,
+                )
+
+            grouped[conference].append({
+                "team_id": int(team_id),
+                "team": team.get("name", ""),
+                "city": team.get("city", ""),
+                "tricode": team.get("tricode", ""),
+                "wins": int(value("WINS", "W", default=0)),
+                "losses": int(value("LOSSES", "L", default=0)),
+                "win_pct": float(value("WinPCT", "WIN_PCT", default=0)),
+                "rank": int(value("PlayoffRank", "PLAYOFF_RANK", default=99)),
+            })
+        for rows in grouped.values():
+            rows.sort(key=lambda row: row["rank"])
+        if not any(grouped.values()):
+            raise RuntimeError("NBA standings response contained no conference teams")
+        _set(key, grouped, TTL_STANDINGS)
+        return grouped
+    except Exception as exc:
+        log.warning("NBA standings request failed: %s", exc)
+        stale = _get_stale(key)
+        return stale if stale is not None else {"East": [], "West": []}
+
+
 def get_espn_lineup(
     game_time_utc: str,
     home_tricode: str,
@@ -562,15 +700,18 @@ def _parse_scoreboardv3(board) -> list[dict]:
 # SECTION 2 — Live game state (single game)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def get_live_game(game_id: str) -> dict:
+def get_live_game(game_id: str, game_date: str = "") -> dict:
     """
-    Returns the current live state of one game.
-    Pulls from today's scoreboard (already cached) to avoid a second call.
+    Return one game's state from the cached today/tomorrow scoresheets.
+    Upcoming fixtures outside those windows are resolved by their NBA date.
     """
-    games = get_today_scoreboard()
+    games = [*get_today_scoreboard(), *get_tomorrow_scoreboard()]
     for g in games:
-        if g["game_id"] == game_id:
+        if str(g.get("game_id", "")) == str(game_id):
             return g
+    scheduled = get_scheduled_game(game_id, game_date=game_date) if game_date else None
+    if scheduled:
+        return scheduled
     return {}
 
 
