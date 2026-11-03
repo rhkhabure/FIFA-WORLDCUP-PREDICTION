@@ -29,6 +29,8 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from urllib.parse import quote
 
+_PROCESS_START = time.perf_counter()
+
 # ── Third-party ───────────────────────────────────────────────────────────────
 import numpy as np
 import torch
@@ -40,6 +42,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from scipy.stats import poisson
 from starlette.responses import Response as _Response
+
+_THIRD_PARTY_IMPORTS_READY = time.perf_counter()
 
 # ── Project root ──────────────────────────────────────────────────────────────
 ROOT = Path(__file__).resolve().parent
@@ -86,7 +90,7 @@ from fpl import (
     _CACHE_TTLS,
 )
 from lineup_adjustment import compute_lineup_adjusted_odds, get_absent_key_players
-from prediction_job import run_prediction_job
+from prediction_job import run_prediction_job_sync
 from predictions import get_all_predictions, get_accuracy_stats, predicted_outcome
 from scoreline_matrix import build_scoreline_svg
 from simulate import simulate_cl_tournament, simulate_pl_season
@@ -118,22 +122,31 @@ from routes.nba import router as nba_router, nba_setup
 from nba_model import nba_model
 from constants import EAT, DRAW_PROPENSITY, LEAGUE_FILTERS, LEAGUE_MAP, MATCH_LEAGUES
 
+_PROJECT_IMPORTS_READY = time.perf_counter()
+
 # ── Constants ─────────────────────────────────────────────────────────────────
 # DRAW_PROPENSITY, EAT, LEAGUE_FILTERS, LEAGUE_MAP imported from constants.py
 LEAGUE_KEY = "ENG-Premier League"   # default league for backward compat
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
-def find_file(filename):
-    for p in ROOT.parent.rglob(filename):
-        return p
-    return None
-
-PRIORS_PATH = find_file("v4_priors.json")
-MODEL_PATH  = find_file("football_v4.pth")
-SCALER_PATH = find_file("scaler_v4.pkl")
+_ARTIFACT_LOOKUP_START = time.perf_counter()
+_FOOTBALL_MODEL_DIR = (
+    ROOT.parent / "v4_backend" / "notebooks" / "v4_backend" / "models"
+)
+PRIORS_PATH = Path(os.environ.get(
+    "FOOTBALL_PRIORS_PATH",
+    ROOT.parent / "v4_backend" / "v4_priors.json",
+))
+MODEL_PATH = Path(os.environ.get(
+    "FOOTBALL_MODEL_PATH", _FOOTBALL_MODEL_DIR / "football_v4.pth"
+))
+SCALER_PATH = Path(os.environ.get(
+    "FOOTBALL_SCALER_PATH", _FOOTBALL_MODEL_DIR / "scaler_v4.pkl"
+))
+_ARTIFACTS_RESOLVED_AT = time.perf_counter()
 
 # ── Load DC priors ─────────────────────────────────────────────────────────────
-if PRIORS_PATH and PRIORS_PATH.exists():
+if PRIORS_PATH.is_file():
     with open(PRIORS_PATH) as f:
         priors_db = json.load(f)
     dc_lookup = DCStrengthLookup(PRIORS_PATH)
@@ -159,7 +172,7 @@ class FootballWinProbNet(nn.Module):
 
 
 nn_model, nn_scaler, nn_T = None, None, 1.0
-if MODEL_PATH and MODEL_PATH.exists() and SCALER_PATH and SCALER_PATH.exists():
+if MODEL_PATH.is_file() and SCALER_PATH.is_file():
     ckpt = torch.load(MODEL_PATH, map_location="cpu", weights_only=False)
     nn_model = FootballWinProbNet(**ckpt["arch"])
     nn_model.load_state_dict(ckpt["model_state"])
@@ -171,6 +184,16 @@ if MODEL_PATH and MODEL_PATH.exists() and SCALER_PATH and SCALER_PATH.exists():
 else:
     print("WARNING: football_v4.pth or scaler not found")
 
+_BOOTSTRAP_COMPLETE = time.perf_counter()
+print(
+    "[startup] module timing: "
+    f"third-party imports={_THIRD_PARTY_IMPORTS_READY - _PROCESS_START:.2f}s, "
+    f"project imports={_PROJECT_IMPORTS_READY - _THIRD_PARTY_IMPORTS_READY:.2f}s, "
+    f"artifact lookup={_ARTIFACTS_RESOLVED_AT - _ARTIFACT_LOOKUP_START:.3f}s, "
+    f"artifact loading={_BOOTSTRAP_COMPLETE - _ARTIFACTS_RESOLVED_AT:.2f}s, "
+    f"total module bootstrap={_BOOTSTRAP_COMPLETE - _PROCESS_START:.2f}s"
+)
+
 import asyncio
 from contextlib import asynccontextmanager
 from prediction_job import schedule_prediction_job
@@ -181,9 +204,17 @@ from predictions import (DB_PATH as FOOTBALL_PREDICTIONS_DB, init_db,
 
 @asynccontextmanager
 async def lifespan(app):
-    """FastAPI lifespan — starts background jobs and warms caches on startup."""
+    """Initialize critical state, then run cache warming and jobs in background."""
+    startup_started = time.perf_counter()
+    phase_started = startup_started
     init_db()
+    print(
+        "[startup] football database initialized in "
+        f"{time.perf_counter() - phase_started:.2f}s"
+    )
+
     if priors_db:
+        phase_started = time.perf_counter()
         try:
             from model_updates import refresh_football_ratings
             refresh_football_ratings(FOOTBALL_PREDICTIONS_DB, priors_db)
@@ -191,28 +222,30 @@ async def lifespan(app):
             print("[startup] Football rating evaluation failed")
             import traceback
             traceback.print_exc()
+        finally:
+            print(
+                "[startup] football rating restore/evaluation completed in "
+                f"{time.perf_counter() - phase_started:.2f}s"
+            )
 
-    # Warm FPL fixture cache so first page load is instant
-    # Runs in a thread to avoid blocking the event loop
-    loop = asyncio.get_event_loop()
-    with concurrent.futures.ThreadPoolExecutor() as pool:
-        await loop.run_in_executor(pool, fpl_warm)
-
-    if priors_db:
-        asyncio.create_task(
-            schedule_prediction_job(priors_db, LEAGUE_KEY, interval_minutes=30)
-        )
-        print("[startup] Prediction logging job scheduled (every 30 min)")
-    else:
-        print("[startup] No priors loaded — prediction job skipped")
-
+    phase_started = time.perf_counter()
     match_setup(
         priors_db, nn_model, nn_scaler, nn_T, dc_lookup,
         templates, TEAM_NAME_ALIASES, LEAGUE_KEY, LEAGUE_CONTEXTS,
     )
+    print(
+        "[startup] football routes initialized in "
+        f"{time.perf_counter() - phase_started:.2f}s"
+    )
 
-    # ── NBA model ──────────────────────────────────────────────────
+    phase_started = time.perf_counter()
     nba_model.setup()
+    print(
+        "[startup] NBA model setup completed in "
+        f"{time.perf_counter() - phase_started:.2f}s"
+    )
+
+    phase_started = time.perf_counter()
     # Shared predictions DB — create table if it doesn't exist yet
     try:
         import sqlite3
@@ -260,9 +293,47 @@ async def lifespan(app):
     print(f"[startup] NBA model loaded: {nba_model.loaded}  "
           f"(AUC={nba_model.info().get('roc_auc','—')}  "
           f"Elo teams={nba_model.info().get('n_teams_elo','—')})")
+    print(
+        "[startup] NBA database and Elo setup completed in "
+        f"{time.perf_counter() - phase_started:.2f}s"
+    )
 
-    yield
-    # Shutdown: nothing to clean up (SQLite handles its own flush)
+    async def warm_and_schedule_jobs():
+        warm_started = time.perf_counter()
+        try:
+            await asyncio.to_thread(fpl_warm)
+            print(
+                "[startup] FPL cache warmed in "
+                f"{time.perf_counter() - warm_started:.2f}s"
+            )
+        except Exception:
+            print("[startup] FPL cache warm failed")
+            import traceback
+            traceback.print_exc()
+
+        if priors_db:
+            print("[startup] Prediction logging job scheduled (every 30 min)")
+            await schedule_prediction_job(
+                priors_db, LEAGUE_KEY, interval_minutes=30
+            )
+        else:
+            print("[startup] No priors loaded — prediction job skipped")
+
+    background_task = asyncio.create_task(
+        warm_and_schedule_jobs(), name="startup-background-jobs"
+    )
+    app.state.startup_background_task = background_task
+    print(
+        "[startup] application ready in "
+        f"{time.perf_counter() - startup_started:.2f}s"
+    )
+
+    try:
+        yield
+    finally:
+        background_task.cancel()
+        await asyncio.gather(background_task, return_exceptions=True)
+        # SQLite handles its own flush.
 
 from fastapi.staticfiles import StaticFiles
 
@@ -271,6 +342,29 @@ app.include_router(match_router)
 app.include_router(nba_router, prefix="/nba")
 app.mount("/static", StaticFiles(directory=ROOT / "static"), name="static")
 templates = Jinja2Templates(directory=ROOT / "templates")
+
+
+@app.middleware("http")
+async def log_slow_requests(request: Request, call_next):
+    started = time.perf_counter()
+    response = await call_next(request)
+    elapsed = time.perf_counter() - started
+    if elapsed >= 1.0:
+        print(
+            f"[request] {request.method} {request.url.path} "
+            f"completed in {elapsed:.2f}s"
+        )
+    return response
+
+
+@app.get("/health")
+async def health():
+    return JSONResponse({
+        "status": "ready",
+        "football_model_loaded": nn_model is not None,
+        "nba_model_loaded": nba_model.loaded,
+    })
+
 
 # ── League context helper ──────────────────────────────────────────
 LEAGUE_CONTEXTS = {
@@ -922,7 +1016,9 @@ async def team_profile(request: Request, team_id: int, season: int = 2025):
 async def admin_run_predictions():
     """Manually trigger the prediction job — useful for initial setup."""
     try:
-        await run_prediction_job(priors_db, LEAGUE_KEY)
+        await asyncio.to_thread(
+            run_prediction_job_sync, priors_db, LEAGUE_KEY
+        )
         stats = get_accuracy_stats()
         return JSONResponse({
             "status": "ok",

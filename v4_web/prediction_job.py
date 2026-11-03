@@ -23,6 +23,7 @@ adjustments remain disabled until that league's lineup path is verified.
 import asyncio
 import json
 import numpy as np
+import time
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
@@ -488,6 +489,11 @@ async def run_prediction_job(priors_db: dict, league_key: str):
           f"{checked} results logged this cycle")
 
 
+def run_prediction_job_sync(priors_db: dict, league_key: str) -> None:
+    """Run one async prediction cycle in a worker thread with its own loop."""
+    asyncio.run(run_prediction_job(priors_db, league_key))
+
+
 async def schedule_prediction_job(priors_db: dict, league_key: str,
                                    interval_minutes: int = 30):
     """
@@ -495,8 +501,15 @@ async def schedule_prediction_job(priors_db: dict, league_key: str,
     Call once from FastAPI lifespan or startup event.
     """
     while True:
+        started = time.perf_counter()
         try:
-            await run_prediction_job(priors_db, league_key)
+            await asyncio.to_thread(
+                run_prediction_job_sync, priors_db, league_key
+            )
         except Exception as e:
             print(f"[prediction_job] unhandled error: {e}")
+        print(
+            "[prediction_job] background cycle finished in "
+            f"{time.perf_counter() - started:.2f}s"
+        )
         await asyncio.sleep(interval_minutes * 60)

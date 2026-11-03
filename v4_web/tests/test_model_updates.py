@@ -1,6 +1,8 @@
+import asyncio
 import sqlite3
 import sys
 import tempfile
+import time
 import unittest
 from contextlib import closing
 from pathlib import Path
@@ -9,6 +11,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from prediction_job import _dc_probs
+from prediction_job import run_prediction_job_sync
 from model_updates import (
     _dc_probabilities,
     get_football_match_factors,
@@ -143,6 +146,20 @@ class FootballRatingUpdateTests(unittest.TestCase):
             )
             self.assertGreater(lam_factor, 1.0)
             self.assertLess(mu_factor, 1.0)
+
+
+class PredictionJobSchedulingTests(unittest.IsolatedAsyncioTestCase):
+    async def test_blocking_cycle_runs_outside_the_server_event_loop(self):
+        async def blocking_cycle(*args, **kwargs):
+            time.sleep(0.15)
+
+        with patch("prediction_job.run_prediction_job", blocking_cycle):
+            task = asyncio.create_task(
+                asyncio.to_thread(run_prediction_job_sync, {}, "pl")
+            )
+            await asyncio.sleep(0.01)
+            self.assertFalse(task.done())
+            await task
 
 
 if __name__ == "__main__":
