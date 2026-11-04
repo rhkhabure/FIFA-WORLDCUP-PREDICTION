@@ -18,6 +18,7 @@ APP_ROOT = Path(__file__).resolve().parent
 HISTORICAL_DB_PATH = APP_ROOT / "nba" / "sql" / "nba_stats.sqlite"
 PLAY_BY_PLAY_DB_PATH = APP_ROOT / "nba" / "sql" / "nba_stats_pbp.sqlite"
 HISTORICAL_SEASON_CUTOFF = "2024-25"
+MIN_BEST_SHOT_ATTEMPTS = 25
 _HISTORICAL_START_YEAR_CUTOFF = 2024
 
 
@@ -329,6 +330,7 @@ def _player_shot_profile(
     int,
     float | None,
     Mapping[str, object] | None,
+    Mapping[str, object] | None,
     tuple[Mapping[str, object], ...],
 ]:
     with _read_only_connection(Path(database_path)) as connection:
@@ -369,11 +371,22 @@ def _player_shot_profile(
     attempts = sum(row["attempts"] for row in shot_types)
     made = sum(row["made"] for row in shot_types)
     favorite = shot_types[0] if shot_types else None
+    eligible = [
+        row for row in shot_types
+        if row["shot_type"] != "Dunk"
+        and row["attempts"] >= MIN_BEST_SHOT_ATTEMPTS
+    ]
+    best = max(
+        eligible,
+        key=lambda row: (row["accuracy"], row["attempts"], row["shot_type"]),
+        default=None,
+    )
     return (
         attempts,
         made,
         made / attempts if attempts else None,
         MappingProxyType(favorite) if favorite else None,
+        MappingProxyType(best) if best else None,
         tuple(MappingProxyType(row) for row in shot_types),
     )
 
@@ -381,7 +394,7 @@ def _player_shot_profile(
 def get_player_shot_profile(player_id: int) -> dict[str, object]:
     """Return historical regular-season shot types and conversion rates."""
     player_id = _validate_player_id(player_id)
-    attempts, made, accuracy, favorite, shot_types = _player_shot_profile(
+    attempts, made, accuracy, favorite, best, shot_types = _player_shot_profile(
         str(get_play_by_play_db_path()), player_id
     )
     return {
@@ -389,6 +402,8 @@ def get_player_shot_profile(player_id: int) -> dict[str, object]:
         "made": made,
         "accuracy": accuracy,
         "favorite": dict(favorite) if favorite else None,
+        "best": dict(best) if best else None,
+        "best_min_attempts": MIN_BEST_SHOT_ATTEMPTS,
         "shot_types": _public_rows(shot_types),
     }
 

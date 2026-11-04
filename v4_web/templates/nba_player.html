@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <style>
-  .player-page{max-width:960px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+  .player-page{max-width:1320px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
   .player-card{background:var(--surface,#fff);border:1.5px solid var(--border,#e2e8f0);
                border-radius:12px;padding:18px}
   .player-photo{width:132px;height:132px;object-fit:cover;object-position:top;
@@ -13,8 +13,43 @@
                      color:var(--text-muted,#64748b)}
   .player-stat-value{font-size:21px;font-weight:900;margin-top:5px}
   .player-table-note{font-size:11px;color:var(--text-muted,#64748b);margin-top:10px}
-  @media(max-width:620px){.player-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
-    .player-header{align-items:flex-start!important;flex-direction:column}}
+  .player-header{display:grid!important;grid-template-columns:minmax(0,1.2fr) minmax(360px,1fr);gap:24px!important}
+  .player-identity{display:flex;align-items:center;gap:20px;min-width:0}
+  .player-information{min-width:0;border-left:1px solid var(--border);padding-left:22px}
+  .player-info-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .player-info-item{padding:9px 10px;background:var(--surface-2);border-radius:8px;min-width:0}
+  .player-experience{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+  .experience-ball{width:38px;height:38px;border-radius:50%;display:inline-flex;
+                   justify-content:center;align-items:center;border:2px solid currentColor}
+  .experience-ball i{font-size:22px}
+  .tier-rookie{color:#166534;background:#DCFCE7}
+  .tier-early{color:#1D4ED8;background:#DBEAFE}
+  .tier-established{color:#6D28D9;background:#EDE9FE}
+  .tier-veteran{color:#B45309;background:#FEF3C7}
+  .tier-long{color:#B91C1C;background:#FEE2E2}
+  .tier-career{color:#0F766E;background:#CCFBF1}
+  .player-honors{grid-column:1/-1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:12px}
+  .honor-tile{display:flex;align-items:center;gap:10px;padding:12px;border:1px solid var(--border);border-radius:10px}
+  .honor-icon{width:36px;height:36px;border-radius:9px;display:grid;place-items:center;
+              color:#92400E;background:#FEF3C7;font-size:20px;flex:none}
+  .career-timeline{display:flex;gap:0;overflow-x:auto;padding:10px 0 4px}
+  .timeline-season{position:relative;min-width:118px;text-align:center;padding:0 10px}
+  .timeline-season:not(:last-child)::after{content:"";position:absolute;height:2px;
+    background:var(--border-strong);left:calc(50% + 24px);right:calc(-50% + 24px);top:22px}
+  .timeline-logos{position:relative;z-index:1;display:flex;justify-content:center;gap:3px;
+    min-height:46px;align-items:center}
+  .timeline-logos img{width:38px;height:38px;object-fit:contain;background:#fff;
+    border-radius:50%;border:1px solid var(--border);padding:3px}
+  .timeline-season-label{font:700 10px var(--font-mono);margin-top:7px}
+  .loyalty-badge{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;
+    background:#ECFDF5;color:#166534;border:1px solid #86EFAC;border-radius:99px;
+    font-size:11px;font-weight:800}
+  @media(max-width:760px){.player-header{grid-template-columns:1fr}
+    .player-information{border-left:0;border-top:1px solid var(--border);padding:16px 0 0}
+    .player-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  @media(max-width:500px){.player-identity{align-items:flex-start;flex-direction:column}
+    .player-info-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .player-honors{grid-template-columns:1fr}}
 </style>
 
 <main class="player-page">
@@ -28,28 +63,63 @@
   </section>
   {% else %}
   <section class="player-card">
-    <div class="player-header" style="display:flex;align-items:center;gap:20px">
-      <img class="player-photo"
-           src="https://cdn.nba.com/headshots/nba/latest/260x190/{{ player_id }}.png"
-           alt="{{ player.get('DISPLAY_FIRST_LAST', 'NBA player') }}"
-           onerror="this.style.display='none'">
-      <div style="flex:1">
-        <div style="font-size:26px;font-weight:900;line-height:1.1">
-          {{ player.get('DISPLAY_FIRST_LAST', 'NBA Player') }}
-        </div>
-        <div style="font-size:13px;color:var(--text-muted,#64748b);margin-top:7px">
-          {{ player.get('POSITION') or 'Position unavailable' }}
-          {% if player.get('JERSEY') %} · #{{ player.get('JERSEY') }}{% endif %}
-          {% if player.get('TEAM_CITY') and player.get('TEAM_NAME') %}
-          · {{ player.get('TEAM_CITY') }} {{ player.get('TEAM_NAME') }}
+    <div class="player-header">
+      <div class="player-identity">
+        <img class="player-photo"
+             src="https://cdn.nba.com/headshots/nba/latest/260x190/{{ player_id }}.png"
+             alt="{{ player.get('DISPLAY_FIRST_LAST', 'NBA player') }}"
+             onerror="this.style.display='none'">
+        <div style="flex:1">
+          <div style="font-size:26px;font-weight:900;line-height:1.1">
+            {{ player.get('DISPLAY_FIRST_LAST', 'NBA Player') }}
+          </div>
+          <div style="font-size:13px;color:var(--text-muted,#64748b);margin-top:7px">
+            {{ player.get('POSITION') or 'Position unavailable' }}
+            {% if player.get('JERSEY') %} · #{{ player.get('JERSEY') }}{% endif %}
+            {% if player.get('TEAM_CITY') and player.get('TEAM_NAME') %}
+            · {{ player.get('TEAM_CITY') }} {{ player.get('TEAM_NAME') }}
+            {% endif %}
+          </div>
+          {% if team_id %}
+          <a href="/nba/team/{{ team_id }}"
+             style="display:inline-block;margin-top:10px;font-size:12px;font-weight:800;color:var(--league-primary)">
+            View team roster
+          </a>
           {% endif %}
         </div>
-        {% if team_id %}
-        <a href="/nba/team/{{ team_id }}"
-           style="display:inline-block;margin-top:10px;font-size:12px;font-weight:800;color:var(--league-primary)">
-          View team roster
-        </a>
-        {% endif %}
+      </div>
+      <div class="player-information">
+        <div style="font:700 10px var(--font-mono);text-transform:uppercase;letter-spacing:.12em;
+                    color:var(--text-muted,#64748b);margin-bottom:10px">Player information</div>
+        <div class="player-experience">
+          {% if experience.available %}
+          <span class="experience-ball tier-{{ experience.key }}" title="{{ experience.label }}">
+            <i class="ti ti-ball-basketball" aria-hidden="true"></i>
+          </span>
+          <span>
+            <span style="display:block;font-size:13px;font-weight:900">{{ experience.label }}</span>
+            <span style="display:block;font-size:11px;color:var(--text-muted)"> {{ experience.seasons_played }} NBA seasons played</span>
+          </span>
+          {% else %}
+          <span style="font-size:11px;color:var(--text-muted)">Experience level unavailable</span>
+          {% endif %}
+        </div>
+        <div class="player-info-grid">
+          {% for label, key in [('Height', 'HEIGHT'), ('Weight', 'WEIGHT'), ('Country', 'COUNTRY')] %}
+          <div class="player-info-item">
+            <div class="player-stat-label">{{ label }}</div>
+            <div style="font-size:12px;font-weight:700;margin-top:4px">
+              {{ player.get(key) if player.get(key) is not none else '—' }}
+            </div>
+          </div>
+          {% endfor %}
+          <div class="player-info-item">
+            <div class="player-stat-label">Draft year</div>
+            <div style="font-size:12px;font-weight:700;margin-top:4px">
+              {{ player.get('DRAFT_YEAR') if player.get('DRAFT_YEAR') not in (none, '', 'Undrafted') else '—' }}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </section>
@@ -66,6 +136,22 @@
         <div class="player-stat-value">{{ headline.get(key) if headline.get(key) is not none else '—' }}</div>
       </div>
       {% endfor %}
+      <div class="player-honors">
+        {% if honors.available %}
+        <div class="honor-tile">
+          <span class="honor-icon"><i class="ti ti-trophy" aria-hidden="true"></i></span>
+          <span><strong style="display:block;font-size:18px">{{ honors.championships }}</strong>
+            <span style="font-size:11px;color:var(--text-muted)">NBA championships</span></span>
+        </div>
+        <div class="honor-tile">
+          <span class="honor-icon"><i class="ti ti-award" aria-hidden="true"></i></span>
+          <span><strong style="display:block;font-size:18px">{{ honors.mvps }}</strong>
+            <span style="font-size:11px;color:var(--text-muted)">Regular-season MVPs</span></span>
+        </div>
+        {% else %}
+        <div class="player-table-note" style="margin:0">Career honors are temporarily unavailable from NBA Stats.</div>
+        {% endif %}
+      </div>
     </div>
     {% if not headline %}
     <div style="font-size:11px;color:var(--text-muted,#64748b);margin-top:12px">
@@ -74,47 +160,38 @@
     {% endif %}
   </section>
 
-  <section class="player-card" style="overflow-x:auto">
-    <div style="font:700 10px var(--font-mono);text-transform:uppercase;letter-spacing:.12em;
-                color:var(--text-muted,#64748b);margin-bottom:12px">Recent regular seasons</div>
-    {% if seasons %}
-    <table style="width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap">
-      <thead>
-        <tr style="text-align:right;color:var(--text-muted,#64748b);font:10px var(--font-mono)">
-          <th style="padding:7px;text-align:left">Season</th>
-          <th style="padding:7px">Team</th>
-          <th style="padding:7px">GP</th>
-          <th style="padding:7px">PTS</th>
-          <th style="padding:7px">REB</th>
-          <th style="padding:7px">AST</th>
-          <th style="padding:7px">MIN</th>
-          <th style="padding:7px;text-align:left">Source</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for row in seasons %}
-        <tr style="text-align:right;border-top:1px solid var(--border,#e2e8f0)">
-          <td style="padding:8px;text-align:left;font-weight:700">{{ row.get('SEASON_ID') or '—' }}</td>
-          <td style="padding:8px">{{ row.get('TEAM_ABBREVIATION') or '—' }}</td>
-          <td style="padding:8px">{{ row.get('GP') if row.get('GP') is not none else '—' }}</td>
-          <td style="padding:8px">{{ row.get('PTS') if row.get('PTS') is not none else '—' }}</td>
-          <td style="padding:8px">{{ row.get('REB') if row.get('REB') is not none else '—' }}</td>
-          <td style="padding:8px">{{ row.get('AST') if row.get('AST') is not none else '—' }}</td>
-          <td style="padding:8px">{{ row.get('MIN') if row.get('MIN') is not none else '—' }}</td>
-          <td style="padding:8px;text-align:left;color:var(--text-muted,#64748b)">{{ row.get('_source') }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+  <section class="player-card">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+      <div>
+        <div style="font:700 10px var(--font-mono);text-transform:uppercase;letter-spacing:.12em;
+                    color:var(--text-muted,#64748b)">NBA team journey</div>
+        <div class="player-table-note">Season-level team history · no trade dates inferred</div>
+      </div>
+      {% if loyalty_badge %}
+      <span class="loyalty-badge"><i class="ti ti-shield-check" aria-hidden="true"></i> One-franchise career</span>
+      {% endif %}
+    </div>
+    {% if team_timeline_available %}
+    <div class="career-timeline" aria-label="Player team history by season">
+      {% for season in team_timeline %}
+      <div class="timeline-season">
+        <div class="timeline-logos">
+          {% for team in season.teams %}
+          <img src="https://cdn.nba.com/logos/nba/{{ team.team_id }}/global/L/logo.svg"
+               alt="{{ team.name }}" title="{{ team.name }}" loading="lazy"
+               onerror="this.hidden=true">
+          {% endfor %}
+        </div>
+        <div class="timeline-season-label">{{ season.season }}</div>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:3px">
+          {{ season.teams|map(attribute='tricode')|join(' · ') }}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
     {% else %}
-    <div style="font-size:11px;color:var(--text-muted,#64748b)">
-      No regular-season NBA stats are available yet for this player.
-    </div>
+    <div class="player-table-note">Season-level team history is unavailable.</div>
     {% endif %}
-    <div class="player-table-note">
-    Current and previous seasons come from the NBA API. Earlier rows are historical regular-season totals through {{ historical_season_cutoff }}.
-    {% if history_unavailable %} Historical database data could not be loaded for this request.{% endif %}
-    </div>
   </section>
 
   {% if career_highs %}
@@ -150,7 +227,7 @@
     {% if shot_profile.get('attempts') %}
     <div class="player-stat-grid" style="margin-bottom:14px">
       <div class="player-stat">
-        <div class="player-stat-label">Most attempted shot</div>
+        <div class="player-stat-label">Favorite shot</div>
         <div class="player-stat-value" style="font-size:17px">
           {{ shot_profile.get('favorite', {}).get('shot_type', '—') }}
         </div>
@@ -158,13 +235,26 @@
           {{ shot_profile.get('favorite', {}).get('attempts', 0) }} attempts
         </div>
       </div>
+      {% if shot_profile.get('best') %}
       <div class="player-stat">
-        <div class="player-stat-label">Shot accuracy</div>
-        <div class="player-stat-value">{{ (shot_profile.get('accuracy', 0) * 100)|round(1) }}%</div>
+        <div class="player-stat-label">Best shot</div>
+        <div class="player-stat-value" style="font-size:17px">{{ shot_profile.best.shot_type }}</div>
+        <div style="font-size:18px;font-weight:900;margin-top:3px">
+          {{ (shot_profile.best.accuracy * 100)|round(1) }}%
+        </div>
         <div class="player-table-note">
-          {{ shot_profile.get('made', 0) }} made of {{ shot_profile.get('attempts', 0) }}
+          Highest accuracy · {{ shot_profile.best.made }} / {{ shot_profile.best.attempts }} made
         </div>
       </div>
+      {% else %}
+      <div class="player-stat">
+        <div class="player-stat-label">Best shot</div>
+        <div class="player-stat-value" style="font-size:15px">Not enough attempts</div>
+        <div class="player-table-note">
+          Requires {{ shot_profile.get('best_min_attempts', 25) }} attempts for a non-dunk shot type.
+        </div>
+      </div>
+      {% endif %}
     </div>
     <table style="width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap">
       <thead>
@@ -187,7 +277,8 @@
       </tbody>
     </table>
     <div class="player-table-note">
-      Shot labels are grouped into broad types; attempts count made and missed field goals with 2- or 3-point values.
+      Favorite shot is the most attempted type. Best shot is the most accurate non-dunk type with at least
+      {{ shot_profile.get('best_min_attempts', 25) }} attempts. Percentages use made shots divided by attempts.
     </div>
     {% elif not shot_history_unavailable %}
     <div style="font-size:11px;color:var(--text-muted,#64748b)">
@@ -264,20 +355,49 @@
   </section>
   {% endif %}
 
-  <section class="player-card">
+  <section class="player-card" style="overflow-x:auto">
     <div style="font:700 10px var(--font-mono);text-transform:uppercase;letter-spacing:.12em;
-                color:var(--text-muted,#64748b);margin-bottom:12px">Player information</div>
-    <div class="player-stat-grid">
-      {% for label, key in [('Height', 'HEIGHT'), ('Weight', 'WEIGHT'), ('Experience', 'SEASON_EXP'), ('Country', 'COUNTRY')] %}
-      <div class="player-stat">
-        <div class="player-stat-label">{{ label }}</div>
-        <div style="font-size:13px;font-weight:700;margin-top:5px">
-          {{ player.get(key) if player.get(key) is not none else '—' }}
-        </div>
-      </div>
-      {% endfor %}
+                color:var(--text-muted,#64748b);margin-bottom:12px">Recent regular seasons</div>
+    {% if seasons %}
+    <table style="width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap">
+      <thead>
+        <tr style="text-align:right;color:var(--text-muted,#64748b);font:10px var(--font-mono)">
+          <th style="padding:7px;text-align:left">Season</th>
+          <th style="padding:7px">Team</th>
+          <th style="padding:7px">GP</th>
+          <th style="padding:7px">PTS</th>
+          <th style="padding:7px">REB</th>
+          <th style="padding:7px">AST</th>
+          <th style="padding:7px">MIN</th>
+          <th style="padding:7px;text-align:left">Source</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in seasons %}
+        <tr style="text-align:right;border-top:1px solid var(--border,#e2e8f0)">
+          <td style="padding:8px;text-align:left;font-weight:700">{{ row.get('SEASON_ID') or '—' }}</td>
+          <td style="padding:8px">{{ row.get('TEAM_ABBREVIATION') or '—' }}</td>
+          <td style="padding:8px">{{ row.get('GP') if row.get('GP') is not none else '—' }}</td>
+          <td style="padding:8px">{{ row.get('PTS') if row.get('PTS') is not none else '—' }}</td>
+          <td style="padding:8px">{{ row.get('REB') if row.get('REB') is not none else '—' }}</td>
+          <td style="padding:8px">{{ row.get('AST') if row.get('AST') is not none else '—' }}</td>
+          <td style="padding:8px">{{ row.get('MIN') if row.get('MIN') is not none else '—' }}</td>
+          <td style="padding:8px;text-align:left;color:var(--text-muted,#64748b)">{{ row.get('_source') }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div style="font-size:11px;color:var(--text-muted,#64748b)">
+      No regular-season NBA stats are available yet for this player.
+    </div>
+    {% endif %}
+    <div class="player-table-note">
+    Current and previous seasons come from the NBA API. Earlier rows are historical regular-season totals through {{ historical_season_cutoff }}.
+    {% if history_unavailable %} Historical database data could not be loaded for this request.{% endif %}
     </div>
   </section>
+
   {% endif %}
 </main>
 {% endblock %}

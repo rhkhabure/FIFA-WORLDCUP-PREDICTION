@@ -715,9 +715,113 @@ async def nba_team_profile(request: Request, team_id: int):
     )
 
 
+def _player_experience(
+    seasons: list[dict], history_available: bool
+) -> dict[str, object]:
+    played = set()
+    if history_available:
+        for row in seasons:
+            season = str(row.get("SEASON_ID") or "")
+            try:
+                games = float(row.get("GP") or 0)
+            except (TypeError, ValueError):
+                continue
+            if re.fullmatch(r"\d{4}-\d{2}", season) and games > 0:
+                played.add(season)
+
+    count = len(played)
+    tiers = (
+        (1, "Rookie", "rookie"),
+        (3, "Early Career", "early"),
+        (7, "Established", "established"),
+        (11, "Veteran", "veteran"),
+        (15, "Long-Tenured", "long"),
+        (float("inf"), "Career Veteran", "career"),
+    )
+    tier = next((label, key) for maximum, label, key in tiers if count <= maximum)
+    return {
+        "available": history_available and count > 0,
+        "seasons_played": count,
+        "label": tier[0] if count else None,
+        "key": tier[1] if count else None,
+    }
+
+
+def _player_honors(awards: list[dict], awards_available: bool) -> dict[str, object]:
+    counted: dict[str, set[str]] = {"championships": set(), "mvps": set()}
+    for award in awards:
+        description = str(award.get("DESCRIPTION") or "").strip().casefold()
+        season = str(award.get("SEASON") or "").strip()
+        if not season:
+            continue
+        if description == "nba champion":
+            counted["championships"].add(season)
+        elif description == "nba most valuable player":
+            counted["mvps"].add(season)
+    return {
+        "available": awards_available,
+        "championships": len(counted["championships"]),
+        "mvps": len(counted["mvps"]),
+    }
+
+
+def _player_team_timeline(
+    career_seasons: list[dict], historical_teams: list[dict]
+) -> dict[str, object]:
+    by_season_team: dict[tuple[str, int], dict] = {}
+    for row in [*historical_teams, *career_seasons]:
+        season = str(row.get("SEASON_ID") or row.get("season_year") or "")
+        abbreviation = str(
+            row.get("TEAM_ABBREVIATION") or row.get("team_abbreviation") or ""
+        ).upper()
+        if not re.fullmatch(r"\d{4}-\d{2}", season) or abbreviation in ("", "TOT"):
+            continue
+        try:
+            team_id = int(row.get("TEAM_ID") or row.get("team_id") or 0)
+            games = float(row.get("GP") or row.get("games_played") or 0)
+        except (TypeError, ValueError):
+            continue
+        if team_id not in NBA_TEAM_IDS or games <= 0:
+            continue
+        team = nba_team(team_id)
+        by_season_team[(season, team_id)] = {
+            "season": season,
+            "team_id": team_id,
+            "tricode": team.get("tricode") or abbreviation,
+            "name": f"{team.get('city', '')} {team.get('name', '')}".strip(),
+            "primary": team.get("primary", "#6b7280"),
+        }
+
+    grouped: dict[str, list[dict]] = {}
+    for row in sorted(
+        by_season_team.values(), key=lambda item: (item["season"], item["team_id"])
+    ):
+        grouped.setdefault(row["season"], []).append(
+            {key: value for key, value in row.items() if key != "season"}
+        )
+    seasons = [
+        {"season": season, "teams": teams}
+        for season, teams in sorted(grouped.items())
+    ]
+    return {
+        "seasons": seasons,
+        "team_ids": {row["team_id"] for row in by_season_team.values()},
+    }
+
+
+def _has_one_franchise_career(
+    timeline: dict[str, object], experience: dict[str, object]
+) -> bool:
+    return (
+        bool(experience.get("available"))
+        and int(experience.get("seasons_played") or 0) >= 3
+        and len(timeline.get("team_ids", set())) == 1
+    )
+
+
 @router.get("/player/{player_id}", response_class=HTMLResponse)
 async def nba_player_profile(request: Request, player_id: int):
-    """Show current NBA profile data alongside local historical regular seasons."""
+    """Show NBA bio, honors, career tenure and historical regular seasons."""
     if player_id <= 0:
         raise HTTPException(status_code=404, detail="NBA player not found")
 
@@ -790,6 +894,18 @@ async def nba_player_profile(request: Request, player_id: int):
     else:
         team_id = None
 
+    career_seasons = profile.get("career_seasons", [])
+    experience = _player_experience(
+        career_seasons, bool(profile.get("career_history_available"))
+    )
+    honors = _player_honors(
+        profile.get("awards", []), bool(profile.get("awards_available"))
+    )
+    team_timeline = _player_team_timeline(
+        career_seasons, historical["team_history"]
+    )
+    loyalty_badge = _has_one_franchise_career(team_timeline, experience)
+
     player_name = info.get("DISPLAY_FIRST_LAST") or f"Player {player_id}"
     unavailable = not bool(profile.get("info")) and not bool(historical["seasons"])
     return templates.TemplateResponse(
@@ -804,6 +920,11 @@ async def nba_player_profile(request: Request, player_id: int):
             "team_history": historical["team_history"],
             "career_highs": historical["career_highs"],
             "shot_profile": shot_profile,
+            "experience": experience,
+            "honors": honors,
+            "team_timeline": team_timeline["seasons"],
+            "team_timeline_available": bool(team_timeline["seasons"]),
+            "loyalty_badge": loyalty_badge,
             "shot_history_unavailable": shot_history_unavailable,
             "historical_season_cutoff": HISTORICAL_SEASON_CUTOFF,
             "history_unavailable": history_unavailable,

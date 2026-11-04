@@ -140,7 +140,7 @@ def get_team_roster(team_id: int, season: str | None = None) -> list[dict]:
 
 
 def get_player_profile(player_id: int) -> dict:
-    """Return a player's NBA bio and headline stats, cached for six hours."""
+    """Return a player's NBA bio, full career season rows, and awards."""
     key = f"player_profile_{player_id}"
     cached = _get(key)
     if cached is not None:
@@ -155,14 +155,28 @@ def get_player_profile(player_id: int) -> dict:
             career = playercareerstats.PlayerCareerStats(
                 player_id=player_id, timeout=10
             )
-            seasons = _records(career.season_totals_regular_season)
+            career_seasons = _records(career.season_totals_regular_season)
         except Exception as exc:
             log.warning("NBA season stats unavailable for player %s: %s", player_id, exc)
-            seasons = []
+            career_seasons = []
+        awards_available = False
+        awards = []
+        try:
+            from nba_api.stats.endpoints import playerawards
+            awards = _records(
+                playerawards.PlayerAwards(player_id=player_id, timeout=10).player_awards
+            )
+            awards_available = True
+        except Exception as exc:
+            log.warning("NBA awards unavailable for player %s: %s", player_id, exc)
         profile = {
             "info": info[0] if info else {},
             "headline": headline[0] if headline else {},
-            "seasons": list(reversed(seasons[-5:])),
+            "seasons": list(reversed(career_seasons[-5:])),
+            "career_seasons": career_seasons,
+            "career_history_available": bool(career_seasons),
+            "awards": awards,
+            "awards_available": awards_available,
         }
         _set(key, profile, TTL_PLAYER_PROFILE)
         return profile
