@@ -1,7 +1,20 @@
-# NBA play-by-play database
+# NBA historical databases
 
-`nba_stats_pbp.sqlite` is intentionally kept out of Git because it is a
-multi-gigabyte dataset. Download it from the Kaggle dataset
+The historical databases and large source CSVs are intentionally kept out of
+Git. Provision the files separately on each machine; the application does not
+download or modify them.
+
+## Historical stats
+
+Place the read-only historical stats database at
+`v4_web/nba/sql/nba_stats.sqlite`, or set `NBA_HISTORY_DB_PATH` to its location.
+This database supports historical team/player profiles and records. Those
+historical sections require a local database; current schedules, scores, and
+provider-backed profiles do not use it.
+
+## Play-by-play
+
+`nba_stats_pbp.sqlite` is a multi-gigabyte dataset. Download it from the Kaggle dataset
 [NBA Stats Dataset: 1996 - Present](https://www.kaggle.com/datasets/chevronronson/nba-stats-dataset),
 which is listed as CC0, and place the file in this directory.
 
@@ -50,3 +63,6 @@ The Git-tracked version did not match this full-size dataset and must not be
 used as a substitute. Historical shot analysis must also account for
 incomplete 2025-26 play-by-play coverage; use the NBA API for the 2025-26 and
 2026-27 seasons.
+
+The large source CSVs in `v4_web/nba/csv/` are local inputs and are not required
+by the running dashboard when the corresponding SQLite databases are present.
