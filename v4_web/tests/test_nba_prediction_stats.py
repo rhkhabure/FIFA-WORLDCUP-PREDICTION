@@ -13,14 +13,18 @@ class NBAPredictionStatsTests(unittest.TestCase):
         self.db = sqlite3.connect(":memory:")
         self.db.execute("""
             CREATE TABLE predictions (
+                id INTEGER PRIMARY KEY,
                 league TEXT,
                 conference TEXT,
                 correct INTEGER,
-                brier REAL
+                brier REAL,
+                home_team_id INTEGER,
+                away_team_id INTEGER
             )
         """)
         self.db.executemany(
-            "INSERT INTO predictions VALUES ('nba', ?, ?, ?)",
+            "INSERT INTO predictions (league, conference, correct, brier) "
+            "VALUES ('nba', ?, ?, ?)",
             [
                 ("East", 1, 0.1),
                 ("East", 0, 0.4),
@@ -52,6 +56,29 @@ class NBAPredictionStatsTests(unittest.TestCase):
         self.assertEqual(stats["played"], 4)
         self.assertEqual(stats["correct"], 2)
         self.assertEqual(stats["accuracy"], 50.0)
+
+    def test_normalize_conference_reclassifies_legacy_preseason_rows(self):
+        self.db.execute(
+            """INSERT INTO predictions
+               (league, conference, correct, brier, home_team_id, away_team_id)
+               VALUES ('nba', 'Preseason', 1, 0.1, 1610612737, 1610612748)"""
+        )
+        self.db.execute(
+            """INSERT INTO predictions
+               (league, conference, correct, brier, home_team_id, away_team_id)
+               VALUES ('nba', 'Preseason', 0, 0.4, 1610612743, 1610612738)"""
+        )
+
+        updated = nba_predictions.normalize_conferences()
+
+        self.assertEqual(updated, 2)
+        self.assertEqual(
+            self.db.execute(
+                "SELECT conference FROM predictions "
+                "WHERE conference IN ('East', 'West') ORDER BY id DESC LIMIT 2"
+            ).fetchall(),
+            [("West",), ("East",)],
+        )
 
 
 if __name__ == "__main__":

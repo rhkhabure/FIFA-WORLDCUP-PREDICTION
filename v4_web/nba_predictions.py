@@ -61,6 +61,46 @@ def _game_exists(game_id: str) -> bool:
         return False
 
 
+def _conference_for_teams(home_team_id, away_team_id) -> str:
+    """Assign a game to its home team's conference, falling back to away team."""
+    for team_id in (home_team_id, away_team_id):
+        try:
+            conference = nba_team(int(team_id)).get("conference", "")
+        except (TypeError, ValueError):
+            continue
+        if conference in ("East", "West"):
+            return conference
+    return ""
+
+
+def normalize_conferences() -> int:
+    """Reclassify legacy NBA rows whose conference is not East or West."""
+    if _db is None:
+        return 0
+    try:
+        rows = _db.execute(
+            "SELECT id, home_team_id, away_team_id FROM predictions "
+            "WHERE league='nba' AND (conference IS NULL OR conference NOT IN ('East', 'West'))"
+        ).fetchall()
+        updates = [
+            (_conference_for_teams(row[1], row[2]), row[0])
+            for row in rows
+        ]
+        updates = [(conference, row_id) for conference, row_id in updates if conference]
+        if updates:
+            _db.executemany(
+                "UPDATE predictions SET conference=? WHERE id=?",
+                updates,
+            )
+            _db.commit()
+        if updates:
+            log.info("Reclassified %s NBA predictions by team conference", len(updates))
+        return len(updates)
+    except sqlite3.Error as exc:
+        log.warning("NBA conference normalization failed: %s", exc)
+        return 0
+
+
 # ── Public API ────────────────────────────────────────────────────────────────
 
 def log_pregame(
@@ -89,11 +129,7 @@ def log_pregame(
 
     home_team_id = game.get("home_team_id")
     away_team_id = game.get("away_team_id")
-    conference = (
-        nba_team(home_team_id).get("conference")
-        or nba_team(away_team_id).get("conference")
-        or ""
-    )
+    conference = _conference_for_teams(home_team_id, away_team_id)
 
     if _game_exists(game_id):
         _execute(

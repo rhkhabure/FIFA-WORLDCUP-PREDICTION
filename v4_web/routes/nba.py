@@ -73,6 +73,7 @@ from fan_votes import (
     get_nba_vote_summary,
     init_nba_fan_votes,
 )
+from teamdata import _flag_img
 import nba_predictions as pred_log
 
 log = logging.getLogger(__name__)
@@ -96,6 +97,7 @@ def nba_setup(model: NBAModel, db=None) -> None:
     _db_path = None
     pred_log.set_db(db)   # share the same connection
     if db is not None:
+        pred_log.normalize_conferences()
         db_row = db.execute("PRAGMA database_list").fetchone()
         if db_row and db_row[2]:
             _db_path = str(db_row[2])
@@ -747,8 +749,16 @@ def _player_experience(
     }
 
 
-def _player_honors(awards: list[dict], awards_available: bool) -> dict[str, object]:
+def _player_honors(
+    awards: list[dict],
+    awards_available: bool,
+    team_timeline: list[dict] | None = None,
+) -> dict[str, object]:
     counted: dict[str, set[str]] = {"championships": set(), "mvps": set()}
+    championship_teams: dict[str, dict] = {}
+    timeline_by_season = {
+        row["season"]: row["teams"] for row in (team_timeline or [])
+    }
     for award in awards:
         description = str(award.get("DESCRIPTION") or "").strip().casefold()
         season = str(award.get("SEASON") or "").strip()
@@ -756,11 +766,50 @@ def _player_honors(awards: list[dict], awards_available: bool) -> dict[str, obje
             continue
         if description == "nba champion":
             counted["championships"].add(season)
+            try:
+                team_id = int(award.get("TEAM_ID") or 0)
+            except (TypeError, ValueError):
+                team_id = 0
+            team_id = team_id if team_id in NBA_TEAM_IDS else None
+            award_team_name = str(award.get("TEAM") or "").strip()
+            normalized_award_team = " ".join(award_team_name.casefold().split())
+            if not team_id and normalized_award_team:
+                for candidate_id, candidate in NBA_TEAMS.items():
+                    candidate_name = " ".join(
+                        f"{candidate.get('city', '')} {candidate.get('name', '')}"
+                        .casefold()
+                        .split()
+                    )
+                    if normalized_award_team == candidate_name:
+                        team_id = candidate_id
+                        break
+            if not team_id:
+                season_teams = timeline_by_season.get(season, [])
+                if len(season_teams) == 1:
+                    team_id = season_teams[0]["team_id"]
+            team = nba_team(team_id) if team_id else {}
+            entry = {
+                "season": season,
+                "team_id": team_id,
+                "team_name": (
+                    f"{team.get('city', '')} {team.get('name', '')}".strip()
+                    if team
+                    else award_team_name
+                ),
+                "tricode": team.get("tricode") or "",
+            }
+            existing = championship_teams.get(season)
+            if not existing or (not existing["team_id"] and team_id):
+                championship_teams[season] = entry
         elif description == "nba most valuable player":
             counted["mvps"].add(season)
     return {
         "available": awards_available,
         "championships": len(counted["championships"]),
+        "championship_seasons": [
+            championship_teams[season]
+            for season in sorted(counted["championships"])
+        ],
         "mvps": len(counted["mvps"]),
     }
 
@@ -898,12 +947,15 @@ async def nba_player_profile(request: Request, player_id: int):
     experience = _player_experience(
         career_seasons, bool(profile.get("career_history_available"))
     )
-    honors = _player_honors(
-        profile.get("awards", []), bool(profile.get("awards_available"))
-    )
     team_timeline = _player_team_timeline(
         career_seasons, historical["team_history"]
     )
+    honors = _player_honors(
+        profile.get("awards", []),
+        bool(profile.get("awards_available")),
+        team_timeline["seasons"],
+    )
+    country_flag = _flag_img(str(info.get("COUNTRY") or ""))
     loyalty_badge = _has_one_franchise_career(team_timeline, experience)
 
     player_name = info.get("DISPLAY_FIRST_LAST") or f"Player {player_id}"
@@ -922,6 +974,7 @@ async def nba_player_profile(request: Request, player_id: int):
             "shot_profile": shot_profile,
             "experience": experience,
             "honors": honors,
+            "country_flag": country_flag,
             "team_timeline": team_timeline["seasons"],
             "team_timeline_available": bool(team_timeline["seasons"]),
             "loyalty_badge": loyalty_badge,

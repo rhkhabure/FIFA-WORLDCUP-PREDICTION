@@ -1,7 +1,8 @@
 {% extends "base.html" %}
 {% block content %}
 <style>
-  .player-page{max-width:1320px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+  .player-page{max-width:1320px;margin:0 auto;display:flex;flex-direction:column;gap:16px;
+               color:#1f2937;font-size:14px}
   .player-card{background:var(--surface,#fff);border:1.5px solid var(--border,#e2e8f0);
                border-radius:12px;padding:18px}
   .player-photo{width:132px;height:132px;object-fit:cover;object-position:top;
@@ -9,15 +10,16 @@
   .player-stat-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
   .player-stat{padding:14px 10px;border:1px solid var(--border,#e2e8f0);
                border-radius:10px;text-align:center}
-  .player-stat-label{font:10px var(--font-mono);text-transform:uppercase;
-                     color:var(--text-muted,#64748b)}
+  .player-stat-label{font:11px var(--font-mono);text-transform:uppercase;
+                     color:#475569}
   .player-stat-value{font-size:21px;font-weight:900;margin-top:5px}
-  .player-table-note{font-size:11px;color:var(--text-muted,#64748b);margin-top:10px}
+  .player-table-note{font-size:12px;color:#475569;margin-top:10px}
   .player-header{display:grid!important;grid-template-columns:minmax(0,1.2fr) minmax(360px,1fr);gap:24px!important}
   .player-identity{display:flex;align-items:center;gap:20px;min-width:0}
   .player-information{min-width:0;border-left:1px solid var(--border);padding-left:22px}
   .player-info-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
   .player-info-item{padding:9px 10px;background:var(--surface-2);border-radius:8px;min-width:0}
+  .player-info-item img[alt]{width:20px;height:15px;margin-right:5px}
   .player-experience{display:flex;align-items:center;gap:10px;margin-bottom:12px}
   .experience-ball{width:38px;height:38px;border-radius:50%;display:inline-flex;
                    justify-content:center;align-items:center;border:2px solid currentColor}
@@ -32,6 +34,20 @@
   .honor-tile{display:flex;align-items:center;gap:10px;padding:12px;border:1px solid var(--border);border-radius:10px}
   .honor-icon{width:36px;height:36px;border-radius:9px;display:grid;place-items:center;
               color:#92400E;background:#FEF3C7;font-size:20px;flex:none}
+  .championship-honor{align-items:flex-start}
+  .championship-content{flex:1;min-width:0}
+  .championship-summary{display:flex;align-items:baseline;gap:8px}
+  .championship-summary strong{font-size:23px;line-height:1}
+  .championship-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));
+    gap:7px;margin-top:11px}
+  .championship-entry{display:flex;align-items:center;gap:9px;min-width:0;padding:7px 9px;
+    background:var(--surface-2);border:1px solid var(--border);border-radius:9px}
+  .championship-crest{width:30px;height:30px;object-fit:contain;flex:none}
+  .championship-crest-fallback{width:30px;height:30px;display:grid;place-items:center;
+    flex:none;border-radius:50%;background:#FEF3C7;color:#92400E;font-size:16px}
+  .championship-crest-fallback[hidden]{display:none}
+  .championship-season{font:700 11px var(--font-mono);color:#475569}
+  .championship-team{font-size:12px;font-weight:800;color:#1f2937;line-height:1.2}
   .career-timeline{display:flex;gap:0;overflow-x:auto;padding:10px 0 4px}
   .timeline-season{position:relative;min-width:118px;text-align:center;padding:0 10px}
   .timeline-season:not(:last-child)::after{content:"";position:absolute;height:2px;
@@ -40,10 +56,16 @@
     min-height:46px;align-items:center}
   .timeline-logos img{width:38px;height:38px;object-fit:contain;background:#fff;
     border-radius:50%;border:1px solid var(--border);padding:3px}
-  .timeline-season-label{font:700 10px var(--font-mono);margin-top:7px}
+  .timeline-season-label{font:700 11px var(--font-mono);margin-top:7px}
   .loyalty-badge{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;
     background:#ECFDF5;color:#166534;border:1px solid #86EFAC;border-radius:99px;
     font-size:11px;font-weight:800}
+  .player-page [style*="color:var(--text-muted"]{color:#475569!important}
+  .player-page [style*="font:700 10px"]{font-size:11px!important;color:#475569!important}
+  .player-page [style*="font-size:11px"]{font-size:12px!important}
+  .player-page [style*="font-size:10px"]{font-size:11px!important}
+  .player-page table{font-size:13px!important}
+  .player-page table thead tr{font-size:11px!important;color:#475569!important}
   @media(max-width:760px){.player-header{grid-template-columns:1fr}
     .player-information{border-left:0;border-top:1px solid var(--border);padding:16px 0 0}
     .player-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
@@ -108,7 +130,8 @@
           {% for label, key in [('Height', 'HEIGHT'), ('Weight', 'WEIGHT'), ('Country', 'COUNTRY')] %}
           <div class="player-info-item">
             <div class="player-stat-label">{{ label }}</div>
-            <div style="font-size:12px;font-weight:700;margin-top:4px">
+            <div style="font-size:13px;font-weight:700;margin-top:4px">
+              {% if key == 'COUNTRY' and country_flag %}{{ country_flag|safe }}{% endif %}
               {{ player.get(key) if player.get(key) is not none else '—' }}
             </div>
           </div>
@@ -138,10 +161,43 @@
       {% endfor %}
       <div class="player-honors">
         {% if honors.available %}
-        <div class="honor-tile">
+        <div class="honor-tile championship-honor">
           <span class="honor-icon"><i class="ti ti-trophy" aria-hidden="true"></i></span>
-          <span><strong style="display:block;font-size:18px">{{ honors.championships }}</strong>
-            <span style="font-size:11px;color:var(--text-muted)">NBA championships</span></span>
+          <div class="championship-content">
+            <div class="championship-summary">
+              <strong>{{ honors.championships }}</strong>
+              <span style="font-size:12px;font-weight:700;color:var(--text-muted)">
+                NBA championship{{ '' if honors.championships == 1 else 's' }}
+              </span>
+            </div>
+            {% if honors.championship_seasons %}
+            <div class="championship-list" aria-label="NBA championship seasons and teams">
+              {% for title in honors.championship_seasons %}
+              <div class="championship-entry">
+                {% if title.team_id %}
+                <img src="https://cdn.nba.com/logos/nba/{{ title.team_id }}/global/L/logo.svg"
+                     class="championship-crest" alt="{{ title.team_name }} logo"
+                     title="{{ title.team_name }}" loading="lazy"
+                     onerror="this.hidden=true;this.nextElementSibling.hidden=false">
+                <span class="championship-crest-fallback" hidden aria-hidden="true">
+                  <i class="ti ti-trophy"></i>
+                </span>
+                {% else %}
+                <span class="championship-crest-fallback" aria-hidden="true">
+                  <i class="ti ti-trophy"></i>
+                </span>
+                {% endif %}
+                <span>
+                  <span class="championship-season">{{ title.season }}</span>
+                  <span class="championship-team" style="display:block">
+                    {{ title.team_name or title.tricode or 'Team unavailable' }}
+                  </span>
+                </span>
+              </div>
+              {% endfor %}
+            </div>
+            {% endif %}
+          </div>
         </div>
         <div class="honor-tile">
           <span class="honor-icon"><i class="ti ti-award" aria-hidden="true"></i></span>

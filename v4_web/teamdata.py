@@ -11,6 +11,7 @@ Pulls from:
 All functions return plain dicts ready for Jinja2 templates.
 """
 
+from html import escape
 import json
 import os
 import time
@@ -127,7 +128,8 @@ _NAT_TO_CODE: dict[str, str] = {
     "South Africa":"ZA","South Korea":"KR","Spain":"ES","Basque Country":"ES","Catalonia":"ES","Sudan":"SD",
     "Sweden":"SE","Switzerland":"CH","Syria":"SY","Tanzania":"TZ",
     "Togo":"TG","Trinidad and Tobago":"TT","Tunisia":"TN","Turkey":"TR",
-    "Uganda":"UG","Ukraine":"UA","United States":"US","Uruguay":"UY",
+    "Uganda":"UG","Ukraine":"UA","United States":"US","United States of America":"US",
+    "USA":"US","US":"US","Uruguay":"UY",
     "Uzbekistan":"UZ","Venezuela":"VE","Wales":"GB-WAL","Zambia":"ZM",
     "Zimbabwe":"ZW",
 }
@@ -148,7 +150,7 @@ def _flag_img(nationality: str) -> str:
     # GB subdivisions all use 'gb' on flagcdn
     iso = code.split("-")[0].lower()
     return (f'<img src="https://flagcdn.com/16x12/{iso}.png" '
-            f'width="16" height="12" alt="{nationality}" '
+            f'width="16" height="12" alt="{escape(nationality, quote=True)}" '
             f'class="inline-block rounded-sm" '
             f'style="vertical-align:middle;margin-right:3px">')
 

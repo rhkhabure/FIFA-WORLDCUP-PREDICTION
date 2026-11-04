@@ -9,6 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import historical_nba
 import nba_api_client
+from teamdata import _flag_img
 from routes.nba import (
     _has_one_franchise_career,
     _player_experience,
@@ -100,16 +101,39 @@ class NBAPlayerProfileTests(unittest.TestCase):
 
     def test_honors_count_championships_and_regular_season_mvps_only(self):
         awards = [
-            {"DESCRIPTION": "NBA Champion", "SEASON": "2019-20"},
+            {"DESCRIPTION": "NBA Champion", "SEASON": "2012-13",
+             "TEAM": "Miami Heat"},
+            {"DESCRIPTION": "NBA Champion", "SEASON": "2019-20",
+             "TEAM": "Los Angeles Lakers"},
             {"DESCRIPTION": "NBA Champion", "SEASON": "2019-20"},
             {"DESCRIPTION": "NBA Most Valuable Player", "SEASON": "2020-21"},
             {"DESCRIPTION": "NBA Most Valuable Player", "SEASON": "2021-22"},
             {"DESCRIPTION": "NBA Finals Most Valuable Player", "SEASON": "2021-22"},
         ]
         result = _player_honors(awards, True)
-        self.assertEqual(result["championships"], 1)
+        self.assertEqual(result["championships"], 2)
         self.assertEqual(result["mvps"], 2)
+        self.assertEqual(
+            result["championship_seasons"],
+            [
+                {
+                    "season": "2012-13",
+                    "team_id": 1610612748,
+                    "team_name": "Miami Heat",
+                    "tricode": "MIA",
+                },
+                {
+                    "season": "2019-20",
+                    "team_id": 1610612747,
+                    "team_name": "Los Angeles Lakers",
+                    "tricode": "LAL",
+                },
+            ],
+        )
         self.assertFalse(_player_honors([], False)["available"])
+
+    def test_nba_country_abbreviation_resolves_to_existing_flag(self):
+        self.assertIn("flagcdn.com/16x12/us.png", _flag_img("USA"))
 
     def test_team_timeline_groups_multiple_teams_in_a_season(self):
         api_rows = [
