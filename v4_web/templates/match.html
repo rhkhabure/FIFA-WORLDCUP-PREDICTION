@@ -113,10 +113,10 @@
                           fix-card-default
                       {% endif %}"
                style="min-width:110px;border:1.5px solid;text-decoration:none">
-                <div class="text-[9px] font-mono mb-0.5" style="color:var(--text-muted)">{{ f.kickoff_eat }}</div>
-                <div class="text-[11px] font-bold truncate">{{ f.home }}</div>
-                <div class="text-[9px]" style="color:var(--text-muted)">vs</div>
-                <div class="text-[11px] font-bold truncate">{{ f.away }}</div>
+                <div class="fix-card-meta text-[9px] font-mono mb-0.5">{{ f.kickoff_eat }}</div>
+                <div class="fix-card-team text-[11px] font-bold truncate">{{ f.home }}</div>
+                <div class="fix-card-meta text-[9px]">vs</div>
+                <div class="fix-card-team text-[11px] font-bold truncate">{{ f.away }}</div>
             </a>
             {% endfor %}
         </div>
@@ -638,14 +638,16 @@
     background: var(--league-primary) !important;
     border: 1px solid var(--league-vivid) !important;
 }
-.fixture-strip-label { color: var(--league-gold) !important; opacity: 0.8; }
+.fixture-strip-label { color: var(--league-gold) !important; opacity: 1; }
 
 /* Fixture cards inside strip — sit on the dark primary background */
 .fix-card-default {
     border: 1.5px solid rgba(255,255,255,0.2) !important;
     background: rgba(255,255,255,0.08) !important;
-    color: rgba(255,255,255,0.75) !important;
+    color: #fff !important;
 }
+.fix-card-meta { color: rgba(255,255,255,0.88) !important; }
+.fix-card-team { color: #fff !important; }
 .fix-card-default:hover {
     border-color: rgba(255,255,255,0.5) !important;
     background: rgba(255,255,255,0.15) !important;
