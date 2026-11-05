@@ -1,7 +1,35 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="space-y-3 max-w-screen-2xl mx-auto">
+<style>
+    body { background-color: #f3f5f9 !important; }
+    .team-profile-page { color: #1e293b; }
+    .team-profile-page [class~="bg-[#0f172a]"] {
+        background-color: #fff !important;
+        border-color: #dbe3ee !important;
+    }
+    .team-profile-page [class*="border-slate-800"] {
+        border-color: #dbe3ee !important;
+    }
+    .team-profile-page [class*="text-slate-"],
+    .team-profile-page [class~="text-white"] {
+        color: #334155 !important;
+    }
+    .team-profile-page [class*="hover:text-white"]:hover {
+        color: #1d4ed8 !important;
+    }
+    .team-profile-page [class~="text-xs"] { font-size: 0.875rem !important; }
+    .team-profile-page [class~="text-[10px]"],
+    .team-profile-page [class~="text-[9px]"] { font-size: 0.75rem !important; }
+    .team-profile-page .team-fixture-card {
+        background-color: #fff;
+        border-color: #dbe3ee;
+        color: #334155;
+    }
+    .team-profile-page .team-fixture-card:hover { background-color: #f8fafc; }
+    .team-profile-pitch { width: 100%; }
+</style>
+<div class="team-profile-page space-y-3 max-w-screen-2xl mx-auto">
 
     <!-- HEADER -->
     <div class="flex items-center justify-between">
@@ -56,15 +84,12 @@
             {% set is_home = (f.home == profile.name or
                               f.home in [profile.short_name, profile.tla]) %}
             <a href="/match?match_id={{ f.match_id }}{% if team_page_league is defined %}&league={{ team_page_league }}{% endif %}"
-               class="flex-none border rounded-lg px-3 py-1.5 text-center
-                      min-w-[115px] transition cursor-pointer
-                      border-slate-700 bg-slate-900/40 text-slate-300
-                      hover:border-cyan-700 hover:bg-cyan-950/20">
+               class="team-fixture-card flex-none border rounded-lg px-3 py-1.5 text-center
+                      min-w-[115px] transition cursor-pointer hover:border-cyan-700">
                 <div class="text-[9px] font-mono text-slate-500 mb-0.5">
                     {{ f.kickoff_eat }}
                 </div>
-                <div class="text-[10px] font-bold truncate"
-                     style="color:{{ team_colour }}">
+                <div class="text-[10px] font-bold truncate text-slate-700">
                     {{ f.home }}
                 </div>
                 <div class="text-[9px] text-slate-600">vs</div>
@@ -319,6 +344,11 @@
                 <div class="text-xs font-mono text-slate-400 uppercase tracking-widest mb-3">
                     Squad
                 </div>
+                {% if squad_is_fallback|default(false) %}
+                <p class="text-[10px] font-mono text-amber-700 mb-2">
+                    Fallback typical XI — not a verified current roster.
+                </p>
+                {% endif %}
                 {% for position in ["Goalkeeper", "Defender", "Midfielder", "Forward"] %}
                 {% if profile.squad[position] %}
                 <div class="mb-3">
@@ -465,8 +495,6 @@
     {% endif %}
 
 </div>
-
-<style>body { background-color: #0b0f19 !important; }</style>
 
 <script>
 document.getElementById('season-select').addEventListener('change', function() {

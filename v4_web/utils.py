@@ -130,6 +130,7 @@ TEAM_THEMES = {
     # ── Serie A ────────────────────────────────────────────────────────────────
     "Juventus"                 : {"primary": "#FFFFFF", "secondary": "#000000", "bg": "#111111"},
     "AC Milan"                 : {"primary": "#FB090B", "secondary": "#000000", "bg": "#1A0101"},
+    "Inter"                    : {"primary": "#010E80", "secondary": "#FFFFFF", "bg": "#010214"},
     "Inter Milan"              : {"primary": "#010E80", "secondary": "#FFFFFF", "bg": "#010214"},
     "Napoli"                   : {"primary": "#12A0C3", "secondary": "#FFFFFF", "bg": "#031620"},
 
@@ -198,6 +199,8 @@ _CREST_IDS: dict[str, int] = {
     "Real Madrid"             : 86,
     "Barcelona"               : 81,
     "Atletico Madrid"         : 78,
+    "Inter"                   : 108,
+    "Inter Milan"             : 108,
     "Bayern Munich"           : 5,
     "Borussia Dortmund"       : 4,
     "Paris Saint Germain"     : 524,
@@ -264,6 +267,8 @@ DEFAULT_FORMATIONS = {
     "Real Madrid"              : "4-3-3",
     "Barcelona"                : "4-3-3",
     "Atletico Madrid"          : "4-4-2",
+    "Inter"                    : "3-5-2",
+    "Inter Milan"              : "3-5-2",
     "Bayern Munich"            : "4-2-3-1",
     "Borussia Dortmund"        : "4-2-3-1",
     "Bayer Leverkusen"         : "3-4-2-1",
@@ -355,6 +360,12 @@ DEFAULT_SQUADS = {
     "Atletico Madrid": ["Oblak", "Molina", "Gimenez", "Witsel", "Reinildo",
                         "Koke", "De Paul", "Saul", "Llorente",
                         "Griezmann", "Morata"],
+    "Inter":          ["Sommer", "Pavard", "Acerbi", "Bastoni",
+                       "Dumfries", "Barella", "Calhanoglu", "Mkhitaryan",
+                       "Dimarco", "Thuram", "Lautaro Martinez"],
+    "Inter Milan":    ["Sommer", "Pavard", "Acerbi", "Bastoni",
+                       "Dumfries", "Barella", "Calhanoglu", "Mkhitaryan",
+                       "Dimarco", "Thuram", "Lautaro Martinez"],
     "Bayern Munich"  : ["Neuer", "Kimmich", "Upamecano", "De Ligt", "Davies",
                         "Goretzka", "Laimer",
                         "Muller", "Sane", "Kane", "Gnabry"],
@@ -373,6 +384,8 @@ def get_squad_for_team(team_name: str) -> list[str]:
         return DEFAULT_SQUADS[team_name]
     # Common API name -> short name mappings
     _SQUAD_ALIASES = {
+        "FC Internazionale Milano": "Inter",
+        "Inter Milan"             : "Inter",
         "West Ham United"        : "West Ham",
         "Leeds United"           : "Leeds",
         "Newcastle United"       : "Newcastle United",
@@ -393,6 +406,7 @@ def get_formation_for_team(team_name: str) -> str:
     if team_name in DEFAULT_FORMATIONS:
         return DEFAULT_FORMATIONS[team_name]
     _FORMATION_ALIASES = {
+        "Inter Milan": "Inter",
         "West Ham United"        : "West Ham",
         "Leeds United"           : "Leeds",
         "Tottenham Hotspur"      : "Tottenham",
@@ -422,12 +436,12 @@ def generate_pitch_svg_vertical(formation="4-3-3", team_color="#14b8a6",
         return [1] + [int(x) for x in fmt_str.split("-")]
 
     lines = parse_formation(formation)
-    W, H = 200, 320   # taller: fills centre column above last 5 widget
+    W, H = 300, 320   # wider viewBox gives player labels room across the pitch
 
     crest_url = get_crest_proxy_url(team_name)
 
     svg = (
-        f'<svg width="100%" style="max-width:480px;display:block;margin:0 auto;"'
+        f'<svg class="team-profile-pitch" width="100%" style="display:block;margin:0 auto;"'
         f' viewBox="0 0 {W} {H}" xmlns="http://www.w3.org/2000/svg">'
         '<defs>'
         f'<pattern id="grass-v" x="0" y="0" width="20" height="{H}"'
@@ -495,8 +509,6 @@ def generate_pitch_svg_vertical(formation="4-3-3", team_color="#14b8a6",
                 name = players[p_idx]
                 name_parts = name.split()
                 label = name_parts[-1] if name_parts else name
-                if len(label) > 6:
-                    label = label[:5] + "…"
                 player_query = (
                     f"name={quote(name, safe='')}"
                     f"&team={quote(team_name, safe='')}"
@@ -512,7 +524,7 @@ def generate_pitch_svg_vertical(formation="4-3-3", team_color="#14b8a6",
                     f' fill="{team_color}" stroke="white" stroke-width="1.5"/>'
                     f'<text x="{x:.1f}" y="{y + 13:.1f}" fill="white"'
                     f' font-family="\'JetBrains Mono\',monospace"'
-                    f' font-size="5px" text-anchor="middle"'
+                    f' font-size="6px" text-anchor="middle"'
                     f' style="text-shadow:0 0 3px rgba(0,0,0,0.9)">{escape(label)}</text>'
                     f'</a>'
                 )

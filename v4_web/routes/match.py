@@ -109,6 +109,52 @@ def league_ctx(league_key: str = "pl") -> dict:
     return LEAGUE_CONTEXTS.get(league_key, LEAGUE_CONTEXTS.get("pl", {}))
 
 
+def _find_open_vote_match_id(
+    predictions: list[dict],
+    match_id: str,
+    league: str,
+    home_team: str,
+    away_team: str,
+    now: datetime,
+) -> str | None:
+    """Find the stored prediction backing an upcoming fixture shown by a provider."""
+    requested_id = str(match_id)
+    id_aliases = {requested_id}
+    if league == "laliga":
+        if requested_id.startswith("bbs_"):
+            id_aliases.add(f"ll_{requested_id[4:]}")
+        elif requested_id.startswith("ll_"):
+            id_aliases.add(f"bbs_{requested_id[3:]}")
+
+    def team_key(name: str) -> str:
+        return TEAM_NAME_ALIASES.get(name, name).casefold()
+
+    expected_teams = (team_key(home_team), team_key(away_team))
+    for prediction in predictions:
+        if (
+            prediction.get("league", "pl") != league
+            or prediction.get("actual_result")
+        ):
+            continue
+        id_matches = str(prediction.get("match_id", "")) in id_aliases
+        teams_match = (
+            team_key(str(prediction.get("home_team", ""))),
+            team_key(str(prediction.get("away_team", ""))),
+        ) == expected_teams
+        if not id_matches and not teams_match:
+            continue
+        try:
+            kickoff = datetime.fromisoformat(
+                str(prediction.get("kickoff_utc", "")).replace("Z", "+00:00")
+            )
+            if kickoff.tzinfo is None or kickoff <= now:
+                continue
+        except (TypeError, ValueError):
+            continue
+        return str(prediction["match_id"])
+    return None
+
+
 def get_effective_gamma(gamma_calibrated: float, season_start_month: int = 8,
                         season_start_day: int = 21) -> float:
     """
@@ -517,7 +563,7 @@ async def match(request: Request):
                 except Exception as e:
                     print(f"[match] FotMob redirect error: {e}")
 
-        if active_ctx_key in ("bundesliga", "seriea"):
+        if active_ctx_key in ("laliga", "bundesliga", "seriea"):
             try:
                 today = datetime.now(EAT).date()
                 today_fixtures = get_fixtures_by_date_fd(
@@ -1370,7 +1416,7 @@ async def match(request: Request):
             fixtures = get_upcoming_fixtures(max_fixtures=10)
         except Exception:
             pass
-    elif active_ctx_key in ("laliga", "bundesliga"):
+    elif active_ctx_key in ("laliga", "bundesliga", "seriea"):
         # Dated fixtures include live games that no longer appear as scheduled.
         today = datetime.now(EAT).date()
         weekend_start = (
@@ -1561,30 +1607,19 @@ async def match(request: Request):
         fixtures = recent_results + fixtures
 
     vote_match_id = None
-    displayed_home = str(featured.get("home_name", "")).casefold()
-    displayed_away = str(featured.get("away_name", "")).casefold()
+    displayed_home = str(featured.get("home_name", ""))
+    displayed_away = str(featured.get("away_name", ""))
     if displayed_home and displayed_away and active_ctx_key in (
         "pl", "laliga", "bundesliga", "seriea"
     ):
-        now_utc = datetime.now(timezone.utc)
-        for prediction in stored_predictions:
-            if (
-                prediction.get("league", "pl") != active_ctx_key
-                or prediction.get("actual_result")
-                or str(prediction.get("home_team", "")).casefold() != displayed_home
-                or str(prediction.get("away_team", "")).casefold() != displayed_away
-            ):
-                continue
-            try:
-                kickoff = datetime.fromisoformat(
-                    str(prediction.get("kickoff_utc", "")).replace("Z", "+00:00")
-                )
-                if kickoff.tzinfo is None or kickoff <= now_utc:
-                    continue
-            except (TypeError, ValueError):
-                continue
-            vote_match_id = str(prediction["match_id"])
-            break
+        vote_match_id = _find_open_vote_match_id(
+            stored_predictions,
+            match_id,
+            active_ctx_key,
+            displayed_home,
+            displayed_away,
+            datetime.now(timezone.utc),
+        )
 
     ctx = {
         "request"          : request,

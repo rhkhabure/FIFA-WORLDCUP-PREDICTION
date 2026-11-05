@@ -511,6 +511,45 @@ def _set_current_league_roster(league_key: str, team_names: set[str]) -> None:
     LEAGUE_CONTEXTS[league_key]["team_nav_all"] = all_teams
 
 
+def _find_league_team_info(season_teams: list[dict], team_name: str) -> dict | None:
+    return next(
+        (
+            candidate for candidate in season_teams
+            if TEAM_NAME_ALIASES.get(candidate["name"], candidate["name"]) == team_name
+        ),
+        None,
+    )
+
+
+def _next_fixture_from_team_fixtures(
+    fixtures: list[dict], team_name: str
+) -> dict | None:
+    if not fixtures:
+        return None
+    fixture = fixtures[0]
+    home = fixture.get("home", "")
+    is_home = fixture.get(
+        "is_home",
+        TEAM_NAME_ALIASES.get(home, home) == team_name,
+    )
+    return {
+        "match_id": fixture.get("match_id"),
+        "date": fixture.get("kickoff_eat") or fixture.get("date", ""),
+        "opponent": fixture.get("away" if is_home else "home", ""),
+        "is_home": is_home,
+    }
+
+
+_TEAM_PROFILE_FALLBACKS = {
+    "Inter": {
+        "id": 108,
+        "venue": "San Siro",
+        "founded": 1908,
+        "colours": "Blue and black",
+    },
+}
+
+
 # ── DC pre-game ───────────────────────────────────────────────────────────────
 
 @app.get("/crest/{team_name}")
@@ -695,21 +734,34 @@ async def league_team_page(
     gamma = get_effective_gamma(
         league_data.get("meta", {}).get("gamma_home_advantage", 1.25)
     )
-    if league_key in ("seriea", "bundesliga"):
+    if league_key in ("laliga", "seriea", "bundesliga", "ligue1"):
         now = datetime.now(timezone.utc)
         season = season or (now.year if now.month >= 7 else now.year - 1)
         season_teams = get_competition_teams_fd(league_cfg["comp"], season)
-        team_info = next(
-            (
-                candidate for candidate in season_teams
-                if candidate["name"] == team_key
-                or TEAM_NAME_ALIASES.get(candidate["name"], candidate["name"]) == team_key
-            ),
-            None,
-        )
-        if team_info:
-            if not team_info.get("squad"):
-                details = get_team_details_fd(team_info["id"])
+        team_info = _find_league_team_info(season_teams, team_key)
+        if not team_info:
+            team_info = _find_league_team_info(
+                get_competition_teams_fd(league_cfg["comp"], season - 1),
+                team_key,
+            )
+        if not team_info:
+            fallback = _TEAM_PROFILE_FALLBACKS.get(team_key, {})
+            team_info = {
+                "id": fallback.get("id", _CREST_IDS.get(team_key)),
+                "name": team_key,
+                "short_name": "",
+                "tla": "",
+                "crest": "",
+                "venue": fallback.get("venue", ""),
+                "founded": fallback.get("founded"),
+                "colours": fallback.get("colours", ""),
+                "coach": "",
+                "squad": [],
+            }
+        team_id = team_info.get("id")
+        if team_info is not None:
+            if team_id and not team_info.get("squad"):
+                details = get_team_details_fd(team_id)
                 team_info.update({
                     key: value for key, value in details.items()
                     if value
@@ -721,7 +773,8 @@ async def league_team_page(
                 "Forward": [],
             }
             pitch_players = []
-            for player in team_info.get("squad", []):
+            provider_squad = team_info.get("squad", [])
+            for player in provider_squad:
                 raw_position = (player.get("position") or "").lower()
                 position = (
                     "Goalkeeper" if "goal" in raw_position
@@ -757,6 +810,40 @@ async def league_team_page(
                     "age": age,
                     "position": position,
                 })
+            if not provider_squad:
+                default_players = get_squad_for_team(team_key)
+                if default_players and not all(
+                    name == f"P{index + 1}"
+                    for index, name in enumerate(default_players)
+                ):
+                    formation_positions = [
+                        int(count) for count in (get_formation_for_team(team_key) or "")
+                        .split("-") if count.isdigit()
+                    ]
+                    position_groups = ["Goalkeeper"]
+                    position_groups.extend(
+                        ["Defender"] * (formation_positions[0] if formation_positions else 4)
+                    )
+                    position_groups.extend(
+                        ["Midfielder"] * (
+                            formation_positions[1] if len(formation_positions) > 1 else 4
+                        )
+                    )
+                    position_groups.extend(
+                        ["Forward"] * (
+                            sum(formation_positions[2:]) if len(formation_positions) > 2 else 2
+                        )
+                    )
+                    for index, player_name in enumerate(default_players):
+                        position = position_groups[min(index, len(position_groups) - 1)]
+                        squad_by_position[position].append({
+                            "id": None,
+                            "name": player_name,
+                            "nationality": "",
+                            "flag": "",
+                            "age": "",
+                            "position": position,
+                        })
             for position in ("Goalkeeper", "Defender", "Midfielder", "Forward"):
                 pitch_players.extend(
                     player["name"] for player in squad_by_position[position]
@@ -769,7 +856,7 @@ async def league_team_page(
                 players=pitch_players[:11],
                 team_name=team_key,
                 league=league_key,
-                team_id=team_info["id"],
+                team_id=team_id,
             )
             profile = {
                 **team_info,
@@ -777,10 +864,12 @@ async def league_team_page(
                 "squad": squad_by_position,
             }
             theme = get_theme_for_team(team_key)
-            matches = get_team_matches_fd(
-                team_info["id"], league_cfg["comp"], season
+            matches = (
+                get_team_matches_fd(team_id, league_cfg["comp"], season)
+                if team_id else []
             )
             last_5 = [match for match in matches if match["result"]][:5]
+            team_id = team_info.get("id") or team_id
             next_fixture = next(
                 (
                     match for match in reversed(matches)
@@ -797,9 +886,12 @@ async def league_team_page(
                 if match["status"] in ("SCHEDULED", "TIMED", "IN_PLAY", "PAUSED")
             ]
             fixtures.sort(key=lambda match: match["utc_date"])
+            next_fixture = next_fixture or _next_fixture_from_team_fixtures(
+                fixtures, team_key
+            )
             standings = get_competition_standings_fd(league_cfg["comp"], season)
             for row in standings:
-                row["is_current"] = row["team_id"] == team_info["id"]
+                row["is_current"] = row["team_id"] == team_id
                 row["team_href"] = (
                     f"/league-team?league={league_key}&team={quote(row['team_name'])}"
                 )
@@ -808,12 +900,15 @@ async def league_team_page(
                 "request": request,
                 **league_ctx(league_key),
                 "profile": profile,
-                "coach": profile.get("coach") or "Not available",
+                "coach": profile.get("coach") or TEAM_MANAGERS.get(
+                    team_key, "Not available"
+                ),
                 "team_colour": theme["primary"],
                 "crest_url": crest_url,
                 "formation": formation,
                 "pitch_svg": pitch_svg,
                 "pitch_player_count": min(len(pitch_players), 11),
+                "squad_is_fallback": not bool(provider_squad),
                 "dc_alpha": params["alpha"],
                 "dc_beta": params["beta"],
                 "xg_proj": round(params["alpha"] * mean_defence * gamma, 2),
@@ -822,7 +917,7 @@ async def league_team_page(
                 "last_5": last_5,
                 "next_fixture": next_fixture,
                 "standings": standings,
-                "team_id": team_info["id"],
+                "team_id": team_id,
                 "current_season": season,
                 "team_fixtures": fixtures[:5],
                 "league_key": league_key,
@@ -832,58 +927,12 @@ async def league_team_page(
                     league_data.get("meta", {}).get("trained_on_seasons", [])
                 ),
                 "team_page_league": league_key,
-                "match_data_available": True,
+                "match_data_available": bool(team_id),
                 "league_name": league_cfg["name"],
             }
             return templates.TemplateResponse(
                 request=request, name="team.html", context=ctx
             )
-        profile = {
-            "id": None,
-            "name": team_key,
-            "short_name": "",
-            "tla": "",
-            "crest": "",
-            "venue": "",
-            "founded": None,
-            "colours": "",
-            "squad": {},
-        }
-        return templates.TemplateResponse(
-            request=request,
-            name="team.html",
-            context={
-                "request": request,
-                **league_ctx(league_key),
-                "profile": profile,
-                "coach": "Not available",
-                "team_colour": get_theme_for_team(team_key)["primary"],
-                "crest_url": get_crest_proxy_url(team_key),
-                "formation": None,
-                "pitch_svg": None,
-                "dc_alpha": params["alpha"],
-                "dc_beta": params["beta"],
-                "xg_proj": round(params["alpha"] * mean_defence * gamma, 2),
-                "dc_estimated": team_estimated,
-                "all_results": [],
-                "last_5": [],
-                "next_fixture": None,
-                "standings": [],
-                "team_id": None,
-                "current_season": season,
-                "team_fixtures": [],
-                "league_key": league_key,
-                "season_options": [season, season - 1, season - 2],
-                "team_estimated": team_estimated,
-                "trained_seasons": ", ".join(
-                    league_data.get("meta", {}).get("trained_on_seasons", [])
-                ),
-                "team_page_league": league_key,
-                "match_data_available": False,
-                "league_name": league_cfg["name"],
-            },
-        )
-
     return templates.TemplateResponse(
         request=request,
         name="league_team.html",
@@ -1008,6 +1057,7 @@ async def team_profile(request: Request, team_id: int, season: int = 2025):
         )
 
     team_fixtures = [f for f in all_fixtures if _fixture_involves_team(f)][:5]
+    next_fixture = _next_fixture_from_team_fixtures(team_fixtures, team_name)
 
     # Season data — use fdco CSVs for historical, football-data.org for recent
     # football-data.org free tier: current + ~2 recent seasons
@@ -1025,7 +1075,7 @@ async def team_profile(request: Request, team_id: int, season: int = 2025):
         standings   = get_standings(season=season)
 
     last_5       = get_last_n_results(all_results, n=5)
-    next_fixture = get_next_fixture(all_results)
+    next_fixture = get_next_fixture(all_results) or next_fixture
 
     ctx = {
         "request"        : request,
