@@ -2,6 +2,7 @@
 {% block content %}
 <style>
 body { background: var(--league-tint) !important; }
+.football-player-page { max-width:1100px;margin:0 auto;display:flex;flex-direction:column; }
 .p-card {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -77,9 +78,50 @@ body { background: var(--league-tint) !important; }
     flex-shrink: 0;
     white-space: nowrap;
 }
+.season-stat-grid {
+    display:grid;
+    grid-template-columns:repeat(4,minmax(0,1fr));
+    gap:8px;
+}
+.season-stat-tile {
+    background:var(--league-tint);
+    border:1px solid var(--border);
+    border-radius:9px;
+    padding:11px 12px;
+}
+.season-stat-tile strong {
+    display:block;
+    color:var(--text-primary);
+    font:700 20px var(--font-mono);
+    margin-top:4px;
+}
+.season-table-wrap { overflow-x:auto; }
+.season-table { width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap; }
+.season-table th {
+    color:var(--text-muted);
+    font:700 10px var(--font-mono);
+    letter-spacing:.06em;
+    text-align:right;
+    text-transform:uppercase;
+    padding:8px;
+}
+.season-table th:first-child,.season-table td:first-child,
+.season-table th:nth-child(2),.season-table td:nth-child(2) { text-align:left; }
+.season-table td {
+    border-top:1px solid var(--border);
+    padding:9px 8px;
+    text-align:right;
+    color:var(--text-secondary);
+}
+.season-table tr.selected-season td { background:var(--league-tint);color:var(--text-primary); }
+.player-middle-row { display:grid;grid-template-columns:1fr 1fr;gap:0; }
+@media(max-width:620px) {
+    .season-stat-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .player-middle-row { grid-template-columns:1fr; }
+}
 </style>
 
-<div style="max-width:780px;margin:0 auto;display:flex;flex-direction:column;gap:0">
+<main class="football-player-page">
 
   <!-- ── HEADER CARD ────────────────────────────────────────────── -->
   <div class="p-card" style="border-radius:14px 14px 0 0;border-bottom:none;padding:20px">
@@ -185,8 +227,117 @@ body { background: var(--league-tint) !important; }
     </div>
   </div>
 
+  <!-- Historical, source-attributed player statistics -->
+  <section class="p-card" style="border-top:none;padding:17px 18px">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;
+                flex-wrap:wrap;margin-bottom:12px">
+      <div>
+        <div class="lbl" style="margin-bottom:3px">Historical season performance</div>
+        <div style="font-size:11px;color:var(--text-secondary)">
+          Understat season totals · not live match data
+        </div>
+      </div>
+      {% if player_stats.available %}
+      <form method="get" action="/player" style="display:flex;align-items:center;gap:7px">
+        <input type="hidden" name="name" value="{{ player_name }}">
+        <input type="hidden" name="team" value="{{ team_name }}">
+        <input type="hidden" name="league" value="{{ league }}">
+        <input type="hidden" name="team_id" value="{{ team_id }}">
+        <label for="stats-season" class="lbl" style="margin:0">Season</label>
+        <select id="stats-season" name="stats_season" onchange="this.form.submit()"
+                style="border:1px solid var(--border);border-radius:7px;background:var(--surface);
+                       color:var(--text-primary);padding:6px 9px;font:12px var(--font-mono)">
+          {% for row in player_stats.seasons %}
+          <option value="{{ row.selection_key }}"
+                  {% if row.selection_key == player_stats.selected_season %}selected{% endif %}>
+            {{ row.season_label }} · {{ row.league_name }}
+          </option>
+          {% endfor %}
+        </select>
+      </form>
+      {% endif %}
+    </div>
+
+    {% if player_stats.available %}
+    <div class="season-stat-grid">
+      {% for label, value in [
+        ("Appearances", player_stats.selected.appearances),
+        ("Goals", player_stats.selected.goals),
+        ("Assists", player_stats.selected.assists),
+        ("Minutes", player_stats.selected.minutes)
+      ] %}
+      <div class="season-stat-tile">
+        <div class="lbl" style="margin:0">{{ label }}</div>
+        <strong>{{ value if value is not none else "—" }}</strong>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(125px,1fr));
+                gap:8px;margin-top:9px">
+      {% for label, value in [
+        ("Expected goals", player_stats.selected.xg),
+        ("Expected assists", player_stats.selected.xa),
+        ("Shots", player_stats.selected.shots),
+        ("Key passes", player_stats.selected.key_passes),
+        ("xG / 90", player_stats.selected.xg_per90),
+        ("xA / 90", player_stats.selected.xa_per90)
+      ] %}
+      <div style="border:1px solid var(--border);border-radius:8px;padding:9px 10px">
+        <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;
+                    letter-spacing:.06em">{{ label }}</div>
+        <div style="font:600 14px var(--font-mono);color:var(--text-primary);margin-top:4px">
+          {{ "%.2f"|format(value) if value is not none else "—" }}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="season-table-wrap" style="margin-top:16px">
+      <table class="season-table">
+        <thead>
+          <tr>
+            <th>Season</th><th>Club</th><th>Apps</th><th>Min</th>
+            <th>G</th><th>A</th><th>xG</th><th>xA</th><th>Shots</th><th>Key passes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in player_stats.seasons %}
+          <tr {% if row.selection_key == player_stats.selected_season %}class="selected-season"{% endif %}>
+            <td>{{ row.season_label }}</td>
+            <td>{{ row.team }} <span style="color:var(--text-muted)">· {{ row.league_name }}</span></td>
+            <td>{{ row.appearances if row.appearances is not none else "—" }}</td>
+            <td>{{ row.minutes if row.minutes is not none else "—" }}</td>
+            <td>{{ row.goals if row.goals is not none else "—" }}</td>
+            <td>{{ row.assists if row.assists is not none else "—" }}</td>
+            <td>{{ "%.2f"|format(row.xg) if row.xg is not none else "—" }}</td>
+            <td>{{ "%.2f"|format(row.xa) if row.xa is not none else "—" }}</td>
+            <td>{{ row.shots if row.shots is not none else "—" }}</td>
+            <td>{{ row.key_passes if row.key_passes is not none else "—" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div style="font-size:10px;color:var(--text-muted);margin-top:10px;line-height:1.5">
+      Source: Understat via SoccerData. Historical league-season aggregates; coverage and
+      available metrics vary by league and season. No player values are estimated.
+    </div>
+    {% else %}
+    <div style="border:1px dashed var(--border);border-radius:9px;padding:14px;
+                color:var(--text-secondary);font-size:12px;line-height:1.5">
+      {% if not player_stats.archive_available %}
+      Historical player statistics have not been imported on this installation yet.
+      {% else %}
+      No matching historical season record is loaded for this player in the supported leagues.
+      New signings and players outside the archive remain blank until a source record is available.
+      {% endif %}
+    </div>
+    {% endif %}
+  </section>
+
   <!-- ── MIDDLE ROW: ratings + next match ──────────────────────── -->
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:0">
+  <div class="player-middle-row">
 
     <!-- Team DC ratings -->
     <div class="p-card" style="border-radius:0;border-right:none;border-top:none;
@@ -362,5 +513,5 @@ body { background: var(--league-tint) !important; }
 
   </div>
 
-</div>
+</main>
 {% endblock %}

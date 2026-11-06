@@ -11,3 +11,4 @@ v4_web/nba/csv/player_boxscores.csv
 v4_web/nba/csv/team_boxscores.csv
 v4_web/nba/sql/nba_stats.sqlite
 v4_web/nba/sql/nba_stats_pbp.sqlite
+v4_web/football/sql/football_player_stats.sqlite

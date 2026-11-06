@@ -46,6 +46,7 @@ python -m uvicorn main:app --reload
 FIFA-WORLDCUP-PREDICTION/
 ├── v4_backend/
 │   ├── historical_scraper.py        # Scrapes 4 seasons of xG from Understat → SQLite
+│   ├── import_player_stats.py       # Imports historical Understat player-season stats
 │   ├── dixon_coles_xg.py            # DC MLE optimiser (SLSQP, draw correction)
 │   ├── feature_builder.py           # DC strength lookup + TEAM_NAME_ALIASES
 │   ├── likelihood_adjustment.py     # Lineup delta → adjusted λ/μ
@@ -193,6 +194,7 @@ NBA support was built as a separate basketball experience rather than adapting f
 | Big Balls Sports | La Liga live scores, fixtures | `BBS_API_KEY` in `.env` |
 | FotMob via parse.bot | Lineups, live xG | `PARSE_BOT_KEY` in `.env` |
 | TheSportsDB | Player photos, career history | None (key `3`, free) |
+| Understat via SoccerData | Historical player-season aggregates for the football profile | Local import; see [`v4_web/football/sql/README.md`](v4_web/football/sql/README.md) |
 | NBA stats/live feeds (`nba_api`) | Current NBA scoreboard, live game state, rosters and player profiles | No application key; provider availability/rate limits apply |
 | ESPN public NBA endpoints | Confirmed starter fallback when NBA live lineup data is unavailable | No application key; only returns lineups after publication |
 | Local NBA SQLite datasets | Historical regular-season box scores, game history and play-by-play shot analysis | Local files; see [`v4_web/nba/sql/README.md`](v4_web/nba/sql/README.md) |

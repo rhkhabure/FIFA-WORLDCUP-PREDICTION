@@ -121,6 +121,7 @@ from routes.match import router as match_router, setup as match_setup, dc_pregam
 from routes.nba import router as nba_router, nba_setup
 from nba_model import nba_model
 from constants import EAT, DRAW_PROPENSITY, LEAGUE_FILTERS, LEAGUE_MAP, MATCH_LEAGUES
+from football_player_stats import get_player_season_stats
 
 _PROJECT_IMPORTS_READY = time.perf_counter()
 
@@ -1174,6 +1175,7 @@ async def player_page(request: Request):
     name    = request.query_params.get("name", "").strip()
     team    = request.query_params.get("team", "").strip()
     league  = request.query_params.get("league", "pl").lower()
+    selected_stats_season = request.query_params.get("stats_season") or None
     if league not in LEAGUE_CONTEXTS or league not in MATCH_LEAGUES:
         league = "pl"
 
@@ -1270,18 +1272,26 @@ async def player_page(request: Request):
         kit = {"fill": "#14b8a6", "stroke": "#fff", "abbr": team[:3].upper() if team else "---"}
 
     league_display = MATCH_LEAGUES[league]["name"]
+    stats_player_name = tsdb_player["name"] if tsdb_player else name
+    player_stats = get_player_season_stats(
+        stats_player_name,
+        league,
+        current_team=team,
+        selected_season=selected_stats_season,
+    )
 
     return templates.TemplateResponse(
         request=request, name="player.html",
         context={
             "request"       : request,
-            "player_name"   : tsdb_player["name"] if tsdb_player else name,
+            "player_name"   : stats_player_name,
             "team_name"     : team,
             "team_id"       : team_id,
             "league"        : league,
             "league_display": league_display,
             "tsdb"          : tsdb_player,
             "career"        : career,
+            "player_stats"  : player_stats,
             "alpha"         : round(alpha, 3) if alpha else None,
             "beta"          : round(beta,  3) if beta  else None,
             "gamma"         : round(gamma, 3),
