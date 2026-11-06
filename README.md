@@ -6,10 +6,15 @@
 
 ## What it does
 
-The football system predicts match outcomes using two complementary models:
+The football system predicts match outcomes using two different models:
 
-- **Pre-game:** Dixon-Coles bivariate Poisson, calibrated on 4 seasons of xG data across 125 teams and 5 leagues. Outputs home / draw / away probabilities with a scoreline probability matrix.
-- **Live (in-game):** A PyTorch neural network (11→40→20→3) that takes over once the match has started, adjusting odds dynamically using the current score, minute, and xG state.
+- **Pre-game:** Dixon–Coles scoreline probabilities from fitted xG-based team priors. A separate bounded attack/concession factor can adapt to settled results, but only when per-league walk-forward checks improve both Brier score and log-loss.
+- **Live (in-game):** An 11→40→20→3 PyTorch classifier using score, minute, and normalized team-strength features. It does **not** consume xG; its role is live state prediction, not pre-match forecasting.
+
+See [`FOOTBALL_MODEL.md`](FOOTBALL_MODEL.md) for the equations, exact inputs,
+training and validation procedure, current adaptive-rating status and known
+limitations. The application-level reference is
+[`DOCUMENTATION.md`](DOCUMENTATION.md).
 
 The NBA dashboard has a separate NBA win-probability model and basketball-specific pages. Historical NBA statistics are queried from local SQLite files; current schedules, rosters, player information, and live game state come from the NBA data feeds.
 
@@ -45,13 +50,19 @@ python -m uvicorn main:app --reload
 ```
 FIFA-WORLDCUP-PREDICTION/
 ├── v4_backend/
+│   ├── v4_priors.json               # Fitted DC priors by league and team
 │   ├── historical_scraper.py        # Scrapes 4 seasons of xG from Understat → SQLite
+│   ├── build_v4_dataset.py          # Builds live-model snapshots from match history
 │   ├── import_player_stats.py       # Imports historical Understat player-season stats
 │   ├── dixon_coles_xg.py            # DC MLE optimiser (SLSQP, draw correction)
 │   ├── feature_builder.py           # DC strength lookup + TEAM_NAME_ALIASES
 │   ├── likelihood_adjustment.py     # Lineup delta → adjusted λ/μ
 │   └── notebooks/
-│       └── train_v4_priors.ipynb    # Runs the optimiser → outputs v4_priors.json
+│       ├── train_v4_priors.ipynb    # Fits static DC priors
+│       ├── train_v4_neural.ipynb    # Trains the live classifier
+│       └── v4_backend/models/
+│           ├── football_v4.pth      # Live neural-network checkpoint
+│           └── scaler_v4.pkl        # Training-fitted feature scaler
 │
 ├── v4_web/                          # The running application
 │   ├── nba/                         # NBA model artifacts and historical datasets
@@ -69,6 +80,7 @@ FIFA-WORLDCUP-PREDICTION/
 │   ├── fpl.py                       # FPL API client (PL fixtures, team map)
 │   ├── thesportsdb.py               # TheSportsDB client (player photos, career)
 │   ├── predictions.py               # SQLite predictions DB (log + retrieve)
+│   ├── model_updates.py             # Walk-forward evaluation and bounded team factors
 │   ├── prediction_job.py            # Background job — logs predictions + results
 │   ├── nba_api_client.py            # NBA schedules, live scores, rosters and player data
 │   ├── nba_model.py                 # NBA win-probability model and Elo ratings
@@ -81,7 +93,6 @@ FIFA-WORLDCUP-PREDICTION/
 │   ├── utils.py                     # Pitch SVG, kit definitions, crest proxy
 │   ├── teamdata.py                  # PL team profiles
 │   ├── laliga_teamdata.py           # La Liga team metadata
-│   ├── feature_builder.py           # (symlink to v4_backend equivalent)
 │   ├── templates/                   # Jinja2 HTML templates
 │   │   ├── base.html                # Sidebar, nav, dark theme
 │   │   ├── index.html               # Hub page
@@ -96,18 +107,16 @@ FIFA-WORLDCUP-PREDICTION/
 │   │   ├── team.html                # Team profile page
 │   │   ├── teams.html               # PL team map
 │   │   └── teams_laliga.html        # La Liga team map
-│   └── scripts/                     # Build/train/validate scripts (not part of app)
-│       ├── build_phase1-4.py        # DC training pipeline phases
-│       ├── validate_*.py            # Model validation scripts
+│   └── scripts/                     # Utility scripts (not part of app)
+│       ├── weekend_odds.py          # Weekend fixture/odds utility
 │       └── backfill_history.py      # One-time predictions DB backfill
 │
-├── v4_priors.json                   # Trained DC priors — 125 teams, 5 leagues
-├── football_v4.pth                  # Neural net weights
 ├── v4_historical_data.sqlite        # 4 seasons xG data — training set
 ├── .env                             # API keys (not committed)
 ├── README.md                        # This file
 ├── USER_MANUAL.md                   # Step-by-step setup and usage guide
-└── DOCUMENTATION.md                 # Full technical reference
+├── DOCUMENTATION.md                 # Application and integration reference
+└── FOOTBALL_MODEL.md                # Detailed equations, training, status and limitations
 ```
 
 ---
@@ -201,14 +210,14 @@ NBA support was built as a separate basketball experience rather than adapting f
 
 ---
 
-## Model performance (2025/26 season, through GW5)
+## Football model performance and status
 
-| League | Correct | Total | Accuracy | Baseline |
-|--------|---------|-------|----------|---------|
-| La Liga | 2 | 3 | 66.7% | 43% |
-| Premier League | 1 | 5 | 20.0% | 43% |
-
-*Small sample — meaningful evaluation expected after GW10.*
+Recorded validation shows why the system uses Dixon–Coles before kickoff and
+the neural network for live score/time updates. The current per-league
+result-driven rating layer is selectively promoted only after a minimum-sample
+and proper-scoring-rule gate. Detailed validation numbers and the dated local
+status are maintained in [`FOOTBALL_MODEL.md`](FOOTBALL_MODEL.md); those
+short-window figures are not a guarantee of future performance.
 
 ---
 

@@ -24,113 +24,40 @@ Full technical documentation for the Melios Dira Odds V4.2 football prediction s
 
 The system has two layers:
 
-**Mathematical engine** — a two-component prediction model:
-- Dixon-Coles (DC) bivariate Poisson for pre-game probability estimation
-- PyTorch neural network for live in-game probability updating
+**Mathematical engine** — Dixon–Coles (DC) for pre-match probabilities and an
+11→40→20→3 PyTorch classifier for live match-state probabilities. A separate,
+result-driven team-rating layer can adjust DC expected goals when its
+walk-forward evaluation passes per-league scoring-rule gates. It does not
+retrain the neural network.
 
 **Dashboard** — a FastAPI server serving Jinja2 HTML templates. All predictions, pitch rendering, and match data are computed server-side and injected into templates. No client-side JavaScript frameworks; SVG graphics are generated in Python and served as inline strings.
 
-The two components complement each other: DC is statistically rigorous and interpretable, the neural net is fast and responsive to live match state. Neither is used outside its intended context.
+The models have distinct jobs: DC is used before kickoff; the neural network is
+used after the match starts. The neural net performed worse than DC in the
+recorded pre-game holdout, so its strong internal live-snapshot score is not
+used to justify pre-match predictions. See [`FOOTBALL_MODEL.md`](FOOTBALL_MODEL.md)
+for the full equations, feature definitions, training procedure and current
+adaptive-rating status.
 
 ---
 
 ## 2. Mathematical models
 
-### 2.1 Dixon-Coles bivariate Poisson (pre-game)
+The current football prediction system is documented in detail in
+[`FOOTBALL_MODEL.md`](FOOTBALL_MODEL.md). In summary:
 
-**Purpose:** Compute home / draw / away probabilities before kickoff.
+- **Pre-match:** fitted Dixon–Coles team attack/defence priors generate expected
+  goal rates and a 1X2 scoreline distribution; a bounded history-driven
+  attack/concession factor is applied only for leagues where walk-forward
+  validation accepts it.
+- **Live:** the 11-feature neural classifier consumes score, minute and
+  normalized DC-strength features. It does not consume xG. Stored validation
+  indicates that it belongs in the live role, not the pre-match role.
+- **Optional lineup panel:** manually assigned key-player weights adjust
+  expected goals when confirmed lineups are available; this remains a
+  heuristic, separate from both trained models.
 
-**Inputs:** Team attack (α) and defence (β) ratings from `v4_priors.json`, plus the league home advantage parameter (γ).
-
-**How it works:**
-
-Each team's expected goals are modelled as:
-
-```
-λ (home expected goals) = α_home × β_away × γ
-μ (away expected goals) = α_away × β_home
-```
-
-The probability of each scoreline (h goals, a goals) follows a bivariate Poisson distribution:
-
-```
-P(h, a) = Poisson(h | λ) × Poisson(a | μ)
-```
-
-With a low-score correction (Dixon-Coles ρ parameter) applied to the 0-0, 1-0, 0-1, 1-1 cells to correct for the observed over-frequency of low-scoring draws:
-
-```
-P(0,0) *= max(1 - λ×μ×ρ, 1e-5)
-P(1,0) *= max(1 + μ×ρ,   1e-5)
-P(0,1) *= max(1 + λ×ρ,   1e-5)
-P(1,1) *= max(1 - ρ,     1e-5)
-```
-
-ρ is set globally to `DRAW_PROPENSITY = 0.10`, tuned via elbow test on holdout data.
-
-Home, draw, and away probabilities are then the sums of the lower triangle, diagonal, and upper triangle of the 9×9 scoreline matrix respectively.
-
-**Prior estimation:** α and β values are estimated by maximum likelihood estimation (MLE) using SciPy's SLSQP optimiser, trained on 4 seasons of xG data (from Understat via `soccerdata`). A time-decay factor weights more recent matches more heavily. A sum-to-1 constraint on attack ratings is enforced to ensure identifiability.
-
-**Coverage:** 5 leagues × ~25 teams each = 125 teams total.
-
-| League | Teams | γ (home advantage) |
-|--------|-------|-------------------|
-| ENG-Premier League | 26 | 1.204 |
-| ESP-La Liga | 25 | 1.341 |
-| GER-Bundesliga | 24 | 1.261 |
-| ITA-Serie A | 26 | 1.177 |
-| FRA-Ligue 1 | 24 | 1.223 |
-
----
-
-### 2.2 Lineup adjustment
-
-**Purpose:** Adjust DC odds when key players are confirmed absent from the starting XI.
-
-**How it works:**
-
-For each confirmed absent player, their contribution to team strength is estimated from the DC lookup table (`feature_builder.py` / `DCStrengthLookup`). The adjustment is applied as a fractional reduction to λ or μ before the scoreline matrix is computed:
-
-```
-adj_λ = λ × (1 - Σ Δ_attack_i × λ_a)
-adj_μ = μ × (1 - Σ Δ_defence_i × λ_d)
-```
-
-Where `λ_a` and `λ_d` are hyperparameters controlling the dampening (set conservatively to avoid overcorrecting on single-player absences). Implementation in `lineup_adjustment.py` and `compute_lineup_adjusted_odds()`.
-
----
-
-### 2.3 Neural network (live in-game)
-
-**Purpose:** Update win/draw/lose probabilities dynamically during a live match.
-
-**Architecture:** 11→40→20→3 feed-forward network with ReLU activations and softmax output.
-
-**Input features (11):**
-1. Home goals scored
-2. Away goals scored
-3. Goal difference (home - away)
-4. Match minute (normalised 0–1)
-5. Remaining time fraction
-6. Home xG
-7. Away xG
-8. xG difference
-9. Home xG per minute
-10. Away xG per minute
-11. Game state indicator (winning / drawing / losing from home perspective)
-
-**Output:** 3 probabilities (home win, draw, away win) that sum to 1.
-
-**Training:** ~140,000 match snapshots from the 2024/25 season. Trained with cross-entropy loss, Adam optimiser. Internal accuracy ~71.3%.
-
-**Key design decision:** The neural net is deliberately restricted to **score and time features only** — no team identity, no DC ratings, no pre-match information. This makes it season-agnostic and avoids the structural overfitting that plagued earlier versions (where non-score features encoded season-specific patterns, causing a ~22-point internal/holdout gap).
-
-**Transition:** At kickoff, DC probabilities are displayed. Once the match starts (minute > 0), the neural net takes over and updates every 30 seconds via the `/live/{match_id}` polling endpoint. The DC odds remain visible as the pre-game baseline for comparison.
-
----
-
-### 2.4 Monte Carlo simulation
+### 2.1 Monte Carlo simulation
 
 **Purpose:** Simulate tournament outcomes and season finishes probabilistically.
 
@@ -164,41 +91,58 @@ league, season, date, home_team, away_team,
 home_goals, away_goals, home_xg, away_xg
 ```
 
-**Coverage:** 4 seasons (2021/22–2024/25) across all Big 5 leagues. ~7,156 matches total.
+**Coverage:** 4 seasons (2021/22–2024/25) across all Big 5 leagues; the local
+training ledger and feature set contain approximately 7,156 matches.
 
 ### 3.2 Prior training
 
-**Script:** `v4_backend/notebooks/train_v4_priors.ipynb`
+**Script:** `v4_backend/notebooks/train_v4_priors.ipynb`, using
+`v4_backend/dixon_coles_xg.py`.
 
 **Method:**
 1. Load `matches_xg` from SQLite
-2. Apply exponential time-decay: `weight = exp(-decay_rate × days_ago)`
-3. Run SLSQP MLE optimiser per league to find α, β, γ, ρ
-4. Enforce Σ α = N (sum-to-1 normalisation)
+2. Set home advantage to total home xG / total away xG and apply match weight
+   `exp(-0.0018 × days_ago)`.
+3. Run SLSQP per league to fit α, β and ρ.
+4. Enforce mean(α) = 1 and bounds on α, β and ρ.
 5. Save to `v4_priors.json`
+
+The objective combines continuous xG Poisson log-likelihood terms with a
+Dixon–Coles low-score correction based on actual integer scores. Full
+equations, constraints, fallback behavior and the runtime probability
+calculation are in [`FOOTBALL_MODEL.md`](FOOTBALL_MODEL.md).
 
 **Output format:**
 ```json
 {
   "ENG-Premier League": {
-    "meta": { "gamma_home_advantage": 1.204, "rho_draw_correction": 0.10 },
+    "meta": { "gamma_home_advantage": 1.236, "rho_draw_correction": -0.003 },
     "teams": {
-      "Arsenal": { "alpha": 1.326, "beta": 0.886 },
+      "Arsenal": { "alpha": 1.327, "beta": 0.873 },
       ...
     }
   }
 }
 ```
 
+The figures shown are the rounded current Premier League entries. The fitted
+\(\rho\) is not the separate `DRAW_PROPENSITY` 1X2 adjustment.
+
 ### 3.3 Neural net training
 
-**Script:** `v4_web/scripts/build_train_v4.py`
+**Dataset builder:** `v4_backend/build_v4_dataset.py`
 
-**Method:**
-1. Load finished PL matches from fd.org for 2024/25
-2. Compute match snapshots at each minute using cumulative goals and xG
-3. Train 11→40→20→3 network on 80/20 train/val split
-4. Save best checkpoint to `football_v4.pth`
+**Training notebook:** `v4_backend/notebooks/train_v4_neural.ipynb`
+
+The builder creates 5-minute snapshots from completed league scores. Since the
+historical ledger has no goal times, it approximates events at minutes 44 and
+75. The recorded parquet contains 140,620 snapshots from 7,156 matches across
+five leagues and seasons 2021/22–2024/25. The notebook splits by `match_id`
+(60/20/20), scales features using training rows only, trains the 11→40→20→3
+network with weighted cross-entropy, selects a validation temperature, and
+saves `football_v4.pth` plus `scaler_v4.pkl`. It does not train from live xG.
+See [`FOOTBALL_MODEL.md`](FOOTBALL_MODEL.md) for all parameters and recorded
+validation results.
 
 ### 3.4 Live data flow (runtime)
 
@@ -214,12 +158,12 @@ Big Balls Sports (BBS_API_KEY)
   → Prediction job: log upcoming La Liga matches + results
 
 football-data.org (FOOTBALLDATA_ORG_KEY)
-  → Finished PL match scores (season=2026)
-  → Prediction job: fill in PL results
+  → Supported competition fixtures and finished scores (PL, Serie A, Bundesliga)
+  → Prediction job: log pre-match estimates and settle results
 
 FotMob via parse.bot (PARSE_BOT_KEY)
   → Confirmed lineups (home/away starting XI + formation)
-  → Live scores during match (xG, scoreline, status)
+  → Live scores during match (xG, scoreline, status; xG is not a neural-net input)
   → Note: credit-based, gets exhausted during development
 
 TheSportsDB (key "3", free)
@@ -350,12 +294,12 @@ TheSportsDB (key "3", free)
 
 ```
 v4_web/
-├── main.py              # FastAPI app, lifespan startup, all routes except /match
+├── main.py              # FastAPI app, lifespan startup and routes
 ├── constants.py         # Shared constants: EAT, DRAW_PROPENSITY, LEAGUE_FILTERS, LEAGUE_MAP
 ├── routes/
-│   ├── __init__.py      # Empty — makes routes/ a Python package
 │   └── match.py         # /match, /live/{id}, /api/simulate/* (APIRouter)
 ├── [data clients]       # bbs.py, footballdata.py, fotmob.py, fpl.py, thesportsdb.py
+├── model_updates.py     # Walk-forward football factors and NBA Elo evaluation
 ├── [model modules]      # lineup_adjustment.py, simulate.py, feature_builder.py
 ├── [render modules]     # scoreline_matrix.py, timeline.py, utils.py
 ├── [persistence]        # predictions.py, prediction_job.py
@@ -364,16 +308,18 @@ v4_web/
 
 ### 5.2 Startup sequence (`lifespan` in `main.py`)
 
-1. Load `football_v4.pth` into a `torch.nn.Module` (`FootballNet`)
+1. Import-time bootstrap loads `football_v4.pth` into `FootballWinProbNet`
 2. Load scaler and temperature `nn_T` from pickle
 3. Load `v4_priors.json` into `priors_db` dict
 4. Build `dc_lookup` (DCStrengthLookup from feature_builder)
 5. Initialise Jinja2 `templates` object
 6. Build `LEAGUE_CONTEXTS` dict (theme colours, league name, gamma per league)
-7. Call `match_setup(...)` — passes all globals into `routes/match.py` as module-level refs
-8. Warm FPL cache (bootstrap + fixtures)
-9. Schedule background prediction job (every 30 minutes)
-10. Yield (server is live)
+7. Initialize the prediction database; evaluate/restore result-driven football
+   factors from settled results. This does not train the neural network.
+8. Call `match_setup(...)` — passes model globals into `routes/match.py`
+9. Warm FPL cache (bootstrap + fixtures)
+10. Schedule the prediction job (startup and every 30 minutes)
+11. Yield (server is live)
 
 ### 5.3 Match route globals
 
@@ -402,17 +348,20 @@ def setup(p_db, model, ...):
 `prediction_job.py` runs as an `asyncio` background task, triggered every 30 minutes by an `asyncio.create_task` in `main.py`'s lifespan.
 
 **Each cycle:**
-1. Fetch upcoming PL fixtures (FPL) → log new predictions to SQLite
-2. Fetch upcoming La Liga fixtures (BBS) → log new predictions to SQLite
-3. Check unresolved past predictions (kickoff > 2 hours ago) → fill in actual scores from fd.org (PL) or BBS (La Liga)
-4. Save match snapshots (pre-game odds, lineup, colours) for the history page
+1. Fetch upcoming PL fixtures (FPL), La Liga (BBS), and Serie A/Bundesliga
+   (football-data.org) → log new DC predictions to SQLite.
+2. Where available, fetch confirmed lineups and save a separate heuristic
+   lineup-adjusted snapshot. Serie A lineup adjustments are disabled.
+3. Check unresolved past predictions (kickoff > 2 hours ago) → fill in final
+   scores from football-data.org or BBS, depending on competition.
+4. Save match snapshots (score, status, colours) for the match/history pages.
 
 **Result resolution flow:**
 ```
 Prediction DB (unresolved, kickoff > 2hr ago)
-  PL matches  → find_finished_match_by_teams() → fd.org cache (season=2026)
-  La Liga     → bbs.get_match_detail(uuid) → BBS API
-  → log_result(match_id, result, h_score, a_score)
+  PL / Serie A / Bundesliga → find_finished_match_by_teams() → fd.org competition cache
+  La Liga                   → bbs.get_match_detail(uuid) → BBS API
+  → log_result(match_id, result, home_goals, away_goals)
 ```
 
 ---
@@ -483,24 +432,35 @@ GET /match?league=laliga&match_id=bbs_abc123
 
 | Column | Type | Description |
 |--------|------|-------------|
-| `match_id` | TEXT PK | fd.org fixture ID (PL) or `bbs_{uuid}` (La Liga) |
+| `match_id` | TEXT PK | Provider fixture ID; La Liga history IDs use an `ll_` prefix |
 | `league` | TEXT | `"pl"` or `"laliga"` |
+| `season` | INT | Season start year used for evaluation grouping |
 | `home_team` | TEXT | Home team name |
 | `away_team` | TEXT | Away team name |
 | `kickoff_utc` | TEXT | ISO 8601 UTC kickoff time |
 | `pre_dc_home` | REAL | DC home win probability (%) |
 | `pre_dc_draw` | REAL | DC draw probability (%) |
 | `pre_dc_away` | REAL | DC away win probability (%) |
-| `pre_adj_home` | REAL | Lineup-adjusted home probability (%) |
-| `pre_adj_draw` | REAL | Lineup-adjusted draw probability (%) |
-| `pre_adj_away` | REAL | Lineup-adjusted away probability (%) |
+| `pre_dc_lam` | REAL | Pre-match home expected goals |
+| `pre_dc_mu` | REAL | Pre-match away expected goals |
+| `pre_rating_lam_factor` | REAL | Result-driven multiplier applied to home expected goals |
+| `pre_rating_mu_factor` | REAL | Result-driven multiplier applied to away expected goals |
+| `rating_version` | TEXT | Whether the logged estimate used static or accepted rating factors |
+| `adj_home` / `adj_draw` / `adj_away` | REAL | Optional confirmed-lineup probabilities (%) |
+| `adj_lam` / `adj_mu` | REAL | Optional lineup-adjusted expected goals |
 | `absent_home` | TEXT | JSON list of absent home players |
 | `absent_away` | TEXT | JSON list of absent away players |
 | `actual_result` | TEXT | `"H"`, `"D"`, or `"A"` (filled post-match) |
-| `actual_h_score` | INT | Final home goals |
-| `actual_a_score` | INT | Final away goals |
+| `actual_hg` | INT | Final home goals |
+| `actual_ag` | INT | Final away goals |
 | `pre_logged_at` | TEXT | Timestamp when prediction was logged |
 | `result_logged_at` | TEXT | Timestamp when result was filled in |
+
+The same database contains `football_rating_state` (accepted factor snapshots
+keyed by league, season and priors hash) and `model_update_evaluations`
+(sample size, baseline/candidate Brier and log-loss, candidate accuracy,
+acceptance flag and parameter values). See [`FOOTBALL_MODEL.md`](FOOTBALL_MODEL.md)
+for the formulas and the dated local evaluation.
 
 ---
 
@@ -510,7 +470,7 @@ GET /match?league=laliga&match_id=bbs_abc123
 
 ```python
 EAT = timezone(timedelta(hours=3))   # East Africa Time (Nairobi)
-DRAW_PROPENSITY = 0.10               # DC ρ parameter (tuned via elbow test)
+DRAW_PROPENSITY = 0.10               # additional 1X2 draw-propensity adjustment
 
 LEAGUE_FILTERS = {                    # FotMob date cache name matching
     "pl":         ["premier league", "england", "eng"],
@@ -531,10 +491,10 @@ LEAGUE_MAP = {                        # URL param → metadata
 
 ```python
 priors_db         # dict — full v4_priors.json contents
-nn_model          # FootballNet — loaded from football_v4.pth
+nn_model          # FootballWinProbNet — loaded from football_v4.pth
 nn_scaler         # sklearn StandardScaler — loaded from pickle
 nn_T              # float — temperature scaling factor
-dc_lookup         # DCStrengthLookup — for lineup adjustment
+dc_lookup         # DCStrengthLookup — normalized neural features and strength data
 templates         # Jinja2 Templates instance
 TEAM_NAME_ALIASES # dict — maps variant names to canonical names
 LEAGUE_CONTEXTS   # dict — per-league theme (colours, name, gamma)
@@ -542,29 +502,22 @@ LEAGUE_CONTEXTS   # dict — per-league theme (colours, name, gamma)
 
 ---
 
-## 9. Model performance
+## 9. Model performance and current status
 
-### 9.1 Pre-season validation (2024/25 holdout)
+The stored 2526 holdout report found 49.8% accuracy and 19.3% draw recall for
+pre-match Dixon–Coles, compared with 49.3% accuracy and 7.0% draw recall for
+the neural network evaluated at minute 0. The neural network's 71.3% accuracy
+is from a grouped internal test of in-match snapshots, not a pre-match forecast
+or a set of independent matches. Its production role is live match-state
+prediction. These are historical validation figures; see
+[`FOOTBALL_MODEL.md`](FOOTBALL_MODEL.md) for training/test definitions, proper
+scoring metrics, limitations and the latest local adaptive-rating snapshot.
 
-Dixon-Coles pre-game:
-- Overall accuracy: ~49.8% (baseline for correct-outcome prediction ~43%)
-- Draw recall: 19.3% (historically difficult — most models predict 0%)
-- Accuracy improves at higher confidence bands (>60% confidence → ~58% accuracy)
-
-Neural net (live in-game, 2024/25 training set):
-- Internal accuracy: ~71.3% (on held-out snapshots from the training season)
-- Note: this is in-game accuracy — given a match snapshot (score + time), predict final outcome
-
-### 9.2 Live 2025/26 season (through GW5)
-
-| League | DC Correct | Total | Accuracy | Baseline |
-|--------|-----------|-------|----------|---------|
-| La Liga | 2 | 3 | 66.7% | 43% |
-| Premier League | 1 | 5 | 20.0% | 43% |
-
-*8 games is too small a sample for conclusions. Evaluating at GW10 (October 2026).*
-
-**Known issue:** PL draw recall is 0/3 — the model predicted H or A for all three actual draws in GW1–5. This matches the pre-season validation pattern and suggests `DRAW_PROPENSITY` may need upward adjustment for PL specifically.
+The local result-driven update snapshot dated 2026-11-03 shows Serie A
+accepted, Premier League and La Liga rejected because both proper scoring
+metrics worsened, and Bundesliga below the 30-settled-game minimum. These
+short-window outcomes can change when more results are settled and are not a
+general guarantee of model performance.
 
 ---
 

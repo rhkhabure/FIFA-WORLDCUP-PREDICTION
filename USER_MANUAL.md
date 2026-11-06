@@ -68,9 +68,13 @@ cd v4_backend/notebooks
 jupyter notebook train_v4_priors.ipynb
 ```
 
-Click **Run All**. The notebook runs the SLSQP MLE optimiser with exponential time-decay weighting and saves the results to `v4_priors.json` in the project root. Takes around 2–5 minutes.
+Click **Run All**. The notebook runs the SLSQP MLE optimiser with exponential
+time-decay weighting and saves the results to `v4_backend/v4_priors.json`.
+Takes around 2–5 minutes.
 
-> **Note:** `v4_priors.json` and `football_v4.pth` are already included in the repository. You only need to retrain if you want to update the model with new season data.
+> **Note:** The trained priors and live-model artifacts are included in the
+> repository under `v4_backend/`. You only need to retrain to deliberately
+> update the offline model using additional historical data.
 
 ---
 
@@ -88,6 +92,8 @@ Open `http://localhost:8000` in your browser. Keep this terminal open while you 
 2. FPL bootstrap is fetched and cached (PL team names + fixtures)
 3. The prediction logging job is scheduled to run every 30 minutes
 4. The first prediction job cycle runs immediately
+5. Settled football results are replayed at startup to evaluate bounded
+   per-league DC rating factors. This does not retrain the neural network.
 
 ---
 
@@ -177,7 +183,9 @@ The match page is the core of the dashboard. It shows:
 
 **Match timeline** — appears after kickoff, showing goals and key events as a horizontal timeline.
 
-**Live odds** — the neural network takes over once the match is live, updating odds every 30 seconds using the current score and minute.
+**Live odds** — the neural network takes over once the match is reported as
+started, updating probabilities every 30 seconds from the current score,
+minute and team-strength features. It does not use live xG.
 
 ---
 
@@ -243,13 +251,26 @@ The neural net runs on CPU if no CUDA device is detected. It is slower (inferenc
 
 ---
 
-## Retraining the model for a new season
+## Updating or retraining the football models
 
-At the start of each season (August):
+The site does not retrain models automatically. Its recent-results rating
+adjustment is a separate, bounded startup evaluation; it does not modify the
+neural-network weights or static prior file. For a deliberate offline refresh:
 
-1. Run `v4_backend/historical_scraper.py` to fetch the latest xG data
-2. Open `train_v4_priors.ipynb` and run all cells — new `v4_priors.json` generated
-3. Run `v4_web/scripts/build_train_v4.py` to retrain the neural net on updated data
-4. Replace `v4_priors.json` and `football_v4.pth` in the project root
-5. Confirm football-data.org still uses the season start year for its `season` parameter; the client selects the current year automatically
-6. Restart the dashboard
+1. Update `v4_historical_data.sqlite` with `v4_backend/historical_scraper.py`.
+2. Refit static team priors with `v4_backend/notebooks/train_v4_priors.ipynb`.
+3. Rebuild `data/processed/features_v4.parquet` with
+   `v4_backend/build_v4_dataset.py`.
+4. Train and validate the live classifier with
+   `v4_backend/notebooks/train_v4_neural.ipynb` and
+   `v4_backend/validate_v4_neural.py`.
+5. Keep the model checkpoint and scaler together:
+   `v4_backend/notebooks/v4_backend/models/football_v4.pth` and `scaler_v4.pkl`.
+   The priors are loaded from `v4_backend/v4_priors.json`.
+6. Compare against a chronologically separate holdout before deploying, then
+   restart the dashboard to load the artifacts.
+
+The dataset builder currently excludes season `2526`; check its season split
+and input parquet before training. Full mathematical definitions, the
+recorded 2026 model metrics and the adaptive-factor acceptance gate are in
+[`FOOTBALL_MODEL.md`](FOOTBALL_MODEL.md).
