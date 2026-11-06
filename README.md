@@ -16,7 +16,13 @@ training and validation procedure, current adaptive-rating status and known
 limitations. The application-level reference is
 [`DOCUMENTATION.md`](DOCUMENTATION.md).
 
-The NBA dashboard has a separate NBA win-probability model and basketball-specific pages. Historical NBA statistics are queried from local SQLite files; current schedules, rosters, player information, and live game state come from the NBA data feeds.
+The NBA dashboard uses Elo for pregame probabilities and a 16-feature neural
+network for live probabilities. See [`NBA_MODEL.md`](NBA_MODEL.md) for the
+features, probability calculations, training artifacts and temporal test
+folds, result-driven Elo adjustment, current evaluation, and provenance
+limitations. Historical NBA statistics are queried from local SQLite files;
+current schedules, rosters, player information, and live game state come from
+the NBA data feeds.
 
 The application is a FastAPI server with Jinja2 templates, a dark-mode UI, football pitches, and an SVG basketball court.
 
@@ -116,7 +122,8 @@ FIFA-WORLDCUP-PREDICTION/
 ├── README.md                        # This file
 ├── USER_MANUAL.md                   # Step-by-step setup and usage guide
 ├── DOCUMENTATION.md                 # Application and integration reference
-└── FOOTBALL_MODEL.md                # Detailed equations, training, status and limitations
+├── FOOTBALL_MODEL.md                # Football model equations, training and status
+└── NBA_MODEL.md                     # NBA model equations, features, training evidence and status
 ```
 
 ---

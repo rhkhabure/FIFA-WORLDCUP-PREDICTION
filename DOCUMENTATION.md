@@ -1,6 +1,8 @@
 # 📐 DOCUMENTATION.md — V4.2 Technical Reference
 
-Full technical documentation for the Melios Dira Odds V4.2 football prediction system. Covers the mathematical models, data pipeline, API integrations, architecture decisions, and known limitations.
+Full technical documentation for the Melios Dira Odds V4.2 football and NBA
+prediction system. Covers the mathematical models, data pipelines, API
+integrations, architecture decisions, and known limitations.
 
 ---
 
@@ -24,11 +26,12 @@ Full technical documentation for the Melios Dira Odds V4.2 football prediction s
 
 The system has two layers:
 
-**Mathematical engine** — Dixon–Coles (DC) for pre-match probabilities and an
-11→40→20→3 PyTorch classifier for live match-state probabilities. A separate,
-result-driven team-rating layer can adjust DC expected goals when its
-walk-forward evaluation passes per-league scoring-rule gates. It does not
-retrain the neural network.
+**Mathematical engines** — football uses Dixon–Coles (DC) for pre-match
+probabilities and an 11→40→20→3 PyTorch classifier for live match-state
+probabilities. The NBA dashboard uses Elo before tip-off and a 16-feature
+PyTorch classifier during games. Separate, result-driven rating layers can
+adjust football DC factors or NBA Elo ratings when their walk-forward
+evaluations pass scoring-rule gates; neither retrains neural-network weights.
 
 **Dashboard** — a FastAPI server serving Jinja2 HTML templates. All predictions, pitch rendering, and match data are computed server-side and injected into templates. No client-side JavaScript frameworks; SVG graphics are generated in Python and served as inline strings.
 
@@ -39,11 +42,16 @@ used to justify pre-match predictions. See [`FOOTBALL_MODEL.md`](FOOTBALL_MODEL.
 for the full equations, feature definitions, training procedure and current
 adaptive-rating status.
 
+The NBA model has its own lifecycle and feature contract; see
+[`NBA_MODEL.md`](NBA_MODEL.md) for its probability equations, all 16 inputs,
+training artifacts and temporal test folds, result-driven Elo adjustment, and
+documented provenance gaps.
+
 ---
 
 ## 2. Mathematical models
 
-The current football prediction system is documented in detail in
+The football prediction system is documented in detail in
 [`FOOTBALL_MODEL.md`](FOOTBALL_MODEL.md). In summary:
 
 - **Pre-match:** fitted Dixon–Coles team attack/defence priors generate expected
@@ -56,6 +64,14 @@ The current football prediction system is documented in detail in
 - **Optional lineup panel:** manually assigned key-player weights adjust
   expected goals when confirmed lineups are available; this remains a
   heuristic, separate from both trained models.
+
+The NBA prediction system is documented in detail in
+[`NBA_MODEL.md`](NBA_MODEL.md). In summary, pregame probabilities come from
+Elo ratings with a 100-point home-court advantage; live probabilities come
+from a calibrated 16-feature neural classifier. A separate chronological Elo
+replay can replace the baseline ratings after at least 30 settled games and
+only when Brier score improves without worsening log-loss. The Elo replay
+does not retrain the live classifier.
 
 ### 2.1 Monte Carlo simulation
 
@@ -316,10 +332,13 @@ v4_web/
 6. Build `LEAGUE_CONTEXTS` dict (theme colours, league name, gamma per league)
 7. Initialize the prediction database; evaluate/restore result-driven football
    factors from settled results. This does not train the neural network.
-8. Call `match_setup(...)` — passes model globals into `routes/match.py`
-9. Warm FPL cache (bootstrap + fixtures)
-10. Schedule the prediction job (startup and every 30 minutes)
-11. Yield (server is live)
+8. Load NBA model artifacts and call `nba_setup(...)`; logged NBA results are
+   replayed to evaluate Elo updates, not to fine-tune neural-network weights.
+   See [`NBA_MODEL.md`](NBA_MODEL.md).
+9. Call `match_setup(...)` — passes model globals into `routes/match.py`
+10. Warm FPL cache (bootstrap + fixtures)
+11. Schedule the prediction job (startup and every 30 minutes)
+12. Yield (server is live)
 
 ### 5.3 Match route globals
 
@@ -518,6 +537,15 @@ accepted, Premier League and La Liga rejected because both proper scoring
 metrics worsened, and Bundesliga below the 30-settled-game minimum. These
 short-window outcomes can change when more results are settled and are not a
 general guarantee of model performance.
+
+The NBA model's saved validation metrics and three expanding-window
+season-held-out folds are documented in [`NBA_MODEL.md`](NBA_MODEL.md).
+Its result-driven Elo evaluation was accepted locally on 2026-11-06 using 62
+settled regular-season games (Brier 0.25558 → 0.25274; log-loss 0.71609 →
+0.70896). This is an early-season sample, not a long-term performance
+guarantee. The training code and raw training manifest are not present in this
+checkout, so the exact final-model train/validation membership and raw data
+source cannot be independently verified here.
 
 ---
 

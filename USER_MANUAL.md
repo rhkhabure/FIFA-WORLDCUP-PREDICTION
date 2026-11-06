@@ -94,6 +94,9 @@ Open `http://localhost:8000` in your browser. Keep this terminal open while you 
 4. The first prediction job cycle runs immediately
 5. Settled football results are replayed at startup to evaluate bounded
    per-league DC rating factors. This does not retrain the neural network.
+6. The NBA artifacts (live neural model, scaler, calibration temperature and
+   Elo ratings) load for the basketball routes. Logged NBA results are replayed
+   to evaluate Elo updates; this does not fine-tune the neural network.
 
 ---
 
@@ -274,3 +277,11 @@ The dataset builder currently excludes season `2526`; check its season split
 and input parquet before training. Full mathematical definitions, the
 recorded 2026 model metrics and the adaptive-factor acceptance gate are in
 [`FOOTBALL_MODEL.md`](FOOTBALL_MODEL.md).
+
+The NBA prediction system uses a separate pregame Elo model and a live
+16-feature neural classifier. Its deployed training artifacts are loaded at
+startup; this checkout does not include the NBA neural-network training script
+or a fully versioned training-data manifest, so NBA retraining is not a
+documented one-command workflow. The exact feature meanings, probability
+calculation, season-held-out evaluation, result-driven Elo adjustment, and
+known training-provenance gaps are recorded in [`NBA_MODEL.md`](NBA_MODEL.md).
