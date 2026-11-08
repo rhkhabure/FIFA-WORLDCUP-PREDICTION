@@ -195,6 +195,21 @@ def save_provider_api_cache(cache_key: str, fetched_at: float, payload: dict):
         conn.commit()
 
 
+def prediction_correct_for_score(
+    home_pct, draw_pct, away_pct, home_score, away_score
+) -> bool | None:
+    """Compare a saved pregame 1X2 pick with a completed score."""
+    predicted = predicted_outcome(home_pct, draw_pct, away_pct)
+    if predicted is None or home_score is None or away_score is None:
+        return None
+    actual = (
+        "H" if home_score > away_score
+        else "A" if home_score < away_score
+        else "D"
+    )
+    return predicted == actual
+
+
 # ── Write functions ────────────────────────────────────────────────────────────
 
 def log_pre_lineup(

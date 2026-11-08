@@ -240,6 +240,13 @@
     flex-shrink: 0;
 }
 .match-time.live { color: #FF3B30; }
+.match-result {
+    font-size: 16px;
+    line-height: 1;
+    flex-shrink: 0;
+}
+.match-result.correct { color: #10b981; }
+.match-result.wrong { color: #ef4444; }
 .fixture-league-head {
     display:flex;
     align-items:center;
@@ -506,6 +513,16 @@
                 {{ m.kickoff_eat }}
               {% endif %}
             </div>
+            {% if m.pregame_correct is not none %}
+            <span class="match-result {{ 'correct' if m.pregame_correct else 'wrong' }}"
+                  title="{{ 'Pregame pick correct' if m.pregame_correct else 'Pregame pick wrong' }}">
+              {% if m.pregame_correct %}
+                <i class="ti ti-circle-check" aria-label="Pregame pick correct"></i>
+              {% else %}
+                <i class="ti ti-circle-x" aria-label="Pregame pick wrong"></i>
+              {% endif %}
+            </span>
+            {% endif %}
           </a>
           {% endfor %}
         {% endfor %}
