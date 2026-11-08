@@ -53,9 +53,13 @@ predictions (
 
 import json
 import os
+import re
 import sqlite3
+import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
+
+from footballdata import _clean_name
 
 DB_DIR  = Path(__file__).resolve().parent / "data"
 DB_DIR.mkdir(parents=True, exist_ok=True)
@@ -208,6 +212,80 @@ def prediction_correct_for_score(
         else "D"
     )
     return predicted == actual
+
+
+def _normalize_prediction_team(value: str) -> str:
+    value = _clean_name(value)
+    ascii_name = unicodedata.normalize("NFKD", value)
+    ascii_name = ascii_name.encode("ascii", "ignore").decode("ascii")
+    return re.sub(r"[^a-z0-9]+", " ", ascii_name.casefold()).strip()
+
+
+def _prediction_kickoff(value: str) -> datetime | None:
+    if not value:
+        return None
+    try:
+        kickoff = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if kickoff.tzinfo is None:
+        return kickoff.replace(tzinfo=timezone.utc)
+    return kickoff.astimezone(timezone.utc)
+
+
+def find_pregame_prediction(
+    predictions: list[dict],
+    *,
+    league: str,
+    match_id: str,
+    home_team: str,
+    away_team: str,
+    kickoff_utc: str,
+    team_aliases: dict[str, str],
+) -> dict | None:
+    """Find a saved pregame pick despite provider IDs and name-format differences."""
+    league_predictions = [
+        prediction
+        for prediction in predictions
+        if prediction.get("league", "pl") == league
+        and all(
+            prediction.get(key) is not None
+            for key in ("pre_dc_home", "pre_dc_draw", "pre_dc_away")
+        )
+    ]
+    for prediction in league_predictions:
+        if str(prediction.get("match_id", "")) == str(match_id):
+            return prediction
+
+    kickoff = _prediction_kickoff(kickoff_utc)
+    if kickoff is None:
+        return None
+    alias_map = {
+        _normalize_prediction_team(alias): _normalize_prediction_team(canonical)
+        for alias, canonical in team_aliases.items()
+    }
+
+    def team_key(name: str) -> str:
+        key = _normalize_prediction_team(name)
+        return alias_map.get(key, key)
+
+    home_key = team_key(home_team)
+    away_key = team_key(away_team)
+    matches = []
+    for prediction in league_predictions:
+        if team_key(str(prediction.get("home_team", ""))) != home_key:
+            continue
+        if team_key(str(prediction.get("away_team", ""))) != away_key:
+            continue
+        saved_kickoff = _prediction_kickoff(
+            str(prediction.get("kickoff_utc", ""))
+        )
+        if saved_kickoff is None:
+            continue
+        distance = abs((saved_kickoff - kickoff).total_seconds())
+        if distance <= 36 * 60 * 60:
+            matches.append((distance, prediction))
+    return min(matches, key=lambda match: match[0])[1] if matches else None
 
 
 # ── Write functions ────────────────────────────────────────────────────────────

@@ -68,7 +68,6 @@ from footballdata import (
     get_team_details_fd,
     get_team_matches_fd,
     get_competition_standings_fd,
-    _clean_name,
     _populate_finished_cache,
     PL_CODE,
     PD_CODE,
@@ -96,6 +95,7 @@ from predictions import (
     get_all_predictions,
     get_accuracy_stats,
     predicted_outcome,
+    find_pregame_prediction,
     prediction_correct_for_score,
 )
 from scoreline_matrix import build_scoreline_svg
@@ -1506,25 +1506,6 @@ async def history_page(request: Request):
     )
 
 
-def _fixture_prediction_key(
-    league: str, home: str, away: str, kickoff_utc: str
-) -> tuple[str, str, str, str] | None:
-    if not home or not away:
-        return None
-    try:
-        local_date = datetime.fromisoformat(
-            kickoff_utc.replace("Z", "+00:00")
-        ).astimezone(EAT).date().isoformat()
-    except (AttributeError, ValueError):
-        return None
-    return (
-        league,
-        _clean_name(str(home)).casefold(),
-        _clean_name(str(away)).casefold(),
-        local_date,
-    )
-
-
 @app.get("/", response_class=HTMLResponse)
 async def hub(request: Request):
 
@@ -1580,22 +1561,6 @@ async def hub(request: Request):
         print(f"[hub] saved prediction lookup error: {e}")
         saved_predictions = []
 
-    predictions_by_id = {}
-    predictions_by_fixture = {}
-    for prediction in saved_predictions:
-        league = prediction.get("league", "pl")
-        match_id = str(prediction.get("match_id", ""))
-        if match_id:
-            predictions_by_id.setdefault((league, match_id), prediction)
-        key = _fixture_prediction_key(
-            league,
-            prediction.get("home_team", ""),
-            prediction.get("away_team", ""),
-            prediction.get("kickoff_utc", ""),
-        )
-        if key:
-            predictions_by_fixture.setdefault(key, prediction)
-
     today_matches = []
     for league, league_data in leagues.items():
         for fixture in fixtures_by_league.get(league, []):
@@ -1608,17 +1573,15 @@ async def hub(request: Request):
             else:
                 continue
 
-            prediction = predictions_by_id.get(
-                (league, str(fixture.get("match_id", "")))
+            prediction = find_pregame_prediction(
+                saved_predictions,
+                league=league,
+                match_id=str(fixture.get("match_id", "")),
+                home_team=str(fixture.get("home", "")),
+                away_team=str(fixture.get("away", "")),
+                kickoff_utc=str(fixture.get("kickoff_utc", "")),
+                team_aliases=TEAM_NAME_ALIASES,
             )
-            if prediction is None:
-                fixture_key = _fixture_prediction_key(
-                    league,
-                    fixture.get("home", ""),
-                    fixture.get("away", ""),
-                    fixture.get("kickoff_utc", ""),
-                )
-                prediction = predictions_by_fixture.get(fixture_key)
 
             actual_pick_correct = None
             if prediction and fixture.get("status") == "Finished":
