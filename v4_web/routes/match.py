@@ -747,6 +747,15 @@ async def match(request: Request):
                 "kickoff_utc": snap.get("kickoff_utc", ""),
             }
             prior = dc_pregame(home_name, away_name, active_league)
+            if recorded_prediction and all(
+                recorded_prediction.get(key) is not None
+                for key in ("pre_dc_home", "pre_dc_draw", "pre_dc_away")
+            ):
+                prior = [
+                    float(recorded_prediction["pre_dc_home"]),
+                    float(recorded_prediction["pre_dc_draw"]),
+                    float(recorded_prediction["pre_dc_away"]),
+                ]
             posterior = nn_live(home_name, away_name, active_league,
                                int(minute), h_score, a_score)
             absent_home = snap["absent_home"]
@@ -1607,6 +1616,12 @@ async def match(request: Request):
         fixtures = recent_results + fixtures
 
     vote_match_id = None
+    pregame_pick_correct = (
+        bool(recorded_prediction["pre_correct"])
+        if recorded_prediction
+        and recorded_prediction.get("pre_correct") is not None
+        else None
+    )
     displayed_home = str(featured.get("home_name", ""))
     displayed_away = str(featured.get("away_name", ""))
     if displayed_home and displayed_away and active_ctx_key in (
@@ -1627,6 +1642,7 @@ async def match(request: Request):
         **league_ctx(active_ctx_key),
         "featured"         : featured,
         "prior"            : prior,
+        "pregame_pick_correct": pregame_pick_correct,
         "vote_match_id"    : vote_match_id,
         "posterior"        : posterior,
         "pitch_svg"        : pitch_svg,

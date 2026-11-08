@@ -45,6 +45,20 @@
             </div>
             <span class="model-source-label">Dixon–Coles</span>
         </div>
+        {% if featured.status in ['Finished', 'FT']
+              and featured.h_score is not none
+              and featured.a_score is not none
+              and pregame_pick_correct is not none %}
+        <div role="status" aria-live="polite"
+             style="margin-top:8px;font-size:11px;font-weight:700;
+                    color:{{ '#15803d' if pregame_pick_correct else '#C8102E' }}">
+            {% if pregame_pick_correct %}
+                <i class="ti ti-circle-check" aria-hidden="true"></i> Pregame pick correct
+            {% else %}
+                <i class="ti ti-circle-x" aria-hidden="true"></i> Pregame pick wrong
+            {% endif %}
+        </div>
+        {% endif %}
         <div class="match-teams-forecast">
             <div class="match-team-identity">
                 {% if home_crest_url %}
