@@ -145,7 +145,14 @@ def _enrich_game(game: dict) -> dict:
     if _model and _model.loaded and ht_id and at_id:
         pregame = _model.predict_pregame(ht_id, at_id)
 
-    return {
+    if _model and _model.loaded:
+        pred_log.log_pregame(
+            game,
+            pregame["home_win_prob"],
+            _model.elo_rating_version,
+        )
+
+    enriched = {
         **game,
         "home_colour":    ht.get("primary", "#6b7280"),
         "away_colour":    at.get("primary", "#6b7280"),
@@ -160,6 +167,28 @@ def _enrich_game(game: dict) -> dict:
         "elo_diff":       pregame["elo_diff"],
         "tip_off_eat":    to_eat(game.get("game_time_utc", "")),
     }
+    return _apply_saved_pregame(enriched)
+
+
+def _apply_saved_pregame(game: dict) -> dict:
+    """Use only the timestamp-verified snapshot as a pregame pick."""
+    prediction = pred_log.get_prediction(str(game.get("game_id", "")))
+    verified = pred_log.is_verified_pregame(prediction)
+    if verified:
+        home_prob = float(prediction["home_win_prob"])
+        game["home_win_prob"] = home_prob
+        game["away_win_prob"] = float(prediction["away_win_prob"])
+        game["pregame_model_version"] = prediction.get("model_version")
+    game["pregame_verified"] = verified
+    game["pregame_logged_at"] = (
+        prediction.get("pregame_logged_at") if verified else None
+    )
+    game["pregame_correct"] = (
+        prediction.get("correct")
+        if verified and prediction.get("correct") is not None
+        else None
+    )
+    return game
 
 
 def _is_future_game(game_time_utc: str, now: datetime) -> bool:
@@ -270,28 +299,20 @@ async def nba_hub(request: Request):
     pre   = [g for g in games if g["status"] == "pre"]
     final = [g for g in games if g["status"] == "final"]
 
-    # Log pregame predictions for any game not yet in the DB
-    if not showing_tomorrow:
-        probs = {g["game_id"]: g["home_win_prob"] for g in games}
-        n = pred_log.bulk_log_pregame(
-            games, probs,
-            _model.elo_rating_version if _model else "nba-elo-static-v0",
-        )
-        if n:
-            log.info("NBA: logged %d new pregame predictions", n)
-        results_changed = False
-        for game in final:
-            if game.get("home_score") is not None and game.get("away_score") is not None:
-                results_changed = pred_log.log_result(
-                    str(game["game_id"]),
-                    int(game["home_score"]),
-                    int(game["away_score"]),
-                ) or results_changed
-        if results_changed:
-            try:
-                _refresh_nba_elo()
-            except Exception:
-                log.exception("NBA Elo result update failed after hub result logging")
+    results_changed = False
+    for game in final:
+        if game.get("home_score") is not None and game.get("away_score") is not None:
+            results_changed = pred_log.log_result(
+                str(game["game_id"]),
+                int(game["home_score"]),
+                int(game["away_score"]),
+            ) or results_changed
+            game.update(_apply_saved_pregame(game))
+    if results_changed:
+        try:
+            _refresh_nba_elo()
+        except Exception:
+            log.exception("NBA Elo result update failed after hub result logging")
 
     from datetime import timedelta
     d = datetime.now(EAT).date() + (timedelta(days=1) if showing_tomorrow else timedelta())
@@ -357,6 +378,17 @@ async def nba_match(
         )
 
     enriched = _enrich_game(game)
+    if (
+        game.get("status") == "final"
+        and game.get("home_score") is not None
+        and game.get("away_score") is not None
+    ):
+        pred_log.log_result(
+            str(game_id),
+            int(game["home_score"]),
+            int(game["away_score"]),
+        )
+        enriched = _apply_saved_pregame(enriched)
     ht_id    = game.get("home_team_id")
     at_id    = game.get("away_team_id")
     ht       = nba_team(ht_id)
@@ -561,6 +593,8 @@ async def nba_history(request: Request, conference: str = "all"):
     /nba/history — prediction accuracy tracker.
     """
     rows  = _get_nba_history(limit=100, conference=conference)
+    for row in rows:
+        row["pregame_verified"] = pred_log.is_verified_pregame(row)
     if conference not in ("all", "East", "West"):
         conference = "all"
     stats = pred_log.get_stats(conference)
@@ -659,6 +693,7 @@ async def nba_team_profile(request: Request, team_id: int):
             cols   = [d[0] for d in cur.description]
             recent = [dict(zip(cols, row)) for row in cur.fetchall()]
             for game in recent:
+                game["pregame_verified"] = pred_log.is_verified_pregame(game)
                 if game.get("home_score") is None or game.get("away_score") is None:
                     game["team_won"] = None
                     continue

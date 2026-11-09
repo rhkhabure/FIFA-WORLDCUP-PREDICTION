@@ -271,6 +271,7 @@ async def lifespan(app):
                 conference    TEXT,
                 game_time_utc TEXT,
                 model_version TEXT NOT NULL DEFAULT 'nba-elo-static-v0',
+                pregame_logged_at TEXT,
                 home_win_prob REAL,
                 away_win_prob REAL,
                 home_score    INTEGER,
@@ -283,6 +284,7 @@ async def lifespan(app):
         for column, definition in (
             ("game_time_utc", "TEXT"),
             ("model_version", "TEXT NOT NULL DEFAULT 'nba-elo-static-v0'"),
+            ("pregame_logged_at", "TEXT"),
         ):
             try:
                 _nba_db.execute(
@@ -1512,12 +1514,22 @@ async def hub(request: Request):
     today_date = datetime.now(EAT).date()
     today = today_date.isoformat()
 
-    # PL stats from predictions DB
-    try:
-        season = today_date.year if today_date.month >= 7 else today_date.year - 1
-        pl_stats = get_accuracy_stats(season=season)
-    except Exception:
-        pl_stats = None
+    season = today_date.year if today_date.month >= 7 else today_date.year - 1
+    season_label = f"{season}/{str(season + 1)[-2:]}"
+    league_stats = {}
+    for league in ("pl", "laliga", "bundesliga", "seriea", "ligue1"):
+        try:
+            league_stats[league] = get_accuracy_stats(
+                season=season, league=league
+            )
+        except Exception as e:
+            print(f"[hub] {league} accuracy lookup error: {e}")
+            league_stats[league] = None
+    pl_stats = league_stats["pl"]
+    ll_stats = league_stats["laliga"]
+    bl_stats = league_stats["bundesliga"]
+    sa_stats = league_stats["seriea"]
+    l1_stats = league_stats["ligue1"]
 
     # Include today's games plus completed matches from the current/most recent
     # weekend so results remain visible after the final whistle.
@@ -1660,7 +1672,12 @@ async def hub(request: Request):
             "request"         : request,
             "league"          : "pl",
             "league_code"     : "PL",
+            "season_label"    : season_label,
             "pl_stats"        : pl_stats,
+            "ll_stats"        : ll_stats,
+            "bl_stats"        : bl_stats,
+            "sa_stats"        : sa_stats,
+            "l1_stats"        : l1_stats,
             "today_matches"   : today_matches,
             "live_match_groups": live_match_groups,
             "today_match_groups": today_match_groups,

@@ -29,7 +29,7 @@
   <!-- stat tiles -->
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px">
     <div class="h-card">
-      <div class="stat-v">{{ "%.1f"|format(accuracy) }}%</div>
+      <div class="stat-v">{% if stats.played %}{{ "%.1f"|format(accuracy) }}%{% else %}N/A{% endif %}</div>
       <div class="stat-l">Pregame accuracy</div>
     </div>
     <div class="h-card">
@@ -37,14 +37,20 @@
       <div class="stat-l">Avg Brier score</div>
     </div>
     <div class="h-card">
-      <div class="stat-v">{{ correct }} / {{ total }}</div>
-      <div class="stat-l">Picks correct</div>
+      <div class="stat-v">{{ correct }} / {{ stats.played }}</div>
+      <div class="stat-l">Verified picks correct</div>
     </div>
     <div class="h-card">
       <div class="stat-v">{{ total }}</div>
       <div class="stat-l">Games logged</div>
     </div>
   </div>
+  {% if stats.unverified %}
+  <div class="h-card" style="font-size:12px;color:var(--text-muted,#64748b)">
+    {{ stats.unverified }} historical row{{ 's' if stats.unverified != 1 else '' }}
+    lack a recorded before-tip timestamp and are excluded from accuracy.
+  </div>
+  {% endif %}
 
   <!-- conference filter tabs -->
   <div style="display:flex;gap:8px;align-items:center">
@@ -81,18 +87,26 @@
       </thead>
       <tbody>
         {% for r in rows %}
+        {% if r.pregame_verified %}
         {% set hw = r.home_win_prob if r.home_win_prob else 0.5 %}
         {% set fav_home = hw >= 0.5 %}
         {% set fav = r.home_team if fav_home else r.away_team %}
         {% set fav_pct = ((hw if fav_home else 1-hw)*100)|round(0)|int %}
+        {% endif %}
         <tr>
           <td style="font-family:var(--font-mono);color:var(--text-muted,#64748b)">
             {{ r.created_at[:10] if r.created_at else '—' }}
+            {% if r.pregame_verified %}
+            <div style="font-size:9px;margin-top:3px" title="Snapshot logged before scheduled tip">
+              Saved {{ r.pregame_logged_at[:19] }} UTC · {{ r.model_version }}
+            </div>
+            {% endif %}
           </td>
           <td style="font-weight:700">
             {{ r.away_team }} <span style="color:var(--text-muted,#64748b);font-weight:400">@</span> {{ r.home_team }}
           </td>
           <td>
+            {% if r.pregame_verified %}
             <div class="prob-track">
               <div style="width:{{ (100-fav_pct) if fav_home else fav_pct }}%;background:#94a3b8"></div>
               <div style="width:{{ fav_pct if fav_home else (100-fav_pct) }}%;background:var(--league-primary)"></div>
@@ -100,15 +114,20 @@
             <span style="font-size:10px;font-family:var(--font-mono);color:var(--text-muted,#64748b)">
               {{ fav }} {{ fav_pct }}%
             </span>
+            {% else %}
+            <span style="font-size:10px;color:var(--text-muted,#64748b)">Unverified legacy pick</span>
+            {% endif %}
           </td>
-          <td style="font-weight:700">{{ fav }}</td>
+          <td style="font-weight:700">{{ fav if r.pregame_verified else '—' }}</td>
           <td style="font-family:var(--font-mono)">
             {% if r.away_score is not none and r.home_score is not none %}
               {{ r.away_score }}–{{ r.home_score }}
             {% else %}—{% endif %}
           </td>
           <td>
-            {% if r.correct == 1 %}
+            {% if not r.pregame_verified %}
+              <span style="color:var(--text-muted,#64748b)">Unverified</span>
+            {% elif r.correct == 1 %}
               <i class="ti ti-circle-check ok" title="Correct" aria-label="Correct"></i>
             {% elif r.correct == 0 %}
               <i class="ti ti-circle-x bad" title="Wrong" aria-label="Wrong"></i>

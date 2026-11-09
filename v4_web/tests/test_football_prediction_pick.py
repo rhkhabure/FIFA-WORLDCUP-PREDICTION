@@ -3,7 +3,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from predictions import find_pregame_prediction, prediction_correct_for_score
+from predictions import (
+    find_pregame_prediction,
+    get_accuracy_stats,
+    prediction_correct_for_score,
+)
 
 
 ALIASES = {
@@ -102,6 +106,40 @@ def test_fixture_lookup_does_not_match_another_league_or_distant_kickoff():
     )
 
     assert match is None
+
+
+def test_accuracy_stats_can_be_scoped_to_one_league(monkeypatch):
+    predictions = [
+        {
+            "league": "pl",
+            "actual_result": "H",
+            "pre_correct": 1,
+            "adj_correct": None,
+        },
+        {
+            "league": "pl",
+            "actual_result": None,
+            "pre_correct": None,
+            "adj_correct": None,
+        },
+        {
+            "league": "laliga",
+            "actual_result": "A",
+            "pre_correct": 0,
+            "adj_correct": None,
+        },
+    ]
+    monkeypatch.setattr(
+        "predictions.get_all_predictions",
+        lambda season=None: predictions,
+    )
+
+    stats = get_accuracy_stats(season=2026, league="pl")
+
+    assert stats["total_logged"] == 2
+    assert stats["total_finished"] == 1
+    assert stats["pre_total"] == 1
+    assert stats["pre_accuracy"] == 100
 
 
 def test_pregame_home_pick_is_correct_for_home_win():

@@ -292,15 +292,18 @@
     </div>
     {% else %}
     {% for r in recent %}
+    {% if r.pregame_verified %}
     {% set hw = r.home_win_prob if r.home_win_prob else 0.5 %}
     {% set fav_home = hw >= 0.5 %}
     {% set fav_pct = ((hw if fav_home else 1-hw)*100)|round(0)|int %}
     {% set fav_tri = r.home_team if fav_home else r.away_team %}
+    {% endif %}
     <div class="game-row">
       <div>
         <div style="font-size:12px;font-weight:700">
           {{ r.away_team }} <span style="color:var(--text-muted,#64748b);font-weight:400">@</span> {{ r.home_team }}
         </div>
+        {% if r.pregame_verified %}
         <div style="display:flex;align-items:center;gap:6px;margin-top:4px">
           <div class="prob-track" style="width:70px">
             <div style="width:{{ 100-fav_pct }}%;background:#94a3b8"></div>
@@ -310,6 +313,11 @@
             {{ fav_tri }} {{ fav_pct }}%
           </span>
         </div>
+        {% else %}
+        <div style="font-size:10px;color:var(--text-muted,#64748b);margin-top:4px">
+          Legacy pick not verifiable
+        </div>
+        {% endif %}
       </div>
       <div style="text-align:right">
         <div style="font-family:var(--font-mono);font-size:12px;font-weight:700">
@@ -320,7 +328,9 @@
         </div>
       </div>
       <div>
-        {% if r.correct == 1 %}
+        {% if not r.pregame_verified %}
+        <span style="font-size:10px;color:var(--text-muted,#64748b)">Unverified</span>
+        {% elif r.correct == 1 %}
         <i class="ti ti-circle-check ok" aria-label="Correct"></i>
         {% elif r.correct == 0 %}
         <i class="ti ti-circle-x bad" aria-label="Wrong"></i>

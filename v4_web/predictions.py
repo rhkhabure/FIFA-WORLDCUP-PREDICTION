@@ -513,17 +513,21 @@ def get_match_snapshot(match_id: str) -> dict | None:
     return d
 
 
-def get_accuracy_stats(season: int | None = None) -> dict:
+def get_accuracy_stats(
+    season: int | None = None, league: str | None = None
+) -> dict:
     """
     Return accuracy summary:
       pre_total, pre_correct, pre_accuracy
       adj_total, adj_correct, adj_accuracy
     """
     preds = get_all_predictions(season)
-    finished = [p for p in preds if p["actual_result"]]
+    if league is not None:
+        preds = [p for p in preds if p.get("league", "pl") == league]
+    finished = [p for p in preds if p.get("actual_result")]
 
-    pre_scored = [p for p in finished if p["pre_correct"] is not None]
-    adj_scored = [p for p in finished if p["adj_correct"] is not None]
+    pre_scored = [p for p in finished if p.get("pre_correct") is not None]
+    adj_scored = [p for p in finished if p.get("adj_correct") is not None]
 
     def acc(lst, key):
         if not lst:

@@ -150,10 +150,12 @@
                 <div id="js-final-banner" style="display:{{ 'block' if game.status == 'final' else 'none' }};
                      font-size:11px;font-weight:700;margin-top:2px">
                     {% if game.status == 'final' %}
-                        {% if (game.home_score > game.away_score) == fav_home %}
+                        {% if game.pregame_verified and game.pregame_correct == 1 %}
                             <span style="color:#15803d"><i class="ti ti-circle-check" aria-hidden="true"></i> Pregame pick correct</span>
-                        {% else %}
+                        {% elif game.pregame_verified and game.pregame_correct == 0 %}
                             <span style="color:#C8102E"><i class="ti ti-circle-x" aria-hidden="true"></i> Pregame pick wrong</span>
+                        {% else %}
+                            <span class="m-muted">No verified pregame pick recorded</span>
                         {% endif %}
                     {% endif %}
                 </div>
@@ -241,7 +243,8 @@
         <div style="display:flex;flex-direction:column;gap:12px">
 
             <div class="m-card">
-                <div class="m-label">Pregame win probability</div>
+                <div class="m-label">Verified pregame win probability</div>
+                {% if game.pregame_verified %}
                 <div style="display:flex;justify-content:space-between;font-size:20px;font-weight:900;margin-bottom:6px">
                     <span style="color:{{ away_line }}">{{ 100 - hp0 }}%</span>
                     <span style="color:{{ home_line }}">{{ hp0 }}%</span>
@@ -257,7 +260,15 @@
                     Model favours <b style="color:{{ home_line if fav_home else away_line }}">
                     {{ game.home_tricode if fav_home else game.away_tricode }}</b>.
                     Elo-only, including +100 home advantage.
+                    Snapshot saved {{ game.pregame_logged_at[:19] }} UTC
+                    · {{ game.pregame_model_version }}.
                 </div>
+                {% else %}
+                <div class="m-muted" style="font-size:12px;line-height:1.5">
+                    No prediction snapshot was recorded before tip-off. This game is excluded
+                    from verified pregame accuracy.
+                </div>
+                {% endif %}
             </div>
 
             <div class="m-card">
@@ -397,6 +408,7 @@
         awayCol:  "{{ away_line }}",
         poll:     {{ poll_interval | default(20000) }},
         tipUtc:   "{{ game.game_time_utc }}",
+        pregameVerified: {{ 'true' if game.pregame_verified else 'false' }},
         pregame:  {{ game.home_win_prob }},
         homeScore: {{ game.home_score | default(0) }},
         awayScore: {{ game.away_score | default(0) }},
@@ -774,13 +786,17 @@
                 $('js-status').innerHTML = 'FINAL';
                 $('js-status').style.color = 'var(--text-muted,#64748b)';
                 await loadCurve();              // redraw the complete arc once
-                const homeWon = d.home_score > d.away_score;
-                const ok = homeWon === (CFG.pregame >= 0.5);
                 const b = $('js-final-banner');
                 b.style.display = 'block';
-                b.innerHTML = ok
-                    ? '<span style="color:#15803d"><i class="ti ti-circle-check"></i> Pregame pick correct</span>'
-                    : '<span style="color:#C8102E"><i class="ti ti-circle-x"></i> Pregame pick wrong</span>';
+                if (!CFG.pregameVerified) {
+                    b.innerHTML = '<span class="m-muted">No verified pregame pick recorded</span>';
+                } else {
+                    const homeWon = d.home_score > d.away_score;
+                    const ok = homeWon === (CFG.pregame >= 0.5);
+                    b.innerHTML = ok
+                        ? '<span style="color:#15803d"><i class="ti ti-circle-check"></i> Pregame pick correct</span>'
+                        : '<span style="color:#C8102E"><i class="ti ti-circle-x"></i> Pregame pick wrong</span>';
+                }
                 return;
             }
 

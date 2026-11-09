@@ -144,7 +144,14 @@ def refresh_nba_elo(
             }
         baseline_hash = _stable_hash(base)
         rows = db.execute("""
-            SELECT game_id, home_team_id, away_team_id, home_win_prob,
+            SELECT game_id, home_team_id, away_team_id,
+                   CASE
+                       WHEN pregame_logged_at IS NOT NULL
+                        AND game_time_utc IS NOT NULL
+                        AND julianday(pregame_logged_at) < julianday(game_time_utc)
+                       THEN home_win_prob
+                       ELSE NULL
+                   END AS verified_home_win_prob,
                    home_score, away_score, created_at, conference,
                    game_time_utc, model_version
             FROM predictions

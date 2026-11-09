@@ -317,15 +317,15 @@
       </div>
     </div>
     <div class="lc-name">Premier League</div>
-    <div class="lc-country">England · Season 2025/26</div>
+    <div class="lc-country">England · Season {{ season_label }}</div>
     <div class="lc-stats">
       <div class="lc-stat">
-        <div class="lc-stat-val">{{ pl_stats.total_logged if pl_stats else '50' }}</div>
+        <div class="lc-stat-val">{{ pl_stats.total_logged if pl_stats else '0' }}</div>
         <div class="lc-stat-lbl">Predictions</div>
       </div>
       <div class="lc-stat">
         <div class="lc-stat-val" style="color:#F9D000">
-          {{ pl_stats.pre_accuracy if pl_stats else '—' }}%
+          {% if pl_stats and pl_stats.pre_total > 0 %}{{ pl_stats.pre_accuracy }}%{% else %}N/A{% endif %}
         </div>
         <div class="lc-stat-lbl">DC Accuracy</div>
       </div>
@@ -357,15 +357,17 @@
       </div>
     </div>
     <div class="lc-name">La Liga</div>
-    <div class="lc-country">Spain · Season 2025/26</div>
+    <div class="lc-country">Spain · Season {{ season_label }}</div>
     <div class="lc-stats">
       <div class="lc-stat">
-        <div class="lc-stat-val">—</div>
+        <div class="lc-stat-val">
+          {% if ll_stats and ll_stats.pre_total > 0 %}{{ ll_stats.pre_accuracy }}%{% else %}N/A{% endif %}
+        </div>
         <div class="lc-stat-lbl">Accuracy</div>
       </div>
       <div class="lc-stat">
-        <div class="lc-stat-val" style="color:#FFD700">New</div>
-        <div class="lc-stat-lbl">Season</div>
+        <div class="lc-stat-val" style="color:#FFD700">{{ ll_stats.pre_total if ll_stats else 0 }}</div>
+        <div class="lc-stat-lbl">Scored</div>
       </div>
     </div>
     <div class="lc-btn">
@@ -385,15 +387,17 @@
       <div class="lc-status">Upcoming</div>
     </div>
     <div class="lc-name">Bundesliga</div>
-    <div class="lc-country">Germany · Season 2025/26</div>
+    <div class="lc-country">Germany · Season {{ season_label }}</div>
     <div class="lc-stats">
       <div class="lc-stat">
-        <div class="lc-stat-val">—</div>
+        <div class="lc-stat-val">
+          {% if bl_stats and bl_stats.pre_total > 0 %}{{ bl_stats.pre_accuracy }}%{% else %}N/A{% endif %}
+        </div>
         <div class="lc-stat-lbl">Accuracy</div>
       </div>
       <div class="lc-stat">
-        <div class="lc-stat-val" style="color:#FFD700">New</div>
-        <div class="lc-stat-lbl">Season</div>
+        <div class="lc-stat-val" style="color:#FFD700">{{ bl_stats.pre_total if bl_stats else 0 }}</div>
+        <div class="lc-stat-lbl">Scored</div>
       </div>
     </div>
     <div class="lc-btn">
@@ -413,15 +417,17 @@
       <div class="lc-status">Upcoming</div>
     </div>
     <div class="lc-name">Serie A</div>
-    <div class="lc-country">Italy · Season 2025/26</div>
+    <div class="lc-country">Italy · Season {{ season_label }}</div>
     <div class="lc-stats">
       <div class="lc-stat">
-        <div class="lc-stat-val">—</div>
+        <div class="lc-stat-val">
+          {% if sa_stats and sa_stats.pre_total > 0 %}{{ sa_stats.pre_accuracy }}%{% else %}N/A{% endif %}
+        </div>
         <div class="lc-stat-lbl">Accuracy</div>
       </div>
       <div class="lc-stat">
-        <div class="lc-stat-val" style="color:#60A5FA">New</div>
-        <div class="lc-stat-lbl">Season</div>
+        <div class="lc-stat-val" style="color:#60A5FA">{{ sa_stats.pre_total if sa_stats else 0 }}</div>
+        <div class="lc-stat-lbl">Scored</div>
       </div>
     </div>
     <div class="lc-btn">
@@ -441,15 +447,17 @@
       <div class="lc-status">Upcoming</div>
     </div>
     <div class="lc-name">Ligue 1</div>
-    <div class="lc-country">France · Season 2025/26</div>
+    <div class="lc-country">France · Season {{ season_label }}</div>
     <div class="lc-stats">
       <div class="lc-stat">
-        <div class="lc-stat-val">—</div>
+        <div class="lc-stat-val">
+          {% if l1_stats and l1_stats.pre_total > 0 %}{{ l1_stats.pre_accuracy }}%{% else %}N/A{% endif %}
+        </div>
         <div class="lc-stat-lbl">Accuracy</div>
       </div>
       <div class="lc-stat">
-        <div class="lc-stat-val" style="color:#00A3E0">New</div>
-        <div class="lc-stat-lbl">Season</div>
+        <div class="lc-stat-val" style="color:#00A3E0">{{ l1_stats.pre_total if l1_stats else 0 }}</div>
+        <div class="lc-stat-lbl">Scored</div>
       </div>
     </div>
     <div class="lc-btn">
@@ -544,17 +552,25 @@
     <div class="accuracy-panel">
       <div style="font-size:10px;font-weight:700;color:var(--text-muted);
                   text-transform:uppercase;letter-spacing:1px;margin-bottom:12px">
-        Season 2025/26
+        Season {{ season_label }}
       </div>
 
       {% set league_rows = [
         ("Premier League", "#9B59B6", "#3D185A",
          pl_stats.pre_accuracy if pl_stats and pl_stats.pre_total > 0 else None,
          pl_stats.pre_total if pl_stats else 0),
-        ("La Liga",     "#E74C3C", "#8B0000",  None, 0),
-        ("Bundesliga",  "#C0392B", "#1A1A1A",  None, 0),
-        ("Serie A",     "#2563EB", "#1A3A6B",  None, 0),
-        ("Ligue 1",     "#00A3E0", "#003087",  None, 0),
+        ("La Liga", "#E74C3C", "#8B0000",
+         ll_stats.pre_accuracy if ll_stats and ll_stats.pre_total > 0 else None,
+         ll_stats.pre_total if ll_stats else 0),
+        ("Bundesliga", "#C0392B", "#1A1A1A",
+         bl_stats.pre_accuracy if bl_stats and bl_stats.pre_total > 0 else None,
+         bl_stats.pre_total if bl_stats else 0),
+        ("Serie A", "#2563EB", "#1A3A6B",
+         sa_stats.pre_accuracy if sa_stats and sa_stats.pre_total > 0 else None,
+         sa_stats.pre_total if sa_stats else 0),
+        ("Ligue 1", "#00A3E0", "#003087",
+         l1_stats.pre_accuracy if l1_stats and l1_stats.pre_total > 0 else None,
+         l1_stats.pre_total if l1_stats else 0),
       ] %}
 
       {% for lname, dot, val_col, acc, n in league_rows %}
@@ -565,8 +581,8 @@
           <div class="acc-val" style="color:{{ val_col }}">{{ acc }}%</div>
           <div class="acc-sub">{{ n }}G</div>
         {% else %}
-          <div class="acc-val" style="color:var(--text-muted)">—</div>
-          <div class="acc-sub" style="color:var(--text-muted)">new</div>
+          <div class="acc-val" style="color:var(--text-muted)">N/A</div>
+          <div class="acc-sub" style="color:var(--text-muted)">no picks</div>
         {% endif %}
       </div>
       {% endfor %}

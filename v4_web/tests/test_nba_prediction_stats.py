@@ -15,22 +15,35 @@ class NBAPredictionStatsTests(unittest.TestCase):
             CREATE TABLE predictions (
                 id INTEGER PRIMARY KEY,
                 league TEXT,
-                conference TEXT,
-                correct INTEGER,
-                brier REAL,
+                game_id TEXT,
+                home_team TEXT,
+                away_team TEXT,
                 home_team_id INTEGER,
-                away_team_id INTEGER
+                away_team_id INTEGER,
+                conference TEXT,
+                game_time_utc TEXT,
+                model_version TEXT,
+                home_win_prob REAL,
+                away_win_prob REAL,
+                pregame_logged_at TEXT,
+                home_score INTEGER,
+                away_score INTEGER,
+                correct INTEGER,
+                brier REAL
             )
         """)
         self.db.executemany(
-            "INSERT INTO predictions (league, conference, correct, brier) "
-            "VALUES ('nba', ?, ?, ?)",
+            "INSERT INTO predictions "
+            "(league, conference, correct, brier, pregame_logged_at, "
+            "game_time_utc, home_win_prob, away_win_prob) "
+            "VALUES ('nba', ?, ?, ?, ?, ?, ?, ?)",
             [
-                ("East", 1, 0.1),
-                ("East", 0, 0.4),
-                ("West", 1, 0.2),
-                ("Preseason", 0, 0.5),
-                ("East", None, None),
+                ("East", 1, 0.1, "2026-11-09T00:00:00+00:00", "2026-11-10T00:00:00Z", 0.6, 0.4),
+                ("East", 0, 0.4, "2026-11-09T00:00:00+00:00", "2026-11-10T00:00:00Z", 0.6, 0.4),
+                ("West", 1, 0.2, "2026-11-09T00:00:00+00:00", "2026-11-10T00:00:00Z", 0.6, 0.4),
+                ("Preseason", 0, 0.5, "2026-11-09T00:00:00+00:00", "2026-11-10T00:00:00Z", 0.6, 0.4),
+                ("East", None, None, "2026-11-09T00:00:00+00:00", "2026-11-10T00:00:00Z", 0.6, 0.4),
+                ("East", 1, 0.1, None, "2026-11-10T00:00:00Z", 0.6, 0.4),
             ],
         )
         self.db.commit()
@@ -43,7 +56,9 @@ class NBAPredictionStatsTests(unittest.TestCase):
     def test_stats_reflect_selected_conference_and_exclude_unplayed_from_accuracy(self):
         east = nba_predictions.get_stats("East")
 
-        self.assertEqual(east["total"], 3)
+        self.assertEqual(east["total"], 4)
+        self.assertEqual(east["verified"], 3)
+        self.assertEqual(east["unverified"], 1)
         self.assertEqual(east["played"], 2)
         self.assertEqual(east["correct"], 1)
         self.assertEqual(east["accuracy"], 50.0)
@@ -52,7 +67,9 @@ class NBAPredictionStatsTests(unittest.TestCase):
     def test_all_stats_include_both_conferences(self):
         stats = nba_predictions.get_stats()
 
-        self.assertEqual(stats["total"], 5)
+        self.assertEqual(stats["total"], 6)
+        self.assertEqual(stats["verified"], 5)
+        self.assertEqual(stats["unverified"], 1)
         self.assertEqual(stats["played"], 4)
         self.assertEqual(stats["correct"], 2)
         self.assertEqual(stats["accuracy"], 50.0)

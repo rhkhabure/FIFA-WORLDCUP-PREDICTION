@@ -151,7 +151,9 @@
         <div class="live-strip">
             {% for g in live_games %}
             <a href="/nba/match?game_id={{ g.game_id }}" class="nba-card live-card"
-               data-game-id="{{ g.game_id }}" style="padding:12px 14px">
+               data-game-id="{{ g.game_id }}"
+               data-pregame-verified="{{ 'true' if g.pregame_verified else 'false' }}"
+               style="padding:12px 14px">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
                     <span style="font-family:var(--font-mono);font-size:10px;font-weight:700;color:#C8102E">
                         <span class="live-dot" style="width:6px;height:6px"></span>
@@ -183,7 +185,9 @@
                     </div>
                     <div class="pick">
                         <span style="color:color-mix(in srgb, {{ g.away_colour }} 55%, var(--text-primary))">{{ g.away_tricode }} <span class="js-away-pct">{{ (g.away_win_prob*100)|round(0)|int }}</span>%</span>
-                        <span style="color:var(--text-muted,#94a3b8);font-weight:400" class="js-source">pregame</span>
+                        <span style="color:var(--text-muted,#94a3b8);font-weight:400" class="js-source">
+                            {{ 'saved pregame' if g.pregame_verified else 'pregame unverified' }}
+                        </span>
                         <span style="color:color-mix(in srgb, {{ g.home_colour }} 55%, var(--text-primary))">{{ g.home_tricode }} <span class="js-home-pct">{{ (g.home_win_prob*100)|round(0)|int }}</span>%</span>
                     </div>
                 </div>
@@ -262,22 +266,31 @@
                 {{ schedule_team_side(left_id, left_tri, left_colour, left_score, 'team-side-left', playing) }}
 
                 <div class="prob-col">
-                    {{ prob_bar(g, 9) }}
-                    <div class="pick">
-                        <span style="color:color-mix(in srgb, {{ fav_col }} 55%, var(--text-primary))">{{ fav_tri }} {{ fav_pct }}%</span>
-                        <span style="color:var(--text-muted,#94a3b8);font-weight:400">Elo {{ g.home_elo|int }}–{{ g.away_elo|int }}</span>
-                    </div>
+                    {% if g.pregame_verified %}
+                        {{ prob_bar(g, 9) }}
+                        <div class="pick">
+                            <span style="color:color-mix(in srgb, {{ fav_col }} 55%, var(--text-primary))">{{ fav_tri }} {{ fav_pct }}%</span>
+                            <span title="Saved at {{ g.pregame_logged_at }} UTC · {{ g.pregame_model_version }}"
+                                  style="color:var(--text-muted,#94a3b8);font-weight:400">Saved pregame</span>
+                        </div>
+                    {% else %}
+                        <span style="font-size:10px;color:var(--text-muted,#94a3b8)">
+                            No verified pregame pick
+                        </span>
+                    {% endif %}
                 </div>
 
                 {{ schedule_team_side(right_id, right_tri, right_colour, right_score, 'team-side-right', playing) }}
 
                 <div style="text-align:center">
                     {% if g.status == 'final' %}
-                        {% set home_won = g.home_score > g.away_score %}
-                        {% if home_won == fav_home %}
+                        {% if g.pregame_verified and g.pregame_correct == 1 %}
                             <i class="ti ti-circle-check res-ok" title="Prediction correct" aria-label="Prediction correct"></i>
-                        {% else %}
+                        {% elif g.pregame_verified and g.pregame_correct == 0 %}
                             <i class="ti ti-circle-x res-bad" title="Prediction wrong" aria-label="Prediction wrong"></i>
+                        {% else %}
+                            <span title="No verified pregame snapshot" aria-label="No verified pregame pick"
+                                  style="color:var(--text-muted,#94a3b8)">—</span>
                         {% endif %}
                     {% else %}
                         <i class="ti ti-chevron-right" style="color:var(--text-muted,#94a3b8)" aria-hidden="true"></i>
@@ -288,12 +301,16 @@
         </div>
 
         {% if final_games %}
-        {% set ns = namespace(ok=0) %}
+        {% set ns = namespace(ok=0, played=0) %}
         {% for g in final_games %}
-            {% if (g.home_score > g.away_score) == (g.home_win_prob >= 0.5) %}{% set ns.ok = ns.ok + 1 %}{% endif %}
+            {% if g.pregame_verified and g.pregame_correct is not none %}
+                {% set ns.played = ns.played + 1 %}
+                {% if g.pregame_correct == 1 %}{% set ns.ok = ns.ok + 1 %}{% endif %}
+            {% endif %}
         {% endfor %}
         <div style="font-family:var(--font-mono);font-size:11px;color:var(--text-muted,#64748b);margin-top:10px;text-align:right">
-            Today: {{ ns.ok }} / {{ final_games | length }} pregame picks correct
+            {% if ns.played %}Today: {{ ns.ok }} / {{ ns.played }} verified pregame picks correct
+            {% else %}No verified pregame picks recorded for finished games{% endif %}
         </div>
         {% endif %}
         {% endif %}
@@ -321,11 +338,18 @@
                 <div class="time">{{ g.tip_off_eat or 'TBD' }}</div>
                 {{ schedule_team_side(left_id, left_tri, left_colour, left_score, 'team-side-left', false) }}
                 <div class="prob-col">
-                    {{ prob_bar(g, 9) }}
-                    <div class="pick">
-                        <span style="color:color-mix(in srgb, {{ fav_col }} 55%, var(--text-primary))">{{ fav_tri }} {{ fav_pct }}%</span>
-                        <span style="color:var(--text-muted,#94a3b8);font-weight:400">Elo {{ g.home_elo|int }}–{{ g.away_elo|int }}</span>
-                    </div>
+                    {% if g.pregame_verified %}
+                        {{ prob_bar(g, 9) }}
+                        <div class="pick">
+                            <span style="color:color-mix(in srgb, {{ fav_col }} 55%, var(--text-primary))">{{ fav_tri }} {{ fav_pct }}%</span>
+                            <span title="Saved at {{ g.pregame_logged_at }} UTC · {{ g.pregame_model_version }}"
+                                  style="color:var(--text-muted,#94a3b8);font-weight:400">Saved pregame</span>
+                        </div>
+                    {% else %}
+                        <span style="font-size:10px;color:var(--text-muted,#94a3b8)">
+                            No verified pregame pick
+                        </span>
+                    {% endif %}
                 </div>
                 {{ schedule_team_side(right_id, right_tri, right_colour, right_score, 'team-side-right', false) }}
                 <div style="text-align:center">
@@ -368,7 +392,11 @@
             q('.js-away-bar').style.width   = (100 - hp) + '%';
             q('.js-home-pct').textContent   = hp;
             q('.js-away-pct').textContent   = 100 - hp;
-            q('.js-source').textContent     = d.source === 'neural_net' ? 'live model' : 'pregame';
+            q('.js-source').textContent = d.source === 'neural_net'
+                ? 'live model'
+                : card.dataset.pregameVerified === 'true'
+                    ? 'saved pregame'
+                    : 'pregame unverified';
             q('.js-updated').textContent    = new Date().toLocaleTimeString('en-GB',
                 { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Nairobi' });
 

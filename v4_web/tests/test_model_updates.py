@@ -28,7 +28,9 @@ class NBARatingUpdateTests(unittest.TestCase):
                 game_id TEXT, league TEXT, home_team_id INTEGER,
                 away_team_id INTEGER, home_win_prob REAL,
                 home_score INTEGER, away_score INTEGER,
-                created_at TEXT, conference TEXT
+                created_at TEXT, conference TEXT,
+                game_time_utc TEXT, pregame_logged_at TEXT,
+                model_version TEXT
             )
         """)
         for index in range(40):
