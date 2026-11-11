@@ -112,10 +112,15 @@
                       {% else %}
                           border-color: var(--border-color); background: rgba(255,255,255,0.02); color: var(--text-muted);
                       {% endif %}">
-                <div class="text-[9px] font-mono mb-0.5">{{ f.kickoff_eat }}</div>
-                <div class="text-[11px] font-bold truncate">{{ f.home }}</div>
-                <div class="text-[9px]">vs</div>
-                <div class="text-[11px] font-bold truncate">{{ f.away }}</div>
+                <div class="text-[9px] font-mono mb-0.5">
+                    {% if f.status == 'pre' %}{{ f.tip_off_eat }}
+                    {% elif f.status == 'final' %}FT {{ f.away_score }}–{{ f.home_score }}
+                    {% else %}<span class="live-dot" style="width:5px;height:5px;margin-right:3px"></span>{{ f.away_score }}–{{ f.home_score }}
+                    {% endif %}
+                </div>
+                <div class="text-[11px] font-bold truncate">{{ f.away_tricode }}</div>
+                <div class="text-[9px]">@</div>
+                <div class="text-[11px] font-bold truncate">{{ f.home_tricode }}</div>
             </a>
             {% endfor %}
         </div>

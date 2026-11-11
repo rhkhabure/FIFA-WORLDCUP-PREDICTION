@@ -286,6 +286,33 @@ def get_scoreboard_by_date(date_str: str) -> list[dict]:
         return _get_stale(key) or []
 
 
+def get_yesterday_scoreboard() -> list[dict]:
+    """Return games tipping on yesterday's EAT date across NBA date boundaries."""
+    target_date = datetime.now(EAT_TZ).date() - timedelta(days=1)
+    key = f"scoreboard_eat_{target_date.isoformat()}"
+    cached = _get(key)
+    if cached is not None:
+        return cached
+
+    games_by_id: dict[str, dict] = {}
+    for nba_date in (target_date, target_date - timedelta(days=1)):
+        date_str = f"{nba_date.month:02d}/{nba_date.day:02d}/{nba_date.year}"
+        for game in get_scoreboard_by_date(date_str):
+            game_utc = game.get("game_time_utc", "")
+            try:
+                tip_eat = datetime.fromisoformat(
+                    game_utc.replace("Z", "+00:00")
+                ).astimezone(EAT_TZ).date()
+            except (AttributeError, ValueError):
+                tip_eat = target_date
+            if tip_eat == target_date and game.get("game_id"):
+                games_by_id[game["game_id"]] = game
+
+    games = sorted(games_by_id.values(), key=lambda g: g["game_time_utc"])
+    _set(key, games, TTL_STATIC)
+    return games
+
+
 def get_tomorrow_scoreboard() -> list[dict]:
     """Return games tipping on tomorrow's EAT date across NBA date boundaries."""
     target_date = datetime.now(EAT_TZ).date() + timedelta(days=1)
@@ -1289,3 +1316,82 @@ def cache_stats() -> dict:
     live  = sum(1 for _, exp in _cache.values() if exp > now)
     stale = len(_cache) - live
     return {"total": len(_cache), "live": live, "stale": stale}
+
+
+def get_nba_fixtures_strip() -> list[dict]:
+    """
+    Fetches games for yesterday, today, and tomorrow to populate the fixtures strip.
+    Since we can't reliably use ScoreboardV3 in all environments without issues,
+    we can use the scoreboard endpoint but adjust the day offset.
+    """
+    key = "nba_fixtures_strip"
+    cached = _get(key)
+    if cached is not None:
+        return cached
+
+    fixtures = []
+    try:
+        from nba_api.stats.endpoints import scoreboardv2
+        from datetime import datetime, timedelta
+        
+        # In current nba_api version, ScoreboardV2 might have issues, but ScoreboardV3 requires headers.
+        # Alternatively, we can use the regular get_today_scoreboard and perhaps fetch adjacent dates.
+        # But wait! We can just fetch via standard requests directly if nba_api is problematic,
+        # OR use nba_api endpoints properly.
+        
+        # Let's try scoreboardv2 for yesterday, today, tomorrow
+        for offset in [-1, 0, 1]:
+            try:
+                sb = scoreboardv2.ScoreboardV2(day_offset=offset, timeout=5)
+                data = sb.get_dict()
+                headers = []
+                for rs in data.get('resultSets', []):
+                    if rs['name'] == 'GameHeader':
+                        headers = [dict(zip(rs['headers'], row)) for row in rs['rowSet']]
+                
+                for h in headers:
+                    gid = h['GAME_ID']
+                    status = h.get('GAME_STATUS_TEXT', '')
+                    time_utc = h.get('GAME_DATE_EST', '') # Not UTC but close enough for sorting
+                    
+                    away = h.get('VISITOR_TEAM_ID')
+                    home = h.get('HOME_TEAM_ID')
+                    
+                    # We need tricodes. We can use our nba_team helper.
+                    from constants import nba_team
+                    away_t = nba_team(away).get('tricode', 'AWY')
+                    home_t = nba_team(home).get('tricode', 'HOM')
+                    
+                    kickoff = status
+                    if "Final" not in status and "Live" not in status:
+                        # Assuming EAT conversion or just keep status
+                        pass
+                    
+                    fixtures.append({
+                        "game_id": gid,
+                        "home": home_t,
+                        "away": away_t,
+                        "kickoff_eat": kickoff,
+                        "game_time_utc": time_utc
+                    })
+            except Exception as e:
+                log.warning(f"Failed to fetch offset {offset} for fixtures strip: {e}")
+
+        # If it fails, fallback to get_today_scoreboard
+        if not fixtures:
+            games = get_today_scoreboard()
+            for g in games:
+                fixtures.append({
+                    "game_id": g['game_id'],
+                    "home": g['home_tricode'],
+                    "away": g['away_tricode'],
+                    "kickoff_eat": g['status_text'] if g['status'] != 'live' else f"🔴 {g['away_score']}-{g['home_score']}",
+                    "game_time_utc": g['game_time_utc']
+                })
+        
+        _set(key, fixtures, TTL_STATIC)
+        return fixtures
+    except Exception as exc:
+        log.warning("Fixtures strip fetch failed: %s", exc)
+        stale = _get_stale(key)
+        return stale if stale is not None else []

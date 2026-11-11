@@ -50,7 +50,7 @@
   .team-header-widget .tp-label{margin-bottom:6px}
   .team-record-value{font-size:22px;font-weight:900;line-height:1.1}
   .team-elo{text-align:right}
-  .team-standing{font-size:11px;font-weight:700;color:var(--league-primary);margin-top:5px}
+  .team-standing{font-size:11px;font-weight:700;color:{{ col }};margin-top:5px}
   .standings-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:12px}
   .standings-table{border-collapse:collapse;font-size:11px;width:100%;white-space:nowrap}
   .standings-table th{color:var(--text-muted,#64748b);font:700 9px var(--font-mono);
@@ -321,7 +321,7 @@
       </div>
       <div style="text-align:right">
         <div style="font-family:var(--font-mono);font-size:12px;font-weight:700">
-          {% if r.away_score is not none %}{{ r.away_score }}–{{ r.home_score }}{% else %}—{% endif %}
+          {% if r.away_score is not none %}{{ r.away_score|int }}–{{ r.home_score|int }}{% else %}—{% endif %}
         </div>
         <div style="font-size:10px;color:var(--text-muted,#64748b)">
           {{ r.created_at[:10] if r.created_at else '' }}

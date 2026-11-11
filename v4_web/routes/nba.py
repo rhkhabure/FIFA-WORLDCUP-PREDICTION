@@ -43,6 +43,7 @@ from constants import (
 from nba_api_client import (
     get_today_scoreboard,
     get_tomorrow_scoreboard,
+    get_yesterday_scoreboard,
     get_next_team_game,
     get_scheduled_game,
     get_conference_standings,
@@ -410,6 +411,7 @@ async def nba_match(
             "away_team":      at,
             "home_form":      home_form,
             "away_form":      away_form,
+            "fixtures":       [_enrich_game(g) for g in all_games],
             "model_info":     _model.info() if _model else {},
             "sport":          "nba",
             # Chart.js score and game-clock poll interval (ms)
@@ -613,6 +615,7 @@ async def nba_history(request: Request, conference: str = "all"):
             "correct":     correct,
             "accuracy":    accuracy,
             "avg_brier":   avg_brier,
+            "stats":       stats,
             "conference":    conference,
             "sport":         "nba",
             "topbar_title":  "Prediction history",
