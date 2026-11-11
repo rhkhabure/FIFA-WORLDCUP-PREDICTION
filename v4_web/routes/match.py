@@ -661,6 +661,19 @@ async def match(request: Request):
         )
 
     prior, posterior, featured = None, None, {}
+
+    home_alpha, home_beta = None, None
+    away_alpha, away_beta = None, None
+    home_xg_proj, away_xg_proj = None, None
+    league_gamma, league_rho = None, None
+    home_alpha_estimated = False
+    away_alpha_estimated = False
+    vote_match_id = None
+    pregame_pick_correct = None
+    stored_predictions = []
+    recorded_prediction = None
+
+
     pitch_svg    = ""
     timeline_svg = ""
     matrix_svg   = ""
