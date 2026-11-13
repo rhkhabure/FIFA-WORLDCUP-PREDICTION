@@ -71,6 +71,31 @@
   }
 </style>
 
+<style>
+.toggle-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 10px;
+    font-family: var(--font-mono);
+    font-weight: 700;
+    color: var(--text-muted);
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: all 0.15s;
+}
+.toggle-btn:hover {
+    background: var(--surface-2);
+}
+.toggle-btn.active {
+    background: var(--text-primary);
+    color: var(--surface);
+    border-color: var(--text-primary);
+}
+</style>
+
+
 {% set col = team.primary %}
 {% set elo = team.elo %}
 {% set bar_pct = [[(elo - 1300) / 4, 3]|max, 100]|min %}
@@ -344,5 +369,16 @@
   </section>
 
 </div>
+
+
+<script>
+function switchTeamConf(conf, btn) {
+    document.getElementById('east-standings-team').style.display = conf === 'East' ? 'block' : 'none';
+    document.getElementById('west-standings-team').style.display = conf === 'West' ? 'block' : 'none';
+    
+    document.querySelectorAll('.team-conf-btn').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+}
+</script>
 
 {% endblock %}

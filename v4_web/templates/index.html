@@ -91,7 +91,7 @@
     letter-spacing: 0.5px;
     text-transform: uppercase;
     background: rgba(255,255,255,0.15);
-    color: #fff;
+    color: #0f172a;
     align-self: flex-start;
 }
 .lc-status.live {
@@ -117,7 +117,7 @@
 .lc-name {
     font-size: 24px;
     font-weight: 900;
-    color: #fff;
+    color: #0f172a;
     padding: 0 20px 4px;
     letter-spacing: -0.5px;
     line-height: 1.1;
@@ -142,7 +142,7 @@
 .lc-stat-val {
     font-size: 18px;
     font-weight: 900;
-    color: #fff;
+    color: #0f172a;
     line-height: 1;
     font-family: var(--font-mono);
 }
@@ -164,7 +164,7 @@
     padding: 13px 20px;
     background: rgba(255,255,255,0.1);
     border: none;
-    color: #fff;
+    color: #0f172a;
     font-size: 12px;
     font-weight: 800;
     cursor: pointer;
@@ -295,6 +295,31 @@
     .hub-grid .lc-pl { grid-column: span 1; }
 }
 </style>
+
+<style>
+.toggle-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 10px;
+    font-family: var(--font-mono);
+    font-weight: 700;
+    color: var(--text-muted);
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: all 0.15s;
+}
+.toggle-btn:hover {
+    background: var(--surface-2);
+}
+.toggle-btn.active {
+    background: var(--text-primary);
+    color: var(--surface);
+    border-color: var(--text-primary);
+}
+</style>
+
 
 <!-- ── LEAGUE CARDS ──────────────────────────────────────────── -->
 <div class="section-head">Choose your league</div>
@@ -478,6 +503,7 @@
       {% if live_match_groups %}
         <div class="fixture-league-head" style="color:#FF3B30">Live now</div>
         {% for group in live_match_groups %}
+        <div id="live-{{ group.league }}" class="live-group" style="display: {% if group.league == 'pl' %}block{% else %}none{% endif %};">
           <div class="fixture-league-head">
             <span class="acc-dot" style="background:{{ group.league_colour }}"></span>
             {{ group.league_name }}
@@ -495,10 +521,12 @@
             </div>
           </a>
           {% endfor %}
+        </div>
         {% endfor %}
       {% endif %}
       {% if today_match_groups %}
         {% for group in today_match_groups %}
+        <div id="fixtures-{{ group.league }}" class="fixture-group" style="display: {% if group.league == 'pl' %}block{% else %}none{% endif %};">
           <div class="fixture-league-head">
             <span class="acc-dot" style="background:{{ group.league_colour }}"></span>
             {{ group.league_name }}
@@ -533,6 +561,7 @@
             {% endif %}
           </a>
           {% endfor %}
+        </div>
         {% endfor %}
       {% else %}
         {% if not live_match_groups %}
@@ -552,11 +581,11 @@
     <div class="section-head" style="display: flex; justify-content: space-between; align-items: center;">
         <span>League Table</span>
         <div style="display: flex; gap: 8px;">
-            <button onclick="document.querySelectorAll('.league-table').forEach(e => e.style.display='none'); document.getElementById('table-pl').style.display='block'; document.querySelectorAll('.table-btn').forEach(e => e.style.color='var(--text-muted)'); this.style.color='#fff';" class="table-btn" style="background: none; border: none; font-size: 10px; font-family: var(--font-mono); font-weight: 700; color: #fff; cursor: pointer; text-transform: uppercase;">PL</button>
-            <button onclick="document.querySelectorAll('.league-table').forEach(e => e.style.display='none'); document.getElementById('table-laliga').style.display='block'; document.querySelectorAll('.table-btn').forEach(e => e.style.color='var(--text-muted)'); this.style.color='#fff';" class="table-btn" style="background: none; border: none; font-size: 10px; font-family: var(--font-mono); font-weight: 700; color: var(--text-muted); cursor: pointer; text-transform: uppercase;">La Liga</button>
-            <button onclick="document.querySelectorAll('.league-table').forEach(e => e.style.display='none'); document.getElementById('table-bundesliga').style.display='block'; document.querySelectorAll('.table-btn').forEach(e => e.style.color='var(--text-muted)'); this.style.color='#fff';" class="table-btn" style="background: none; border: none; font-size: 10px; font-family: var(--font-mono); font-weight: 700; color: var(--text-muted); cursor: pointer; text-transform: uppercase;">Bundesliga</button>
-            <button onclick="document.querySelectorAll('.league-table').forEach(e => e.style.display='none'); document.getElementById('table-seriea').style.display='block'; document.querySelectorAll('.table-btn').forEach(e => e.style.color='var(--text-muted)'); this.style.color='#fff';" class="table-btn" style="background: none; border: none; font-size: 10px; font-family: var(--font-mono); font-weight: 700; color: var(--text-muted); cursor: pointer; text-transform: uppercase;">Serie A</button>
-            <button onclick="document.querySelectorAll('.league-table').forEach(e => e.style.display='none'); document.getElementById('table-ligue1').style.display='block'; document.querySelectorAll('.table-btn').forEach(e => e.style.color='var(--text-muted)'); this.style.color='#fff';" class="table-btn" style="background: none; border: none; font-size: 10px; font-family: var(--font-mono); font-weight: 700; color: var(--text-muted); cursor: pointer; text-transform: uppercase;">Ligue 1</button>
+            <button onclick="switchLeague('pl', this)" class="toggle-btn table-btn active">PL</button>
+            <button onclick="switchLeague('laliga', this)" class="toggle-btn table-btn">La Liga</button>
+            <button onclick="switchLeague('bundesliga', this)" class="toggle-btn table-btn">Bundesliga</button>
+            <button onclick="switchLeague('seriea', this)" class="toggle-btn table-btn">Serie A</button>
+            <button onclick="switchLeague('ligue1', this)" class="toggle-btn table-btn">Ligue 1</button>
         </div>
     </div>
     <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 16px;">
@@ -584,7 +613,7 @@
                         </td>
                         <td style="padding: 6px; text-align: center;">{{ row.played }}</td>
                         <td style="padding: 6px; text-align: center;">{{ row.gd }}</td>
-                        <td style="padding: 6px; text-align: center; color: #fff; font-weight: 800;">{{ row.points }}</td>
+                        <td style="padding: 6px; text-align: center; color: #0f172a; font-weight: 800;">{{ row.points }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -661,4 +690,26 @@
   </div>
 
 </div>
+
+<script>
+function switchLeague(lg, btn) {
+    document.querySelectorAll('.league-table').forEach(e => e.style.display='none');
+    document.querySelectorAll('.fixture-group').forEach(e => e.style.display='none');
+    document.querySelectorAll('.live-group').forEach(e => e.style.display='none');
+    
+    const table = document.getElementById('table-' + lg);
+    if (table) table.style.display='block';
+    
+    const fixGroup = document.getElementById('fixtures-' + lg);
+    if (fixGroup) fixGroup.style.display='block';
+    
+    const liveGroup = document.getElementById('live-' + lg);
+    if (liveGroup) liveGroup.style.display='block';
+    
+    // Update button states
+    document.querySelectorAll('.table-btn').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+}
+</script>
+
 {% endblock %}
