@@ -1666,6 +1666,15 @@ async def hub(request: Request):
         if fixture["league"] == "laliga" and fixture["local_date"] == today
     )
 
+    # Fetch standings for hub page
+    all_standings = {}
+    for lg, code in [("pl", "PL"), ("laliga", "PD"), ("bundesliga", "BL1"), ("seriea", "SA"), ("ligue1", "FL1")]:
+        try:
+            st = get_competition_standings_fd(code)
+            all_standings[lg] = st
+        except:
+            all_standings[lg] = []
+
     return templates.TemplateResponse(
         request=request, name="index.html",
         context={
@@ -1673,6 +1682,8 @@ async def hub(request: Request):
             "league"          : "pl",
             "league_code"     : "PL",
             "season_label"    : season_label,
+            "all_standings"   : all_standings,
+            "all_standings"   : all_standings,
             "pl_stats"        : pl_stats,
             "ll_stats"        : ll_stats,
             "bl_stats"        : bl_stats,

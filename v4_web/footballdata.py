@@ -272,8 +272,11 @@ def get_competition_standings_fd(
     from v4_backend.feature_builder import TEAM_NAME_ALIASES
 
     try:
-        table = data["standings"][0]["table"]
-    except (KeyError, IndexError):
+        if not data:
+            table = []
+        else:
+            table = data["standings"][0]["table"]
+    except (KeyError, IndexError, TypeError):
         table = []
     standings = []
     for row in table:

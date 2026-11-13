@@ -179,7 +179,7 @@
 /* ── Today's matches strip ────────────────────────────────────── */
 .matches-section {
     display: grid;
-    grid-template-columns: 1fr 300px;
+    grid-template-columns: 1.2fr 1fr 300px;
     gap: 16px;
     margin-bottom: 28px;
 }
@@ -543,6 +543,54 @@
         </div>
         {% endif %}
       {% endif %}
+    </div>
+  </div>
+
+
+  <!-- ── League Table ───────────────────────────────────────────── -->
+  <div>
+    <div class="section-head" style="display: flex; justify-content: space-between; align-items: center;">
+        <span>League Table</span>
+        <div style="display: flex; gap: 8px;">
+            <button onclick="document.querySelectorAll('.league-table').forEach(e => e.style.display='none'); document.getElementById('table-pl').style.display='block'; document.querySelectorAll('.table-btn').forEach(e => e.style.color='var(--text-muted)'); this.style.color='#fff';" class="table-btn" style="background: none; border: none; font-size: 10px; font-family: var(--font-mono); font-weight: 700; color: #fff; cursor: pointer; text-transform: uppercase;">PL</button>
+            <button onclick="document.querySelectorAll('.league-table').forEach(e => e.style.display='none'); document.getElementById('table-laliga').style.display='block'; document.querySelectorAll('.table-btn').forEach(e => e.style.color='var(--text-muted)'); this.style.color='#fff';" class="table-btn" style="background: none; border: none; font-size: 10px; font-family: var(--font-mono); font-weight: 700; color: var(--text-muted); cursor: pointer; text-transform: uppercase;">La Liga</button>
+            <button onclick="document.querySelectorAll('.league-table').forEach(e => e.style.display='none'); document.getElementById('table-bundesliga').style.display='block'; document.querySelectorAll('.table-btn').forEach(e => e.style.color='var(--text-muted)'); this.style.color='#fff';" class="table-btn" style="background: none; border: none; font-size: 10px; font-family: var(--font-mono); font-weight: 700; color: var(--text-muted); cursor: pointer; text-transform: uppercase;">Bundesliga</button>
+            <button onclick="document.querySelectorAll('.league-table').forEach(e => e.style.display='none'); document.getElementById('table-seriea').style.display='block'; document.querySelectorAll('.table-btn').forEach(e => e.style.color='var(--text-muted)'); this.style.color='#fff';" class="table-btn" style="background: none; border: none; font-size: 10px; font-family: var(--font-mono); font-weight: 700; color: var(--text-muted); cursor: pointer; text-transform: uppercase;">Serie A</button>
+            <button onclick="document.querySelectorAll('.league-table').forEach(e => e.style.display='none'); document.getElementById('table-ligue1').style.display='block'; document.querySelectorAll('.table-btn').forEach(e => e.style.color='var(--text-muted)'); this.style.color='#fff';" class="table-btn" style="background: none; border: none; font-size: 10px; font-family: var(--font-mono); font-weight: 700; color: var(--text-muted); cursor: pointer; text-transform: uppercase;">Ligue 1</button>
+        </div>
+    </div>
+    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 16px;">
+        {% for lg in ["pl", "laliga", "bundesliga", "seriea", "ligue1"] %}
+        <div id="table-{{ lg }}" class="league-table" style="display: {% if lg == 'pl' %}block{% else %}none{% endif %}; max-height: 500px; overflow-y: auto;">
+            <table style="width: 100%; text-align: left; border-collapse: collapse; font-family: var(--font-mono); font-size: 11px;">
+                <thead style="border-bottom: 1px solid var(--border); color: var(--text-muted);">
+                    <tr>
+                        <th style="padding: 6px; width: 24px;">#</th>
+                        <th style="padding: 6px;">Team</th>
+                        <th style="padding: 6px; text-align: center;">P</th>
+                        <th style="padding: 6px; text-align: center;">GD</th>
+                        <th style="padding: 6px; text-align: center;">Pts</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in all_standings[lg] %}
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                        <td style="padding: 6px; color: var(--text-muted);">{{ row.position }}</td>
+                        <td style="padding: 6px; font-weight: 700;">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <img src="{{ row.crest }}" style="width: 16px; height: 16px; object-fit: contain;" onerror="this.style.display='none'">
+                                <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px;">{{ row.team_name }}</span>
+                            </div>
+                        </td>
+                        <td style="padding: 6px; text-align: center;">{{ row.played }}</td>
+                        <td style="padding: 6px; text-align: center;">{{ row.gd }}</td>
+                        <td style="padding: 6px; text-align: center; color: #fff; font-weight: 800;">{{ row.points }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endfor %}
     </div>
   </div>
 

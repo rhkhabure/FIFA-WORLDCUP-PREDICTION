@@ -193,11 +193,11 @@
             </div>
 
             <!-- Standings -->
-            {% if standings %}
             <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl">
                 <div class="text-xs font-mono text-slate-400 uppercase tracking-widest mb-3">
                     League Table
                 </div>
+                {% if standings %}
                 <div>
                     {% for row in standings %}
                     {% set is_current = (row.team_id == team_id) %}
@@ -250,8 +250,12 @@
                     </div>
                     {% endfor %}
                 </div>
+                {% else %}
+                <div class="text-xs font-mono text-slate-500 py-4 text-center">
+                    League table data currently unavailable from API feed.
+                </div>
+                {% endif %}
             </div>
-            {% endif %}
 
             <!-- Next fixture -->
             {% if next_fixture %}
@@ -330,8 +334,12 @@
                     </div>
                     {% endfor %}
                 </div>
+                {% else %}
+                <div class="text-xs font-mono text-slate-500 py-4 text-center">
+                    League table data currently unavailable from API feed.
+                </div>
+                {% endif %}
             </div>
-            {% endif %}
         </div>
 
         <!-- RIGHT: Squad + WDL -->
@@ -387,16 +395,16 @@
             {% endif %}
 
             <!-- Win / Draw / Loss widget — below squad -->
-            {% if all_results %}
-            {% set wins   = all_results | selectattr("result","eq","W") | list | length %}
-            {% set draws  = all_results | selectattr("result","eq","D") | list | length %}
-            {% set losses = all_results | selectattr("result","eq","L") | list | length %}
-            {% set total  = wins + draws + losses %}
-            {% if total > 0 %}
             <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl">
                 <div class="text-xs font-mono text-slate-400 uppercase tracking-widest mb-3">
                     Season Record
                 </div>
+                {% if all_results %}
+                {% set wins   = all_results | selectattr("result","eq","W") | list | length %}
+                {% set draws  = all_results | selectattr("result","eq","D") | list | length %}
+                {% set losses = all_results | selectattr("result","eq","L") | list | length %}
+                {% set total  = wins + draws + losses %}
+                {% if total > 0 %}
                 <div class="flex rounded-lg overflow-hidden h-4 mb-3">
                     {% if wins > 0 %}
                     <div style="width:{{ (wins/total*100)|round }}%;background:#059669"
@@ -431,20 +439,24 @@
                     <span class="text-slate-500">Points</span>
                     <span class="text-slate-200 font-bold">{{ pts }} / {{ max_pts }}</span>
                 </div>
+                {% endif %}
+                {% else %}
+                <div class="text-xs font-mono text-slate-500 py-4 text-center">
+                    Match record unavailable from API feed.
+                </div>
+                {% endif %}
             </div>
-            {% endif %}
-            {% endif %}
 
         </div>
     </div>
 
     <!-- BOTTOM: Full Season Results — full width -->
-    {% if all_results %}
-    {% set display_season = current_season|string + "/" + ((current_season + 1)|string)[-2:] %}
     <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-4 shadow-xl">
         <div class="text-xs font-mono text-slate-400 uppercase tracking-widest mb-3">
+            {% set display_season = current_season|string + "/" + ((current_season + 1)|string)[-2:] if current_season else "" %}
             {{ display_season }} Season Results
         </div>
+        {% if all_results %}
         <div class="overflow-x-auto">
             <table class="w-full text-xs font-mono">
                 <thead>
@@ -491,8 +503,12 @@
                 </tbody>
             </table>
         </div>
+        {% else %}
+        <div class="text-xs font-mono text-slate-500 py-6 text-center">
+            Detailed fixture history unavailable from API feed.
+        </div>
+        {% endif %}
     </div>
-    {% endif %}
 
 </div>
 
