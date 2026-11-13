@@ -319,22 +319,26 @@ async def nba_hub(request: Request):
     d = datetime.now(EAT).date() + (timedelta(days=1) if showing_tomorrow else timedelta())
     hub_date = d.strftime("%A %b ") + str(d.day)
 
+    standings = await run_in_threadpool(get_conference_standings)
+
+    standings = await run_in_threadpool(get_conference_standings)
+
     return templates.TemplateResponse(
         request=request,
         name="nba_hub.html",
         context={
-            "live_games":        live,
-            "upcoming_games":    pre,
-            "final_games":       final,
-            "all_games":         games,
-            "model_info":        _model.info() if _model else {},
-            "sport":             "nba",
-            "topbar_title":      f"NBA · {hub_date}",
-            "live_count":        len(live),
-            "title":             "NBA Hub",
-            "showing_tomorrow":  showing_tomorrow,
-            "tomorrow_games":   next_day_games,
-            "hub_date":          hub_date,
+            "live_games":     live,
+            "upcoming_games": pre,
+            "final_games":    final,
+            "tomorrow_games": next_day_games,
+            "all_games":      games,
+            "showing_tomorrow": showing_tomorrow,
+            "model_info":     _model.info() if _model else {},
+            "sport":          "nba",
+            "topbar_title":   "NBA · Today",
+            "live_count":     len(live),
+            "title":          "NBA Hub",
+            "standings":      standings,
         },
     )
 
