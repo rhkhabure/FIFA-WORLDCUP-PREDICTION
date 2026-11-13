@@ -1533,14 +1533,10 @@ async def hub(request: Request):
 
     # Include today's games plus completed matches from the current/most recent
     # weekend so results remain visible after the final whistle.
-    weekend_start = (
-        today_date - timedelta(days=today_date.weekday() - 5)
-        if today_date.weekday() >= 5
-        else today_date - timedelta(days=today_date.weekday() + 2)
-    )
-    weekend_end = weekend_start + timedelta(days=1)
-    date_from = weekend_start.isoformat()
-    date_to = max(today_date, weekend_end).isoformat()
+    # Include recent matches (last 5 days) and upcoming weekend matches (next 5 days)
+    # This guarantees we cover the previous weekend, today, and the upcoming weekend.
+    date_from = (today_date - timedelta(days=5)).isoformat()
+    date_to = (today_date + timedelta(days=5)).isoformat()
     leagues = {
         "pl": {"colour": "#9B59B6"},
         "laliga": {"colour": "#E74C3C"},

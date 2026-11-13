@@ -68,7 +68,7 @@
     }
     .nba-logo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain;
                     background: #fff; padding: 3px; z-index: 1; }
-    .nba-logo-fallback { font-family: var(--font-mono); font-size: 9px; font-weight: 800; color: #fff; }
+    .nba-logo-fallback { font-family: var(--font-mono); font-size: 9px; font-weight: 800; color: #0f172a; }
 
     .prob-track { display: flex; border-radius: 99px; overflow: hidden; background: var(--border, #e2e8f0); }
     .prob-track > div { transition: width 0.6s cubic-bezier(.4,0,.2,1); }
@@ -113,6 +113,31 @@
         .sched-row .prob-col .pick span:last-child { display: none; }
     }
 </style>
+
+<style>
+.toggle-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 10px;
+    font-family: var(--font-mono);
+    font-weight: 700;
+    color: var(--text-muted);
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: all 0.15s;
+}
+.toggle-btn:hover {
+    background: var(--surface-2);
+}
+.toggle-btn.active {
+    background: var(--text-primary);
+    color: var(--surface);
+    border-color: var(--text-primary);
+}
+</style>
+
 
 <div style="display:flex;flex-direction:column;gap:22px;max-width:1200px;margin:0 auto">
 
@@ -368,8 +393,8 @@
         <div class="nba-section-label" style="display: flex; justify-content: space-between; align-items: center;">
             <span>Conference Standings</span>
             <div style="display: flex; gap: 8px;">
-                <button onclick="document.getElementById('east-standings').style.display='block'; document.getElementById('west-standings').style.display='none'; this.style.color='#fff'; document.getElementById('west-btn').style.color='var(--text-muted)';" id="east-btn" style="background: none; border: none; font-size: 10px; font-family: var(--font-mono); font-weight: 700; color: #fff; cursor: pointer; text-transform: uppercase;">East</button>
-                <button onclick="document.getElementById('west-standings').style.display='block'; document.getElementById('east-standings').style.display='none'; this.style.color='#fff'; document.getElementById('east-btn').style.color='var(--text-muted)';" id="west-btn" style="background: none; border: none; font-size: 10px; font-family: var(--font-mono); font-weight: 700; color: var(--text-muted); cursor: pointer; text-transform: uppercase;">West</button>
+                <button onclick="switchConf('East', this)" class="toggle-btn conf-btn active">East</button>
+                <button onclick="switchConf('West', this)" class="toggle-btn conf-btn">West</button>
             </div>
         </div>
         
@@ -492,4 +517,15 @@
     setInterval(pollAll, 20000);
 })();
 </script>
+
+<script>
+function switchConf(conf, btn) {
+    document.getElementById('east-standings').style.display = conf === 'East' ? 'block' : 'none';
+    document.getElementById('west-standings').style.display = conf === 'West' ? 'block' : 'none';
+    
+    document.querySelectorAll('.conf-btn').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+}
+</script>
+
 {% endblock %}
