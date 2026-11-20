@@ -60,6 +60,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from footballdata import _clean_name
+from database_migrations import FOOTBALL_MIGRATIONS, apply_migrations
 
 DB_DIR  = Path(__file__).resolve().parent / "data"
 DB_DIR.mkdir(parents=True, exist_ok=True)
@@ -167,6 +168,7 @@ def init_db():
                 payload TEXT NOT NULL
             )
         """)
+        apply_migrations(conn, FOOTBALL_MIGRATIONS)
         conn.commit()
 
 

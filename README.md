@@ -81,6 +81,18 @@ transport and server/rate-limit failures. Existing in-memory or SQLite-backed
 caches serve stale data where supported, so temporary provider outages degrade
 data freshness rather than taking down page rendering.
 
+## Database backups
+
+The application uses local SQLite files for prediction history and fan votes.
+Create an integrity-checked backup outside the repository with:
+
+```bash
+python v4_web/scripts/backup_databases.py --output-dir /path/to/private/backups
+```
+
+Schedule this command on the host and copy the resulting files to durable
+off-host storage. The application does not expose database backups over HTTP.
+
 ---
 
 ## Project structure

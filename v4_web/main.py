@@ -131,6 +131,7 @@ from constants import EAT, DRAW_PROPENSITY, LEAGUE_FILTERS, LEAGUE_MAP, MATCH_LE
 from football_player_stats import get_player_season_stats
 from security import allowed_hosts, require_admin
 from monitoring import readiness_report, sqlite_probe
+from database_migrations import NBA_MIGRATIONS, apply_migrations
 
 _PROJECT_IMPORTS_READY = time.perf_counter()
 
@@ -301,6 +302,7 @@ async def lifespan(app):
                     raise
         _nba_db.execute("CREATE INDEX IF NOT EXISTS idx_pred_league ON predictions(league)")
         _nba_db.execute("CREATE INDEX IF NOT EXISTS idx_pred_game   ON predictions(game_id)")
+        apply_migrations(_nba_db, NBA_MIGRATIONS)
         _nba_db.commit()
         print("[startup] predictions.db ready")
     except Exception as e:

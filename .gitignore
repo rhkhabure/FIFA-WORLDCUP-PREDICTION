@@ -20,3 +20,6 @@ __pycache__/
 
 # Local runtime database
 v4_web/predictions.db
+
+# Local database backups
+backups/

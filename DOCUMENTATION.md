@@ -124,6 +124,21 @@ behavior; cached clients serve stale data when a refresh fails. Retries are
 bounded so a provider outage cannot block a request indefinitely or create an
 uncontrolled request storm.
 
+### 1.6 Database backups and migrations
+
+The football database is `v4_web/data/predictions.db`; the shared NBA
+prediction database is `v4_web/predictions.db`. Startup records the current
+schema baseline in SQLite `PRAGMA user_version` through
+`v4_web/database_migrations.py`. Future schema changes must be added as
+numbered, atomic migrations rather than unguarded ad-hoc `ALTER TABLE` calls.
+
+`v4_web/database_maintenance.py` uses SQLite's online backup API and runs
+`PRAGMA integrity_check` before and after each copy. The
+`v4_web/scripts/backup_databases.py` command creates timestamped backups for
+both databases and fails if either source is missing or corrupt. Backups must
+be scheduled and copied to durable off-host storage; local files and a Render
+filesystem are not sufficient disaster-recovery storage.
+
 ---
 
 ## 2. Mathematical models
