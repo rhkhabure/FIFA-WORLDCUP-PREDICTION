@@ -24,14 +24,13 @@ API base: https://api.parse.bot/scraper/645b8e03-271d-4c85-97e7-35d5733a2d78
 """
 
 import json
-import os
 import threading
 import time
 import urllib.request
 import urllib.error
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 from constants import EAT, LEAGUE_FILTERS
+from config import get_env
 
 PARSE_BASE = "https://api.parse.bot/scraper/645b8e03-271d-4c85-97e7-35d5733a2d78"
 
@@ -46,21 +45,7 @@ MATCH_WINDOW_AFTER_KICKOFF = 4 * 60 * 60
 _api_cache_lock = threading.RLock()
 
 
-def _get_api_key() -> str:
-    here = os.path.dirname(os.path.abspath(__file__))
-    for _ in range(4):
-        env_path = os.path.join(here, ".env")
-        if os.path.exists(env_path):
-            with open(env_path) as f:
-                for line in f:
-                    line = line.strip()
-                    if line.startswith("PARSE_BOT_KEY="):
-                        return line.split("=", 1)[1].strip()
-        here = os.path.dirname(here)
-    return os.environ.get("PARSE_BOT_KEY", "")
-
-
-API_KEY = _get_api_key()
+API_KEY = get_env("PARSE_BOT_KEY")
 
 
 def _fetch(endpoint: str, params: dict | None = None) -> dict:

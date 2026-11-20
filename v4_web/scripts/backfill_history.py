@@ -22,6 +22,7 @@ Requires:
 import asyncio
 import json
 import sqlite3
+import sys
 import time
 import urllib.request
 from datetime import datetime, timezone
@@ -29,18 +30,14 @@ from pathlib import Path
 import numpy as np
 from scipy.stats import poisson
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from config import get_env
+
 # ── Config ─────────────────────────────────────────────────────────────────
 ROOT       = Path(__file__).parent
 DB_PATH    = ROOT / "data" / "predictions.db"
 PRIORS_PATH= ROOT.parent / "v4_backend" / "v4_priors.json"
-ENV_PATH   = ROOT / ".env"
-
-# Load API key
-PARSE_BOT_KEY = ""
-if ENV_PATH.exists():
-    for line in ENV_PATH.read_text().splitlines():
-        if line.startswith("PARSE_BOT_KEY="):
-            PARSE_BOT_KEY = line.split("=", 1)[1].strip()
+PARSE_BOT_KEY = get_env("PARSE_BOT_KEY")
 
 # Load priors
 with open(PRIORS_PATH) as f:

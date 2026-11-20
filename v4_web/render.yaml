@@ -10,5 +10,7 @@ services:
         value: 3.11.9
       - key: FOOTBALLDATA_ORG_KEY
         sync: false
+      - key: BBS_API_KEY
+        sync: false
       - key: PARSE_BOT_KEY
         sync: false

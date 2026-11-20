@@ -245,10 +245,19 @@ short-window figures are not a guarantee of future performance.
 
 ## Environment variables (`.env`)
 
+Copy [`.env.example`](.env.example) to `.env` for local development. The
+application loads this file only as a convenience; deployment environments
+should provide secrets through their secret manager or environment settings.
+Existing environment variables always take precedence.
+
 ```
 FOOTBALLDATA_ORG_KEY=your_key_here
 BBS_API_KEY=your_bbs_key_here
 PARSE_BOT_KEY=your_parsebot_key_here   # optional
+SOFASCORE_RAPIDAPI_KEY=your_rapidapi_key_here   # legacy v3 sync only
 NBA_HISTORY_DB_PATH=v4_web/nba/sql/nba_stats.sqlite       # optional override
 NBA_PBP_DB_PATH=v4_web/nba/sql/nba_stats_pbp.sqlite      # optional override
 ```
+
+Never commit `.env` or real credentials. Any credential that was previously
+committed must be revoked and replaced at its provider before production use.

@@ -13,12 +13,11 @@ All functions return plain dicts ready for Jinja2 templates.
 
 from html import escape
 import json
-import os
 import time
 import urllib.request
 import urllib.error
 from datetime import datetime, timezone, timedelta
-from pathlib import Path
+from config import get_env
 
 EAT = timezone(timedelta(hours=3))
 
@@ -28,21 +27,7 @@ _CACHE_TTL         = 300   # 5 min for match/standings data
 _PROFILE_CACHE_TTL = 3600  # 1 hour for squad/profile (changes rarely)
 
 
-def _get_api_key() -> str:
-    here = os.path.dirname(os.path.abspath(__file__))
-    for _ in range(4):
-        env_path = os.path.join(here, ".env")
-        if os.path.exists(env_path):
-            with open(env_path) as f:
-                for line in f:
-                    line = line.strip()
-                    if line.startswith("FOOTBALLDATA_ORG_KEY="):
-                        return line.split("=", 1)[1].strip()
-        here = os.path.dirname(here)
-    return os.environ.get("FOOTBALLDATA_ORG_KEY", "")
-
-
-API_KEY  = _get_api_key()
+API_KEY  = get_env("FOOTBALLDATA_ORG_KEY")
 BASE_URL = "https://api.football-data.org/v4"
 
 

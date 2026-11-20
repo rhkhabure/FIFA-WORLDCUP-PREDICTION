@@ -62,6 +62,24 @@ where necessary so CI remains deterministic and does not require API keys.
 Browser interaction and responsive smoke tests remain release-validation
 checks until they are added to the repository's automated test harness.
 
+### 1.2 Configuration and secrets
+
+`v4_web/config.py` is the single loader for local configuration. It reads
+simple `KEY=VALUE` entries from the repository-root `.env` when present, but
+never overwrites variables already supplied by the process environment. This
+keeps deployment-provided secrets authoritative and allows CI to run without a
+local `.env`.
+
+The committed `.env.example` lists supported credentials and optional model or
+data-path overrides. The real `.env` is ignored and must never be committed.
+Provider credentials are optional at runtime; unavailable providers continue
+to use the application's existing fallback and warning behavior.
+
+The repository previously contained credentials in tracked configuration and a
+legacy hard-coded RapidAPI key. Those values have been removed from the current
+tree. They must be revoked and replaced at their providers because removing
+them from the current tree does not erase historical Git commits.
+
 ---
 
 ## 2. Mathematical models

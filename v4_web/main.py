@@ -19,7 +19,6 @@ Run:  uvicorn main:app --reload --port 8000
 # ── Standard library ──────────────────────────────────────────────────────────
 import concurrent.futures
 import json
-import os
 import pickle
 import sys
 import time
@@ -28,6 +27,7 @@ from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from urllib.parse import quote
+from config import get_env
 
 _PROCESS_START = time.perf_counter()
 
@@ -140,14 +140,14 @@ _ARTIFACT_LOOKUP_START = time.perf_counter()
 _FOOTBALL_MODEL_DIR = (
     ROOT.parent / "v4_backend" / "notebooks" / "v4_backend" / "models"
 )
-PRIORS_PATH = Path(os.environ.get(
+PRIORS_PATH = Path(get_env(
     "FOOTBALL_PRIORS_PATH",
     ROOT.parent / "v4_backend" / "v4_priors.json",
 ))
-MODEL_PATH = Path(os.environ.get(
+MODEL_PATH = Path(get_env(
     "FOOTBALL_MODEL_PATH", _FOOTBALL_MODEL_DIR / "football_v4.pth"
 ))
-SCALER_PATH = Path(os.environ.get(
+SCALER_PATH = Path(get_env(
     "FOOTBALL_SCALER_PATH", _FOOTBALL_MODEL_DIR / "scaler_v4.pkl"
 ))
 _ARTIFACTS_RESOLVED_AT = time.perf_counter()

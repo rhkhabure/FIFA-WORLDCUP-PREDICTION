@@ -1,13 +1,17 @@
 import json
+import os
 import urllib.request
 import ssl
 import time
 from pathlib import Path
 
-API_KEY = "2d8a002cf8mshf22bca7802e285bp1bfac6jsncd0235ec1f66"
+API_KEY = os.environ.get("SOFASCORE_RAPIDAPI_KEY", "")
 HOST = "sofascore.p.rapidapi.com"
 
 def fetch(endpoint):
+    if not API_KEY:
+        print("SOFASCORE_RAPIDAPI_KEY is not configured.")
+        return None
     url = f"https://{HOST}/{endpoint}"
     req = urllib.request.Request(url, headers={'x-rapidapi-key': API_KEY, 'x-rapidapi-host': HOST})
     ctx = ssl.create_default_context()

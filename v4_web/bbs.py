@@ -28,13 +28,12 @@ Environment variable: BBS_API_KEY in .env
 """
 
 import json
-import os
 import ssl
 import time
 import urllib.request
 import urllib.error
 from datetime import datetime, timezone, timedelta
-from pathlib import Path
+from config import get_env
 
 BASE_URL = "https://api.bigballsdata.com/v1"
 EAT      = timezone(timedelta(hours=3))
@@ -54,20 +53,7 @@ _TTLS = {
 }
 
 
-def _get_key() -> str:
-    here = Path(__file__).resolve().parent
-    for _ in range(4):
-        env = here / ".env"
-        if env.exists():
-            for line in env.read_text().splitlines():
-                line = line.strip()
-                if line.startswith("BBS_API_KEY="):
-                    return line.split("=", 1)[1].strip()
-        here = here.parent
-    return os.environ.get("BBS_API_KEY", "")
-
-
-API_KEY = _get_key()
+API_KEY = get_env("BBS_API_KEY")
 
 
 def has_key() -> bool:

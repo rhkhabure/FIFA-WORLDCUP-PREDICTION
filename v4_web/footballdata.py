@@ -15,12 +15,12 @@ Competition codes: PL = Premier League, PD = La Liga
 """
 
 import json
-import os
 import re
 import time as _time
 import urllib.request
 import urllib.error
 from datetime import datetime, timezone, timedelta
+from config import get_env
 
 BASE_URL  = "https://api.football-data.org/v4"
 PL_CODE   = "PL"
@@ -33,21 +33,7 @@ COMP_TO_PRIORS = {
 }
 
 
-def _get_api_key() -> str:
-    here = os.path.dirname(os.path.abspath(__file__))
-    for _ in range(4):
-        env_path = os.path.join(here, ".env")
-        if os.path.exists(env_path):
-            with open(env_path) as f:
-                for line in f:
-                    line = line.strip()
-                    if line.startswith("FOOTBALLDATA_ORG_KEY="):
-                        return line.split("=", 1)[1].strip()
-        here = os.path.dirname(here)
-    return os.environ.get("FOOTBALLDATA_ORG_KEY", "")
-
-
-API_KEY = _get_api_key()
+API_KEY = get_env("FOOTBALLDATA_ORG_KEY")
 
 
 def _fetch(endpoint: str, params: dict | None = None) -> dict:

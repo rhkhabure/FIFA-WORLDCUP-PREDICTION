@@ -17,7 +17,6 @@ Routes registered in main.py via:
 
 # ── Standard library ──────────────────────────────────────────────────────────
 import json
-import os
 import time
 from datetime import datetime, timezone, timedelta
 from collections import defaultdict
@@ -29,6 +28,7 @@ from fastapi import APIRouter
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.requests import Request
 from scipy.stats import poisson
+from config import get_env
 
 # ── Local modules ─────────────────────────────────────────────────────────────
 from bbs import (
@@ -434,7 +434,7 @@ async def api_simulate_pl(request: Request):
         ctx = ssl.create_default_context()
         ctx.check_hostname = False
         ctx.verify_mode    = ssl.CERT_NONE
-        API_KEY = os.getenv("FOOTBALLDATA_ORG_KEY", "")
+        API_KEY = get_env("FOOTBALLDATA_ORG_KEY")
         r = _urllib_req.Request(
             "https://api.football-data.org/v4/competitions/PL/standings",
             headers={"X-Auth-Token": API_KEY}
