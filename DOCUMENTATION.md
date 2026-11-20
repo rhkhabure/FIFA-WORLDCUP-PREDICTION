@@ -80,6 +80,22 @@ legacy hard-coded RapidAPI key. Those values have been removed from the current
 tree. They must be revoked and replaced at their providers because removing
 them from the current tree does not erase historical Git commits.
 
+### 1.3 Security baseline
+
+The FastAPI application uses `TrustedHostMiddleware` with `ALLOWED_HOSTS`.
+Local development defaults to `localhost`, `127.0.0.1`, and `testserver`; the
+Render configuration supplies the deployed hostname explicitly.
+
+Responses include `X-Content-Type-Options`, `X-Frame-Options`,
+`Referrer-Policy`, and `Permissions-Policy`. API and administrative responses
+are marked `no-store`; HSTS is sent only when the request is HTTPS or the
+deployment proxy reports HTTPS.
+
+The operational endpoints `/admin/*` and `/nba/debug` require
+`Authorization: Bearer <ADMIN_API_TOKEN>`. If no token is configured they
+return `503` rather than becoming unauthenticated. Public pages, `/health`,
+and fan-voting endpoints remain public by design.
+
 ---
 
 ## 2. Mathematical models

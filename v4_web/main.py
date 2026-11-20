@@ -41,6 +41,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from scipy.stats import poisson
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.responses import Response as _Response
 
 _THIRD_PARTY_IMPORTS_READY = time.perf_counter()
@@ -128,6 +129,7 @@ from routes.nba import router as nba_router, nba_setup
 from nba_model import nba_model
 from constants import EAT, DRAW_PROPENSITY, LEAGUE_FILTERS, LEAGUE_MAP, MATCH_LEAGUES
 from football_player_stats import get_player_season_stats
+from security import allowed_hosts, require_admin
 
 _PROJECT_IMPORTS_READY = time.perf_counter()
 
@@ -349,6 +351,7 @@ async def lifespan(app):
 from fastapi.staticfiles import StaticFiles
 
 app = FastAPI(title="Melios Dira Odds", lifespan=lifespan)
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts())
 app.include_router(match_router)
 app.include_router(nba_router, prefix="/nba")
 app.mount("/static", StaticFiles(directory=ROOT / "static"), name="static")
@@ -364,6 +367,25 @@ async def log_slow_requests(request: Request, call_next):
         print(
             f"[request] {request.method} {request.url.path} "
             f"completed in {elapsed:.2f}s"
+        )
+    return response
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault(
+        "Permissions-Policy", "camera=(), microphone=(), geolocation=()"
+    )
+    if request.url.path.startswith(("/api/", "/admin/")):
+        response.headers.setdefault("Cache-Control", "no-store")
+    if request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https":
+        response.headers.setdefault(
+            "Strict-Transport-Security",
+            "max-age=31536000; includeSubDomains",
         )
     return response
 
@@ -1129,8 +1151,9 @@ async def team_profile(request: Request, team_id: int, season: int = 2025):
 
 
 @app.get("/admin/run-predictions")
-async def admin_run_predictions():
+async def admin_run_predictions(request: Request):
     """Manually trigger the prediction job — useful for initial setup."""
+    require_admin(request)
     try:
         await asyncio.to_thread(
             run_prediction_job_sync, priors_db, LEAGUE_KEY
@@ -1146,8 +1169,9 @@ async def admin_run_predictions():
 
 
 @app.get("/admin/predictions-status")
-async def admin_predictions_status():
+async def admin_predictions_status(request: Request):
     """Check what's in the predictions DB."""
+    require_admin(request)
     try:
         preds = get_all_predictions()
         stats = get_accuracy_stats()
@@ -1172,8 +1196,9 @@ async def admin_predictions_status():
 
 
 @app.get("/admin/cache-status")
-async def admin_cache_status():
+async def admin_cache_status(request: Request):
     """Check FPL cache state — what's cached and how stale it is."""
+    require_admin(request)
     now = time.time()
     status = {}
     for key, (data, ts) in _cache.items():

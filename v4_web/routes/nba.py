@@ -62,6 +62,7 @@ from nba_api_client import (
     _elapsed,
 )
 from nba_model import NBAModel
+from security import require_admin
 from historical_nba import (
     HISTORICAL_SEASON_CUTOFF,
     HistoricalNBADataUnavailableError,
@@ -1191,11 +1192,12 @@ async def nba_curve(game_id: str, game_date: str = ""):
 
 
 @router.get("/debug")
-async def nba_debug():
+async def nba_debug(request: Request):
     """
     /nba/debug — model health + cache stats.
     Not linked in the UI, useful during development.
     """
+    require_admin(request)
     return JSONResponse({
         "model":  _model.info() if _model else {"loaded": False},
         "cache":  cache_stats(),

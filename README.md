@@ -64,6 +64,14 @@ python -c "from pathlib import Path; from jinja2 import Environment, FileSystemL
 PYTHONPATH=v4_web python -m unittest discover -s v4_web/tests -p "test_*.py"
 ```
 
+## Security baseline
+
+The application validates request hosts, adds standard security response
+headers, disables caching for API and administrative responses, and protects
+administrative/debug endpoints with the `ADMIN_API_TOKEN` bearer token.
+Configure `ALLOWED_HOSTS` with the deployed hostname and never use a real
+administrative token in source control.
+
 ---
 
 ## Project structure

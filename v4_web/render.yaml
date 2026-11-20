@@ -14,3 +14,7 @@ services:
         sync: false
       - key: PARSE_BOT_KEY
         sync: false
+      - key: ADMIN_API_TOKEN
+        sync: false
+      - key: ALLOWED_HOSTS
+        value: melios-dira-odds.onrender.com
