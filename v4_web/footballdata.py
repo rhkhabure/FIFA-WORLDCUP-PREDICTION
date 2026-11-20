@@ -21,6 +21,7 @@ import urllib.request
 import urllib.error
 from datetime import datetime, timezone, timedelta
 from config import get_env
+from http_resilience import urlopen_with_retry
 
 BASE_URL  = "https://api.football-data.org/v4"
 PL_CODE   = "PL"
@@ -49,7 +50,7 @@ def _fetch(endpoint: str, params: dict | None = None) -> dict:
         },
     )
     try:
-        with urllib.request.urlopen(req, timeout=8) as resp:
+        with urlopen_with_retry(req, timeout=8) as resp:
             return json.loads(resp.read().decode())
     except urllib.error.HTTPError as e:
         print(f"football-data.org HTTP {e.code} on /{endpoint}: {e.reason}")

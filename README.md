@@ -76,6 +76,11 @@ Health probes are available at `/health/live` for process liveness and
 `/health/ready` for local model/database readiness. Operational request
 counters are available at `/admin/metrics` with administrative authorization.
 
+External read-only provider requests use bounded retries for transient
+transport and server/rate-limit failures. Existing in-memory or SQLite-backed
+caches serve stale data where supported, so temporary provider outages degrade
+data freshness rather than taking down page rendering.
+
 ---
 
 ## Project structure

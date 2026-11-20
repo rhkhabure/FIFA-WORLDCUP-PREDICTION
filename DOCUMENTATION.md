@@ -111,6 +111,19 @@ counts. `/admin/metrics` exposes a snapshot of those counters behind the admin
 bearer token. Counters reset when the process restarts; durable log shipping
 and alerting remain deployment-level responsibilities.
 
+### 1.5 External API resilience
+
+`v4_web/http_resilience.py` provides bounded exponential retry for read-only
+provider requests. It retries transport failures and transient HTTP statuses
+408, 425, 429, 500, 502, 503, and 504, with a maximum of two retries and no
+retry for authentication or other permanent client errors.
+
+The helper is used by the core football, NBA fallback, fixture, lineup, player,
+and profile clients. Each client retains its existing timeout and fallback
+behavior; cached clients serve stale data when a refresh fails. Retries are
+bounded so a provider outage cannot block a request indefinitely or create an
+uncontrolled request storm.
+
 ---
 
 ## 2. Mathematical models

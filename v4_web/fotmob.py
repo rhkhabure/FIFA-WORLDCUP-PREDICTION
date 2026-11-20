@@ -31,6 +31,7 @@ import urllib.error
 from datetime import datetime, timedelta, timezone
 from constants import EAT, LEAGUE_FILTERS
 from config import get_env
+from http_resilience import urlopen_with_retry
 
 PARSE_BASE = "https://api.parse.bot/scraper/645b8e03-271d-4c85-97e7-35d5733a2d78"
 
@@ -62,7 +63,7 @@ def _fetch(endpoint: str, params: dict | None = None) -> dict:
         },
     )
     try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        with urlopen_with_retry(req, timeout=10) as resp:
             return json.loads(resp.read().decode())
     except urllib.error.HTTPError as e:
         print(f"FotMob HTTP {e.code} on {endpoint}: {e.reason}")

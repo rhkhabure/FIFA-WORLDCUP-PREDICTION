@@ -34,6 +34,7 @@ import urllib.request
 import urllib.error
 from datetime import datetime, timezone, timedelta
 from config import get_env
+from http_resilience import urlopen_with_retry
 
 BASE_URL = "https://api.bigballsdata.com/v1"
 EAT      = timezone(timedelta(hours=3))
@@ -71,7 +72,7 @@ def _fetch(endpoint: str) -> dict:
         "User-Agent"   : "V4-Dashboard/1.0",
     })
     try:
-        with urllib.request.urlopen(req, timeout=10, context=_SSL_CTX) as r:
+        with urlopen_with_retry(req, timeout=10, context=_SSL_CTX) as r:
             return json.loads(r.read().decode())
     except urllib.error.HTTPError as e:
         print(f"[bbs] HTTP {e.code} on /{endpoint}: {e.reason}")

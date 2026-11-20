@@ -18,6 +18,7 @@ import urllib.request
 import urllib.error
 from datetime import datetime, timezone, timedelta
 from config import get_env
+from http_resilience import urlopen_with_retry
 
 EAT = timezone(timedelta(hours=3))
 
@@ -46,7 +47,7 @@ def _fetch(endpoint: str, params: dict | None = None,
         url, headers={"X-Auth-Token": API_KEY}
     )
     try:
-        with urllib.request.urlopen(req, timeout=8) as resp:
+        with urlopen_with_retry(req, timeout=8) as resp:
             data = json.loads(resp.read().decode())
         _cache[url] = (data, time.time())
         return data

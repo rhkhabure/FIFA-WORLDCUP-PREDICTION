@@ -20,6 +20,7 @@ import time
 import urllib.request
 import urllib.error
 from datetime import datetime, timezone, timedelta
+from http_resilience import urlopen_with_retry
 
 BASE = "https://fantasy.premierleague.com/api"
 EAT  = timezone(timedelta(hours=3))   # East Africa Time = UTC+3
@@ -49,7 +50,7 @@ def _fetch(endpoint: str) -> dict | list:
     url = f"{BASE}/{endpoint.lstrip('/')}"
     req = urllib.request.Request(url, headers=HEADERS)
     try:
-        with urllib.request.urlopen(req, timeout=8, context=_SSL_CTX) as resp:
+        with urlopen_with_retry(req, timeout=8, context=_SSL_CTX) as resp:
             return json.loads(resp.read().decode())
     except urllib.error.HTTPError as e:
         print(f"FPL HTTP {e.code} on {endpoint}: {e.reason}")

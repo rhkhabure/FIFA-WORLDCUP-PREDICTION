@@ -29,6 +29,7 @@ import time
 import urllib.request
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
+from http_resilience import urlopen_with_retry
 
 EAT = timezone(timedelta(hours=3))
 
@@ -105,7 +106,7 @@ def _download_season(season_start: int) -> str | None:
         url, headers={"User-Agent": "Mozilla/5.0 (compatible; v4dashboard/1.0)"}
     )
     try:
-        with urllib.request.urlopen(req, timeout=15, context=_SSL_CTX) as resp:
+        with urlopen_with_retry(req, timeout=15, context=_SSL_CTX) as resp:
             raw = resp.read().decode("utf-8", errors="replace")
         cache = _cache_path(season_start)
         cache.write_text(raw, encoding="utf-8")

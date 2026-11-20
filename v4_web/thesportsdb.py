@@ -20,6 +20,7 @@ import time
 import urllib.request
 import urllib.error
 from datetime import datetime, timezone
+from http_resilience import urlopen_with_retry
 
 BASE_URL = "https://www.thesportsdb.com/api/v1/json/3"
 
@@ -39,7 +40,7 @@ def _fetch(endpoint: str) -> dict:
         "Accept"    : "application/json",
     })
     try:
-        with urllib.request.urlopen(req, timeout=8, context=_SSL_CTX) as r:
+        with urlopen_with_retry(req, timeout=8, context=_SSL_CTX) as r:
             return json.loads(r.read().decode())
     except urllib.error.HTTPError as e:
         print(f"[tsdb] HTTP {e.code} on /{endpoint}")

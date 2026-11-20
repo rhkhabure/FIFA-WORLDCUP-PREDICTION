@@ -23,11 +23,12 @@ import math
 import time
 from datetime import datetime, timezone, timedelta
 from urllib.parse import urlencode
-from urllib.request import Request, urlopen
+from urllib.request import Request
 import json
 from typing import Any
 
 from constants import nba_team
+from http_resilience import urlopen_with_retry
 
 log = logging.getLogger(__name__)
 
@@ -568,7 +569,7 @@ def get_espn_lineup(
 
     def fetch_json(url: str) -> dict:
         request = Request(url, headers={"User-Agent": "Mozilla/5.0"})
-        with urlopen(request, timeout=8) as response:
+        with urlopen_with_retry(request, timeout=8) as response:
             return json.loads(response.read())
 
     try:
@@ -853,7 +854,7 @@ def _get_espn_game_plays(
                 + urlencode({"dates": date.strftime("%Y%m%d")})
             )
             request = Request(url, headers={"User-Agent": "Mozilla/5.0"})
-            with urlopen(request, timeout=8) as response:
+            with urlopen_with_retry(request, timeout=8) as response:
                 scoreboard = json.loads(response.read())
             for event in scoreboard.get("events", []):
                 competition = (event.get("competitions") or [{}])[0]
@@ -895,7 +896,7 @@ def _get_espn_game_plays(
             + urlencode({"event": event["id"]})
         )
         request = Request(summary_url, headers={"User-Agent": "Mozilla/5.0"})
-        with urlopen(request, timeout=8) as response:
+        with urlopen_with_retry(request, timeout=8) as response:
             summary = json.loads(response.read())
         result = (summary.get("plays", []), team_ids, espn_home_code != home_code)
         if not result[0]:
