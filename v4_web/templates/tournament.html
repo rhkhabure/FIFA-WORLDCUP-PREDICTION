@@ -1,0 +1,428 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+body{background:var(--league-tint)!important}
+.t-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px}
+.tab-btn{padding:5px 16px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;
+         border:1px solid var(--border);background:var(--surface);color:var(--text-secondary);
+         transition:all .15s}
+.tab-btn.active{background:var(--league-primary);color:var(--league-gold);border-color:var(--league-primary)}
+.league-tab{padding:4px 12px;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer;
+            border:1px solid var(--border);background:var(--surface);color:var(--text-secondary)}
+.league-tab.active{background:var(--league-primary);color:var(--league-gold);border-color:var(--league-primary)}
+.team-chip{display:flex;align-items:center;gap:6px;font-size:12px;padding:5px 8px;
+           border-radius:6px;background:var(--surface);border:1px solid var(--border);
+           color:var(--text-primary);cursor:pointer;transition:all .1s;user-select:none}
+.team-chip:hover{border-color:var(--league-vivid);background:var(--league-tint)}
+.team-chip.selected{opacity:.4;cursor:default}
+.selected-chip{display:flex;align-items:center;justify-content:space-between;
+               font-size:12px;padding:5px 8px;border-radius:6px;
+               background:var(--league-tint);border:1px solid var(--league-vivid);
+               color:var(--text-primary)}
+.abbr-pill{font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;flex-shrink:0}
+.run-btn{width:100%;padding:9px;border-radius:8px;font-size:13px;font-weight:600;
+         cursor:pointer;border:none;background:var(--league-primary);
+         color:var(--league-gold);transition:opacity .15s}
+.run-btn:disabled{opacity:.4;cursor:not-allowed}
+.pct-bar{height:5px;background:var(--league-tint);border-radius:3px;overflow:hidden;margin-top:4px}
+.lbl{font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px}
+.bracket-col{display:flex;flex-direction:column;flex:1;min-width:0;padding:0 6px;
+             border-right:1px solid var(--border)}
+.bracket-col:last-child{border-right:none}
+.b-match{display:flex;flex-direction:column;gap:2px;margin-bottom:10px}
+.b-team{font-size:11px;padding:4px 8px;border-radius:5px;background:var(--surface);
+        color:var(--text-secondary);border:1px solid var(--border)}
+.b-team.winner{font-weight:600;color:var(--text-primary);border-color:var(--league-vivid)}
+.tbl-row{display:grid;grid-template-columns:28px 1fr 36px 36px 36px 36px 36px 52px 52px 52px;
+         gap:4px;align-items:center;padding:5px 8px;border-radius:6px;font-size:12px}
+.tbl-row:hover{background:var(--league-tint)}
+.tbl-head{color:var(--text-muted);font-size:10px;font-weight:600;text-transform:uppercase;
+          letter-spacing:.8px;border-bottom:1px solid var(--border);padding-bottom:4px}
+.pct-cell{font-size:11px;font-weight:600;text-align:center;border-radius:4px;padding:2px 4px}
+.spinner{display:inline-block;width:16px;height:16px;border:2px solid var(--league-gold);
+         border-top-color:transparent;border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+
+<div style="max-width:960px;margin:0 auto">
+
+<!-- Header + mode tabs -->
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+  <div>
+    <h1 style="font-size:20px;font-weight:500;color:var(--league-primary);margin-bottom:2px">
+      Tournament simulator
+    </h1>
+    <p style="font-size:12px;color:var(--text-muted)">Dixon-Coles · 10,000 Monte Carlo runs</p>
+  </div>
+  <div style="display:flex;gap:8px">
+    <button class="tab-btn active" id="tab-cl" onclick="switchMode('cl')">
+      Champions League
+    </button>
+    <button class="tab-btn" id="tab-pl" onclick="switchMode('pl')">
+      PL Season
+    </button>
+  </div>
+</div>
+
+<!-- ══ CL MODE ═══════════════════════════════════════════════════════ -->
+<div id="mode-cl">
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+
+    <!-- Team browser -->
+    <div class="t-card">
+      <div class="lbl" style="margin-bottom:10px">Browse teams by league</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px" id="league-tabs">
+        <button class="league-tab active" onclick="setLeague('pl')">PL</button>
+        <button class="league-tab" onclick="setLeague('laliga')">La Liga</button>
+        <button class="league-tab" onclick="setLeague('bundesliga')">Bundesliga</button>
+        <button class="league-tab" onclick="setLeague('seriea')">Serie A</button>
+        <button class="league-tab" onclick="setLeague('ligue1')">Ligue 1</button>
+      </div>
+      <div id="team-list" style="display:grid;grid-template-columns:1fr 1fr;gap:4px;max-height:280px;overflow-y:auto"></div>
+    </div>
+
+    <!-- Selection + run -->
+    <div class="t-card" style="display:flex;flex-direction:column;gap:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div class="lbl">Selected teams</div>
+        <span id="slot-count" style="font-size:12px;color:var(--text-muted)">0 / 16</span>
+      </div>
+      <div id="selected-list" style="display:grid;grid-template-columns:1fr 1fr;gap:4px;flex:1;min-height:180px"></div>
+      <button class="run-btn" id="cl-run-btn" onclick="runCL()" disabled>
+        Run 10,000 simulations
+      </button>
+      <button onclick="clearSelection()" style="font-size:11px;color:var(--text-muted);
+              background:none;border:none;cursor:pointer;text-align:left;padding:0">
+        Clear all
+      </button>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <div id="cl-results" style="display:none;display:grid;grid-template-columns:220px 1fr;gap:12px">
+
+    <!-- Win probabilities -->
+    <div class="t-card">
+      <div class="lbl" style="margin-bottom:12px">Win probability</div>
+      <div id="win-prob-list" style="display:flex;flex-direction:column;gap:8px"></div>
+      <div style="margin-top:12px;font-size:10px;color:var(--text-muted)" id="cl-n-runs"></div>
+    </div>
+
+    <!-- Bracket -->
+    <div class="t-card" style="overflow-x:auto">
+      <div class="lbl" style="margin-bottom:12px">Most likely bracket</div>
+      <div style="display:flex;min-width:520px" id="bracket-display"></div>
+    </div>
+  </div>
+
+  <div id="cl-loading" style="display:none;text-align:center;padding:40px">
+    <div class="spinner" style="margin:0 auto 12px"></div>
+    <div style="font-size:12px;color:var(--text-muted)">Running 10,000 simulations…</div>
+  </div>
+</div>
+
+<!-- ══ PL MODE ═══════════════════════════════════════════════════════ -->
+<div id="mode-pl" style="display:none">
+  <div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap">
+    <button class="run-btn" id="pl-run-btn" onclick="runPL()"
+            style="max-width:280px">
+      Simulate remaining season (10,000 runs)
+    </button>
+    <div style="font-size:12px;color:var(--text-muted);align-self:center;line-height:1.5">
+      Fetches current standings from football-data.org · simulates remaining fixtures using DC priors
+    </div>
+  </div>
+
+  <div id="pl-loading" style="display:none;text-align:center;padding:40px">
+    <div class="spinner" style="margin:0 auto 12px"></div>
+    <div style="font-size:12px;color:var(--text-muted)">Simulating 30+ gameweeks × 10,000 times…</div>
+  </div>
+
+  <div id="pl-results" style="display:none">
+    <div class="t-card" style="overflow-x:auto">
+      <div class="lbl" style="margin-bottom:12px">Predicted final table</div>
+      <!-- Header -->
+      <div class="tbl-row tbl-head" style="margin-bottom:4px">
+        <span>#</span>
+        <span>Team</span>
+        <span style="text-align:center">Pts</span>
+        <span style="text-align:center">P10</span>
+        <span style="text-align:center">P90</span>
+        <span style="text-align:center">GD</span>
+        <span style="text-align:center">Pos</span>
+        <span style="text-align:center">Title</span>
+        <span style="text-align:center">Top 4</span>
+        <span style="text-align:center">Rel.</span>
+      </div>
+      <div id="pl-table-body"></div>
+      <div style="margin-top:10px;font-size:10px;color:var(--text-muted)" id="pl-n-runs"></div>
+    </div>
+  </div>
+</div>
+
+</div>
+
+<script>
+const ALL_TEAMS = {{ all_teams | safe }};
+const LEAGUE_KEYS = {
+  pl:'ENG-Premier League', laliga:'ESP-La Liga',
+  bundesliga:'GER-Bundesliga', seriea:'ITA-Serie A', ligue1:'FRA-Ligue 1'
+};
+
+let currentLeague = 'pl';
+let selected = [];   // [{name, fill, stroke, abbr, league}]
+
+function switchMode(mode) {
+  document.getElementById('mode-cl').style.display = mode==='cl' ? '' : 'none';
+  document.getElementById('mode-pl').style.display = mode==='pl' ? '' : 'none';
+  document.getElementById('tab-cl').classList.toggle('active', mode==='cl');
+  document.getElementById('tab-pl').classList.toggle('active', mode==='pl');
+}
+
+function setLeague(lg) {
+  currentLeague = lg;
+  document.querySelectorAll('.league-tab').forEach(b =>
+    b.classList.toggle('active', b.textContent.toLowerCase().replace(/ /g,'') === 
+      {pl:'pl',laliga:'laliga',bundesliga:'bundesliga',seriea:'seriea',ligue1:'ligue1'}[lg])
+  );
+  renderTeamList();
+}
+
+function abbrPill(t) {
+  return `<span class="abbr-pill" style="background:${t.fill};color:${t.stroke === '#fff' ? '#fff' : '#222'};
+          border:1px solid ${t.stroke}">${t.abbr}</span>`;
+}
+
+function renderTeamList() {
+  const teams = ALL_TEAMS[currentLeague] || [];
+  const isSelected = name => selected.some(s => s.name === name);
+  document.getElementById('team-list').innerHTML = teams.map(t => `
+    <div class="team-chip ${isSelected(t.name)?'selected':''}"
+         onclick="toggleTeam(${JSON.stringify(t).replace(/"/g,"'")}, '${currentLeague}')">
+      ${abbrPill(t)}
+      <span style="truncate;overflow:hidden;white-space:nowrap;max-width:90px">${t.name}</span>
+    </div>
+  `).join('');
+}
+
+function renderSelected() {
+  const slots = 16;
+  let html = '';
+  for (let i = 0; i < slots; i++) {
+    if (i < selected.length) {
+      const t = selected[i];
+      html += `<div class="selected-chip">
+        <span style="display:flex;align-items:center;gap:5px;overflow:hidden">
+          ${abbrPill(t)}
+          <span style="overflow:hidden;white-space:nowrap;font-size:11px">${t.name}</span>
+        </span>
+        <span onclick="removeTeam(${i})" style="cursor:pointer;color:var(--text-muted);
+              font-size:16px;line-height:1;flex-shrink:0">×</span>
+      </div>`;
+    } else {
+      html += `<div style="font-size:11px;padding:5px 8px;border-radius:6px;
+               background:var(--surface);color:var(--text-muted);
+               border:1px dashed var(--border);text-align:center">+ add team</div>`;
+    }
+  }
+  document.getElementById('selected-list').innerHTML = html;
+  document.getElementById('slot-count').textContent = `${selected.length} / 16`;
+  document.getElementById('cl-run-btn').disabled = selected.length !== 16;
+}
+
+function toggleTeam(tStr, league) {
+  const t = typeof tStr === 'string'
+    ? JSON.parse(tStr.replace(/'/g, '"'))
+    : tStr;
+  if (selected.some(s => s.name === t.name)) return;
+  if (selected.length >= 16) return;
+  selected.push({...t, league});
+  renderTeamList();
+  renderSelected();
+}
+
+function removeTeam(idx) {
+  selected.splice(idx, 1);
+  renderTeamList();
+  renderSelected();
+}
+
+function clearSelection() {
+  selected = [];
+  renderTeamList();
+  renderSelected();
+  document.getElementById('cl-results').style.display = 'none';
+}
+
+// ── CL simulation ─────────────────────────────────────────────────
+async function runCL() {
+  if (selected.length !== 16) return;
+  document.getElementById('cl-loading').style.display = '';
+  document.getElementById('cl-results').style.display = 'none';
+  document.getElementById('cl-run-btn').disabled = true;
+
+  const teams    = selected.map(s => s.name);
+  const leagueMap= Object.fromEntries(selected.map(s => [s.name, LEAGUE_KEYS[s.league]]));
+
+  try {
+    const resp = await fetch('/api/simulate/cl', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({teams, league_map: leagueMap})
+    });
+    const data = await resp.json();
+    if (data.error) { alert(data.error); return; }
+    renderCLResults(data);
+  } catch(e) {
+    alert('Simulation failed: ' + e.message);
+  } finally {
+    document.getElementById('cl-loading').style.display = 'none';
+    document.getElementById('cl-run-btn').disabled = false;
+  }
+}
+
+function renderCLResults(data) {
+  const winPct = data.win_pct;
+  const sfPct  = data.sf_pct;
+
+  // Win probability list
+  const teamMap = Object.fromEntries(selected.map(s => [s.name, s]));
+  const ranked  = Object.entries(winPct).sort((a,b) => b[1]-a[1]);
+  const maxPct  = ranked[0]?.[1] || 1;
+
+  document.getElementById('win-prob-list').innerHTML = ranked.slice(0,8).map(([name, pct]) => {
+    const t = teamMap[name] || {fill:'#888',abbr:name.slice(0,3)};
+    return `<div>
+      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px">
+        <span style="display:flex;align-items:center;gap:5px;color:var(--text-primary)">
+          ${abbrPill(t)} ${name}
+        </span>
+        <span style="font-family:var(--font-mono);font-weight:500;color:var(--text-primary)">${pct}%</span>
+      </div>
+      <div class="pct-bar"><div style="width:${(pct/maxPct*100).toFixed(1)}%;height:100%;
+           background:${t.fill};border-radius:3px"></div></div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('cl-n-runs').textContent =
+    `n = ${data.n_runs.toLocaleString()} simulations · click team for DC odds`;
+
+  // Bracket
+  const ml = data.most_likely;
+  const bracket = document.getElementById('bracket-display');
+  bracket.innerHTML = '';
+  const rounds = [
+    {label:'Round of 16', matches: ml.r16 || [], span:1},
+    {label:'Quarter finals', matches: ml.qf || [], span:2},
+    {label:'Semi finals', matches: ml.sf || [], span:4},
+    {label:'Final', matches: ml.final || [], span:8},
+  ];
+  rounds.forEach(({label, matches, span}) => {
+    const col = document.createElement('div');
+    col.className = 'bracket-col';
+    col.style.paddingTop = `${(span-1)*18}px`;
+    col.innerHTML = `<div class="lbl" style="margin-bottom:8px;white-space:nowrap">${label}</div>`;
+    matches.forEach(m => {
+      const t1 = teamMap[m.home] || {};
+      const t2 = teamMap[m.away] || {};
+      col.innerHTML += `<div class="b-match" style="margin-bottom:${span*14}px">
+        <div class="b-team ${m.winner===m.home?'winner':''}"
+             style="${m.winner===m.home?`background:${(t1.fill||'#888')}18;border-color:${t1.fill||'#888'}60`:''};
+                    display:flex;align-items:center;gap:5px">
+          ${abbrPill(t1)} ${m.home}
+        </div>
+        <div class="b-team ${m.winner===m.away?'winner':''}"
+             style="${m.winner===m.away?`background:${(t2.fill||'#888')}18;border-color:${t2.fill||'#888'}60`:''};
+                    display:flex;align-items:center;gap:5px">
+          ${abbrPill(t2)} ${m.away}
+        </div>
+      </div>`;
+    });
+    // Winner card on final column
+    if (label === 'Final' && ml.winner) {
+      const wt = teamMap[ml.winner] || {};
+      col.innerHTML += `<div style="padding:8px 10px;border-radius:8px;background:${wt.fill||'#888'};
+                             text-align:center;margin-top:4px">
+        <div style="font-size:9px;color:rgba(255,255,255,.7);text-transform:uppercase;letter-spacing:1px">
+          Most likely winner
+        </div>
+        <div style="font-size:13px;font-weight:500;color:#fff;margin-top:2px">${ml.winner}</div>
+        <div style="font-size:11px;color:rgba(255,255,255,.8);font-family:var(--font-mono)">
+          ${winPct[ml.winner]}%
+        </div>
+      </div>`;
+    }
+    bracket.appendChild(col);
+  });
+
+  document.getElementById('cl-results').style.display = 'grid';
+}
+
+// ── PL simulation ─────────────────────────────────────────────────
+async function runPL() {
+  document.getElementById('pl-loading').style.display = '';
+  document.getElementById('pl-results').style.display = 'none';
+  document.getElementById('pl-run-btn').disabled = true;
+
+  try {
+    const resp = await fetch('/api/simulate/pl', {method:'POST'});
+    const data = await resp.json();
+    if (data.error) { alert(data.error); return; }
+    renderPLResults(data);
+  } catch(e) {
+    alert('Simulation failed: ' + e.message);
+  } finally {
+    document.getElementById('pl-loading').style.display = 'none';
+    document.getElementById('pl-run-btn').disabled = false;
+  }
+}
+
+function pctCell(pct, colorFn) {
+  const [bg, col] = colorFn(pct);
+  if (pct <= 0) return `<span class="pct-cell" style="color:var(--text-muted)">—</span>`;
+  return `<span class="pct-cell" style="background:${bg};color:${col}">${pct}%</span>`;
+}
+
+function renderPLResults(data) {
+  const table = data.table || [];
+  const teamMap = Object.fromEntries(
+    (ALL_TEAMS.pl||[]).map(t => [t.name, t])
+  );
+
+  document.getElementById('pl-table-body').innerHTML = table.map((row, i) => {
+    const pos = i + 1;
+    const t   = teamMap[row.team] || {fill:'#888',abbr:row.team.slice(0,3).toUpperCase(),stroke:'#fff'};
+    const isTop4   = pos <= 4;
+    const isRel    = pos >= 18;
+    const rowBg    = isTop4 ? `background:var(--league-tint)` : isRel ? `background:#FFF5F5` : '';
+    const titleFn  = p => p>15?['#dcfce7','#14532d']:p>5?['#f0fdf4','#15803d']:['transparent','var(--text-muted)'];
+    const top4Fn   = p => p>40?['#dbeafe','#1e3a8a']:p>20?['#eff6ff','#1d4ed8']:['transparent','var(--text-muted)'];
+    const relFn    = p => p>40?['#fee2e2','#7f1d1d']:p>15?['#fef2f2','#991b1b']:['transparent','var(--text-muted)'];
+    return `<div class="tbl-row" style="${rowBg}">
+      <span style="color:var(--text-muted);font-weight:500;font-family:var(--font-mono)">${pos}</span>
+      <span style="display:flex;align-items:center;gap:5px;overflow:hidden">
+        ${abbrPill(t)}
+        <span style="overflow:hidden;white-space:nowrap">${row.team}</span>
+      </span>
+      <span style="text-align:center;font-weight:600;font-family:var(--font-mono)">${row.pts_median}</span>
+      <span style="text-align:center;font-size:10px;color:var(--text-muted);font-family:var(--font-mono)">${row.pts_p10}</span>
+      <span style="text-align:center;font-size:10px;color:var(--text-muted);font-family:var(--font-mono)">${row.pts_p90}</span>
+      <span style="text-align:center;font-size:11px;font-family:var(--font-mono);
+            color:${row.gd_median>=0?'#15803d':'#dc2626'}">${row.gd_median>=0?'+':''}${row.gd_median}</span>
+      <span style="text-align:center;font-size:11px;color:var(--text-muted);font-family:var(--font-mono)">${row.pos_median}</span>
+      <span style="text-align:center">${pctCell(row.title_pct, titleFn)}</span>
+      <span style="text-align:center">${pctCell(row.top4_pct, top4Fn)}</span>
+      <span style="text-align:center">${pctCell(row.rel_pct, relFn)}</span>
+    </div>`;
+  }).join('');
+
+  document.getElementById('pl-n-runs').textContent =
+    `n = ${data.n_runs.toLocaleString()} simulations · ${data.fixtures} remaining fixtures · pts = median projected final points`;
+  document.getElementById('pl-results').style.display = '';
+}
+
+// Init
+renderTeamList();
+renderSelected();
+</script>
+{% endblock %}

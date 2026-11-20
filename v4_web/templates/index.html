@@ -1,0 +1,715 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+/* ── Hub page ─────────────────────────────────────────────────── */
+.section-head {
+    font-size: 10px;
+    font-weight: 800;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-bottom: 14px;
+}
+
+/* ── League grid ──────────────────────────────────────────────── */
+.hub-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr;
+    grid-template-rows: auto auto;
+    gap: 14px;
+    margin-bottom: 28px;
+}
+/* PL spans 2 rows on left */
+.hub-grid .lc-pl { grid-row: span 2; }
+
+/* ── League card ──────────────────────────────────────────────── */
+.league-card {
+    border-radius: 20px;
+    overflow: hidden;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: transform 0.18s cubic-bezier(.4,0,.2,1),
+                border-color 0.18s,
+                box-shadow 0.18s;
+    display: flex;
+    flex-direction: column;
+    text-decoration: none;
+    position: relative;
+}
+.league-card:hover {
+    transform: translateY(-3px) scale(1.015);
+    border-color: rgba(255,255,255,0.25);
+    box-shadow: 0 12px 40px rgba(0,0,0,0.25);
+}
+/* Hover overlay shimmer */
+.league-card::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg,
+        rgba(255,255,255,0.08) 0%,
+        transparent 60%);
+    opacity: 0;
+    transition: opacity 0.18s;
+    pointer-events: none;
+    border-radius: inherit;
+}
+.league-card:hover::after { opacity: 1; }
+
+/* Logo emblem flip on hover */
+.lc-logo {
+    width: 60px;
+    height: 60px;
+    border-radius: 14px;
+    background: rgba(255,255,255,0.12);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: transform 0.4s cubic-bezier(.4,0,.2,1);
+    transform-style: preserve-3d;
+}
+.league-card:hover .lc-logo {
+    transform: rotateY(15deg) scale(1.05);
+}
+.lc-logo img {
+    width: 42px;
+    height: 42px;
+    object-fit: contain;
+    filter: brightness(0) invert(1);
+    transition: filter 0.2s;
+}
+/* PL logo — show gold tint on hover */
+.lc-pl:hover .lc-logo img { filter: brightness(0.9) sepia(1) saturate(4) hue-rotate(5deg); }
+
+/* Status badge */
+.lc-status {
+    font-size: 9px;
+    font-weight: 800;
+    padding: 4px 10px;
+    border-radius: 20px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    background: rgba(255,255,255,0.15);
+    color: #0f172a;
+    align-self: flex-start;
+}
+.lc-status.live {
+    background: #FF3B30;
+    animation: pulse-badge 1.5s infinite;
+}
+.lc-status.today {
+    background: rgba(255,215,0,0.25);
+    color: #FFD700;
+}
+@keyframes pulse-badge {
+    0%,100%{opacity:1} 50%{opacity:0.6}
+}
+
+/* Card text */
+.lc-header {
+    padding: 20px 20px 14px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    flex: 0 0 auto;
+}
+.lc-name {
+    font-size: 24px;
+    font-weight: 900;
+    color: #0f172a;
+    padding: 0 20px 4px;
+    letter-spacing: -0.5px;
+    line-height: 1.1;
+}
+.lc-country {
+    font-size: 11px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.6);
+    padding: 0 20px 16px;
+}
+
+/* Stats strip */
+.lc-stats {
+    display: flex;
+    background: rgba(0,0,0,0.18);
+    padding: 12px 20px;
+    gap: 24px;
+    flex: 1;
+    align-items: center;
+}
+.lc-stat { flex: 1; }
+.lc-stat-val {
+    font-size: 18px;
+    font-weight: 900;
+    color: #0f172a;
+    line-height: 1;
+    font-family: var(--font-mono);
+}
+.lc-stat-lbl {
+    font-size: 9px;
+    color: rgba(255,255,255,0.5);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 3px;
+}
+
+/* CTA */
+.lc-btn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 13px 20px;
+    background: rgba(255,255,255,0.1);
+    border: none;
+    color: #0f172a;
+    font-size: 12px;
+    font-weight: 800;
+    cursor: pointer;
+    letter-spacing: 0.3px;
+    transition: background 0.15s;
+    flex-shrink: 0;
+}
+.lc-btn:hover { background: rgba(255,255,255,0.2); }
+.lc-arrow { font-size: 14px; transition: transform 0.15s; }
+.league-card:hover .lc-arrow { transform: translateX(4px); }
+
+/* ── Today's matches strip ────────────────────────────────────── */
+.matches-section {
+    display: grid;
+    grid-template-columns: 1.2fr 1fr 300px;
+    gap: 16px;
+    margin-bottom: 28px;
+}
+.matches-list {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+}
+.match-row {
+    display: flex;
+    align-items: center;
+    padding: 11px 16px;
+    gap: 12px;
+    border-bottom: 1px solid var(--border);
+    text-decoration: none;
+    transition: background 0.1s;
+}
+.match-row:last-child { border-bottom: none; }
+.match-row:hover { background: var(--league-tint); }
+.match-pip {
+    width: 4px;
+    border-radius: 2px;
+    align-self: stretch;
+    min-height: 36px;
+    flex-shrink: 0;
+}
+.match-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-primary);
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.match-sub {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-top: 1px;
+    font-weight: 500;
+}
+.match-odds { display: flex; gap: 5px; flex-shrink: 0; }
+.odd-pill {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-family: var(--font-mono);
+}
+.match-time {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-muted);
+    min-width: 52px;
+    text-align: right;
+    font-family: var(--font-mono);
+    flex-shrink: 0;
+}
+.match-time.live { color: #FF3B30; }
+.match-result {
+    font-size: 16px;
+    line-height: 1;
+    flex-shrink: 0;
+}
+.match-result.correct { color: #10b981; }
+.match-result.wrong { color: #ef4444; }
+.fixture-league-head {
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:10px 16px 7px;
+    font-size:10px;
+    font-weight:800;
+    color:var(--text-muted);
+    text-transform:uppercase;
+    letter-spacing:1px;
+    background:var(--surface);
+}
+.fixture-league-head .acc-dot { width:7px; height:7px; }
+
+/* ── Accuracy panel ───────────────────────────────────────────── */
+.accuracy-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px;
+}
+.acc-row {
+    display: flex;
+    align-items: center;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--border);
+    gap: 8px;
+}
+.acc-row:last-child { border-bottom: none; }
+.acc-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.acc-name { font-size: 12px; font-weight: 600; color: var(--text-primary); flex: 1; }
+.acc-val { font-size: 13px; font-weight: 900; font-family: var(--font-mono); }
+.acc-sub { font-size: 10px; color: var(--text-muted); }
+
+/* ── Responsive ───────────────────────────────────────────────── */
+@media (max-width: 1100px) {
+    .hub-grid {
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: auto;
+    }
+    .hub-grid .lc-pl { grid-row: span 1; grid-column: span 2; }
+    .matches-section { grid-template-columns: 1fr; }
+}
+@media (max-width: 720px) {
+    .hub-grid { grid-template-columns: 1fr; }
+    .hub-grid .lc-pl { grid-column: span 1; }
+}
+</style>
+
+<style>
+.toggle-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 10px;
+    font-family: var(--font-mono);
+    font-weight: 700;
+    color: var(--text-muted);
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: all 0.15s;
+}
+.toggle-btn:hover {
+    background: var(--surface-2);
+}
+.toggle-btn.active {
+    background: var(--text-primary);
+    color: var(--surface);
+    border-color: var(--text-primary);
+}
+</style>
+
+
+<!-- ── LEAGUE CARDS ──────────────────────────────────────────── -->
+<div class="section-head">Choose your league</div>
+<div class="hub-grid">
+
+  <!-- PREMIER LEAGUE — featured, left column, full height -->
+  <a href="/match?league=pl" class="league-card lc-pl"
+     style="background:#3D185A">
+    <div class="lc-header">
+      <div class="lc-logo">
+        <img src="/static/logos/pl.svg" alt="Premier League"
+             onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'PL',style:'color:#F9D000;font-weight:900;font-size:14px'}))"/>
+      </div>
+      <div class="lc-status {% if live_count_pl and live_count_pl > 0 %}live{% endif %}">
+        {% if live_count_pl and live_count_pl > 0 %}
+          {{ live_count_pl }} Live
+        {% else %}
+          Active
+        {% endif %}
+      </div>
+    </div>
+    <div class="lc-name">Premier League</div>
+    <div class="lc-country">England · Season {{ season_label }}</div>
+    <div class="lc-stats">
+      <div class="lc-stat">
+        <div class="lc-stat-val">{{ pl_stats.total_logged if pl_stats else '0' }}</div>
+        <div class="lc-stat-lbl">Predictions</div>
+      </div>
+      <div class="lc-stat">
+        <div class="lc-stat-val" style="color:#F9D000">
+          {% if pl_stats and pl_stats.pre_total > 0 %}{{ pl_stats.pre_accuracy }}%{% else %}N/A{% endif %}
+        </div>
+        <div class="lc-stat-lbl">DC Accuracy</div>
+      </div>
+      <div class="lc-stat">
+        <div class="lc-stat-val">{{ pl_stats.total_finished if pl_stats else '0' }}</div>
+        <div class="lc-stat-lbl">Resolved</div>
+      </div>
+      <div class="lc-stat">
+        <div class="lc-stat-val">4</div>
+        <div class="lc-stat-lbl">GWs logged</div>
+      </div>
+    </div>
+    <div class="lc-btn">
+      <span>Open Premier League dashboard</span>
+      <span class="lc-arrow">→</span>
+    </div>
+  </a>
+
+  <!-- LA LIGA — top right -->
+  <a href="/match?league=laliga" class="league-card"
+     style="background:linear-gradient(135deg,#8B0000 0%,#C0392B 70%,#FF8C00 100%)">
+    <div class="lc-header">
+      <div class="lc-logo">
+        <img src="/static/logos/laliga.svg" alt="La Liga"
+             onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'LL',style:'color:#FFD700;font-weight:900;font-size:14px'}))"/>
+      </div>
+      <div class="lc-status today">
+        {% if today_count_laliga %}{{ today_count_laliga }} Today{% else %}No games today{% endif %}
+      </div>
+    </div>
+    <div class="lc-name">La Liga</div>
+    <div class="lc-country">Spain · Season {{ season_label }}</div>
+    <div class="lc-stats">
+      <div class="lc-stat">
+        <div class="lc-stat-val">
+          {% if ll_stats and ll_stats.pre_total > 0 %}{{ ll_stats.pre_accuracy }}%{% else %}N/A{% endif %}
+        </div>
+        <div class="lc-stat-lbl">Accuracy</div>
+      </div>
+      <div class="lc-stat">
+        <div class="lc-stat-val" style="color:#FFD700">{{ ll_stats.pre_total if ll_stats else 0 }}</div>
+        <div class="lc-stat-lbl">Scored</div>
+      </div>
+    </div>
+    <div class="lc-btn">
+      <span>Open La Liga dashboard</span>
+      <span class="lc-arrow">→</span>
+    </div>
+  </a>
+
+  <!-- BUNDESLIGA — middle right -->
+  <a href="/match?league=bundesliga" class="league-card"
+     style="background:#1A1A1A">
+    <div class="lc-header">
+      <div class="lc-logo">
+        <img src="/static/logos/bundesliga.svg" alt="Bundesliga"
+             onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'BL',style:'color:#E74C3C;font-weight:900;font-size:14px'}))"/>
+      </div>
+      <div class="lc-status">Upcoming</div>
+    </div>
+    <div class="lc-name">Bundesliga</div>
+    <div class="lc-country">Germany · Season {{ season_label }}</div>
+    <div class="lc-stats">
+      <div class="lc-stat">
+        <div class="lc-stat-val">
+          {% if bl_stats and bl_stats.pre_total > 0 %}{{ bl_stats.pre_accuracy }}%{% else %}N/A{% endif %}
+        </div>
+        <div class="lc-stat-lbl">Accuracy</div>
+      </div>
+      <div class="lc-stat">
+        <div class="lc-stat-val" style="color:#FFD700">{{ bl_stats.pre_total if bl_stats else 0 }}</div>
+        <div class="lc-stat-lbl">Scored</div>
+      </div>
+    </div>
+    <div class="lc-btn">
+      <span>Open Bundesliga dashboard</span>
+      <span class="lc-arrow">→</span>
+    </div>
+  </a>
+
+  <!-- SERIE A — bottom right -->
+  <a href="/match?league=seriea" class="league-card"
+     style="background:linear-gradient(135deg,#1A3A6B 0%,#2563EB 100%)">
+    <div class="lc-header">
+      <div class="lc-logo">
+        <img src="/static/logos/seriea.svg" alt="Serie A"
+             onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'SA',style:'color:#60A5FA;font-weight:900;font-size:14px'}))"/>
+      </div>
+      <div class="lc-status">Upcoming</div>
+    </div>
+    <div class="lc-name">Serie A</div>
+    <div class="lc-country">Italy · Season {{ season_label }}</div>
+    <div class="lc-stats">
+      <div class="lc-stat">
+        <div class="lc-stat-val">
+          {% if sa_stats and sa_stats.pre_total > 0 %}{{ sa_stats.pre_accuracy }}%{% else %}N/A{% endif %}
+        </div>
+        <div class="lc-stat-lbl">Accuracy</div>
+      </div>
+      <div class="lc-stat">
+        <div class="lc-stat-val" style="color:#60A5FA">{{ sa_stats.pre_total if sa_stats else 0 }}</div>
+        <div class="lc-stat-lbl">Scored</div>
+      </div>
+    </div>
+    <div class="lc-btn">
+      <span>Open Serie A dashboard</span>
+      <span class="lc-arrow">→</span>
+    </div>
+  </a>
+
+  <!-- LIGUE 1 — bottom far right -->
+  <a href="/league/ligue1" class="league-card"
+     style="background:#003087">
+    <div class="lc-header">
+      <div class="lc-logo">
+        <img src="/static/logos/ligue1.svg" alt="Ligue 1"
+             onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'L1',style:'color:#00A3E0;font-weight:900;font-size:14px'}))"/>
+      </div>
+      <div class="lc-status">Upcoming</div>
+    </div>
+    <div class="lc-name">Ligue 1</div>
+    <div class="lc-country">France · Season {{ season_label }}</div>
+    <div class="lc-stats">
+      <div class="lc-stat">
+        <div class="lc-stat-val">
+          {% if l1_stats and l1_stats.pre_total > 0 %}{{ l1_stats.pre_accuracy }}%{% else %}N/A{% endif %}
+        </div>
+        <div class="lc-stat-lbl">Accuracy</div>
+      </div>
+      <div class="lc-stat">
+        <div class="lc-stat-val" style="color:#00A3E0">{{ l1_stats.pre_total if l1_stats else 0 }}</div>
+        <div class="lc-stat-lbl">Scored</div>
+      </div>
+    </div>
+    <div class="lc-btn">
+      <span>Open Ligue 1 dashboard</span>
+      <span class="lc-arrow">→</span>
+    </div>
+  </a>
+
+</div>
+
+<!-- ── TODAY'S MATCHES + ACCURACY ─────────────────────────────── -->
+<div class="matches-section">
+
+  <!-- Fixtures -->
+  <div>
+    <div class="section-head">Today's fixtures and weekend results · {{ today }}</div>
+    <div class="matches-list">
+      {% if live_match_groups %}
+        <div class="fixture-league-head" style="color:#FF3B30">Live now</div>
+        {% for group in live_match_groups %}
+        <div id="live-{{ group.league }}" class="live-group" style="display: {% if group.league == 'pl' %}block{% else %}none{% endif %};">
+          <div class="fixture-league-head">
+            <span class="acc-dot" style="background:{{ group.league_colour }}"></span>
+            {{ group.league_name }}
+          </div>
+          {% for m in group.fixtures %}
+          <a href="/match?match_id={{ m.match_id }}&league={{ m.league }}" class="match-row">
+            <div class="match-pip" style="background:{{ m.league_colour }}"></div>
+            <div style="flex:1;min-width:0">
+              <div class="match-name">{{ m.home }} vs {{ m.away }}</div>
+              <div class="match-sub">{{ group.league_name }} · Today</div>
+            </div>
+            <div class="match-time live" style="min-width:100px">
+              {% if m.status == "Half Time" %}HT{% else %}LIVE{% endif %}
+              · {{ m.home_score }}–{{ m.away_score }}
+            </div>
+          </a>
+          {% endfor %}
+        </div>
+        {% endfor %}
+      {% endif %}
+      {% if today_match_groups %}
+        {% for group in today_match_groups %}
+        <div id="fixtures-{{ group.league }}" class="fixture-group" style="display: {% if group.league == 'pl' %}block{% else %}none{% endif %};">
+          <div class="fixture-league-head">
+            <span class="acc-dot" style="background:{{ group.league_colour }}"></span>
+            {{ group.league_name }}
+          </div>
+          {% for m in group.fixtures %}
+          <a href="/match?match_id={{ m.match_id }}&league={{ m.league }}" class="match-row">
+            <div class="match-pip" style="background:{{ m.league_colour }}"></div>
+            <div style="flex:1;min-width:0">
+              <div class="match-name">{{ m.home }} vs {{ m.away }}</div>
+              <div class="match-sub">
+                {% if m.local_date == today %}Today{% else %}Weekend · {{ m.local_date }}{% endif %}
+              </div>
+            </div>
+            <div class="match-time" style="min-width:100px">
+              {% if m.status == "Finished" %}
+                FT · {{ m.home_score }}–{{ m.away_score }}
+              {% elif m.status in ("Postponed", "Cancelled") %}
+                {{ m.status|upper }}
+              {% else %}
+                {{ m.kickoff_eat }}
+              {% endif %}
+            </div>
+            {% if m.pregame_correct is not none %}
+            <span class="match-result {{ 'correct' if m.pregame_correct else 'wrong' }}"
+                  title="{{ 'Pregame pick correct' if m.pregame_correct else 'Pregame pick wrong' }}">
+              {% if m.pregame_correct %}
+                <i class="ti ti-circle-check" aria-label="Pregame pick correct"></i>
+              {% else %}
+                <i class="ti ti-circle-x" aria-label="Pregame pick wrong"></i>
+              {% endif %}
+            </span>
+            {% endif %}
+          </a>
+          {% endfor %}
+        </div>
+        {% endfor %}
+      {% else %}
+        {% if not live_match_groups %}
+        <div class="match-row" style="justify-content:center;padding:20px">
+          <span style="font-size:12px;color:var(--text-muted);font-weight:500">
+            No fixtures today or completed matches from this weekend
+          </span>
+        </div>
+        {% endif %}
+      {% endif %}
+    </div>
+  </div>
+
+
+  <!-- ── League Table ───────────────────────────────────────────── -->
+  <div>
+    <div class="section-head" style="display: flex; justify-content: space-between; align-items: center;">
+        <span>League Table</span>
+        <div style="display: flex; gap: 8px;">
+            <button onclick="switchLeague('pl', this)" class="toggle-btn table-btn active">PL</button>
+            <button onclick="switchLeague('laliga', this)" class="toggle-btn table-btn">La Liga</button>
+            <button onclick="switchLeague('bundesliga', this)" class="toggle-btn table-btn">Bundesliga</button>
+            <button onclick="switchLeague('seriea', this)" class="toggle-btn table-btn">Serie A</button>
+            <button onclick="switchLeague('ligue1', this)" class="toggle-btn table-btn">Ligue 1</button>
+        </div>
+    </div>
+    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 16px;">
+        {% for lg in ["pl", "laliga", "bundesliga", "seriea", "ligue1"] %}
+        <div id="table-{{ lg }}" class="league-table" style="display: {% if lg == 'pl' %}block{% else %}none{% endif %}; max-height: 500px; overflow-y: auto;">
+            <table style="width: 100%; text-align: left; border-collapse: collapse; font-family: var(--font-mono); font-size: 11px;">
+                <thead style="border-bottom: 1px solid var(--border); color: var(--text-muted);">
+                    <tr>
+                        <th style="padding: 6px; width: 24px;">#</th>
+                        <th style="padding: 6px;">Team</th>
+                        <th style="padding: 6px; text-align: center;">P</th>
+                        <th style="padding: 6px; text-align: center;">GD</th>
+                        <th style="padding: 6px; text-align: center;">Pts</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in all_standings[lg] %}
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                        <td style="padding: 6px; color: var(--text-muted);">{{ row.position }}</td>
+                        <td style="padding: 6px; font-weight: 700;">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <img src="{{ row.crest }}" style="width: 16px; height: 16px; object-fit: contain;" onerror="this.style.display='none'">
+                                <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px;">{{ row.team_name }}</span>
+                            </div>
+                        </td>
+                        <td style="padding: 6px; text-align: center;">{{ row.played }}</td>
+                        <td style="padding: 6px; text-align: center;">{{ row.gd }}</td>
+                        <td style="padding: 6px; text-align: center; color: #0f172a; font-weight: 800;">{{ row.points }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endfor %}
+    </div>
+  </div>
+
+  <!-- Accuracy panel -->
+  <div>
+    <div class="section-head">Model performance</div>
+    <div class="accuracy-panel">
+      <div style="font-size:10px;font-weight:700;color:var(--text-muted);
+                  text-transform:uppercase;letter-spacing:1px;margin-bottom:12px">
+        Season {{ season_label }}
+      </div>
+
+      {% set league_rows = [
+        ("Premier League", "#9B59B6", "#3D185A",
+         pl_stats.pre_accuracy if pl_stats and pl_stats.pre_total > 0 else None,
+         pl_stats.pre_total if pl_stats else 0),
+        ("La Liga", "#E74C3C", "#8B0000",
+         ll_stats.pre_accuracy if ll_stats and ll_stats.pre_total > 0 else None,
+         ll_stats.pre_total if ll_stats else 0),
+        ("Bundesliga", "#C0392B", "#1A1A1A",
+         bl_stats.pre_accuracy if bl_stats and bl_stats.pre_total > 0 else None,
+         bl_stats.pre_total if bl_stats else 0),
+        ("Serie A", "#2563EB", "#1A3A6B",
+         sa_stats.pre_accuracy if sa_stats and sa_stats.pre_total > 0 else None,
+         sa_stats.pre_total if sa_stats else 0),
+        ("Ligue 1", "#00A3E0", "#003087",
+         l1_stats.pre_accuracy if l1_stats and l1_stats.pre_total > 0 else None,
+         l1_stats.pre_total if l1_stats else 0),
+      ] %}
+
+      {% for lname, dot, val_col, acc, n in league_rows %}
+      <div class="acc-row">
+        <div class="acc-dot" style="background:{{ dot }}"></div>
+        <div class="acc-name">{{ lname }}</div>
+        {% if acc is not none %}
+          <div class="acc-val" style="color:{{ val_col }}">{{ acc }}%</div>
+          <div class="acc-sub">{{ n }}G</div>
+        {% else %}
+          <div class="acc-val" style="color:var(--text-muted)">N/A</div>
+          <div class="acc-sub" style="color:var(--text-muted)">no picks</div>
+        {% endif %}
+      </div>
+      {% endfor %}
+
+      <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
+        <div style="display:flex;justify-content:space-between;
+                    align-items:center;margin-bottom:7px">
+          <span style="font-size:11px;color:var(--text-secondary);font-weight:600">
+            Always-home baseline
+          </span>
+          <span style="font-size:13px;font-weight:900;font-family:var(--font-mono);
+                       color:var(--text-secondary)">43%</span>
+        </div>
+        {% if pl_stats and pl_stats.pre_total > 0 %}
+        {% set delta = pl_stats.pre_accuracy - 43 %}
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:11px;color:var(--text-secondary);font-weight:600">
+            DC model vs baseline
+          </span>
+          <span style="font-size:13px;font-weight:900;font-family:var(--font-mono);
+                       color:{% if delta > 0 %}#1A7A3C{% else %}#C0392B{% endif %}">
+            {% if delta > 0 %}+{% endif %}{{ delta | round(1) }}pp
+          </span>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+function switchLeague(lg, btn) {
+    document.querySelectorAll('.league-table').forEach(e => e.style.display='none');
+    document.querySelectorAll('.fixture-group').forEach(e => e.style.display='none');
+    document.querySelectorAll('.live-group').forEach(e => e.style.display='none');
+    
+    const table = document.getElementById('table-' + lg);
+    if (table) table.style.display='block';
+    
+    const fixGroup = document.getElementById('fixtures-' + lg);
+    if (fixGroup) fixGroup.style.display='block';
+    
+    const liveGroup = document.getElementById('live-' + lg);
+    if (liveGroup) liveGroup.style.display='block';
+    
+    // Update button states
+    document.querySelectorAll('.table-btn').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+}
+</script>
+
+{% endblock %}

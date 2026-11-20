@@ -1,0 +1,310 @@
+{% set is_nba = (sport == 'nba') %}
+<!DOCTYPE html>
+<html lang="en" data-league="{{ 'nba' if is_nba else (league | default('pl')) }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% if title %}{{ title }} · {% endif %}Melios Dira Odds</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="{{ url_for('static', path='theme.css') }}?v=20261103-4">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=JetBrains+Mono:wght@400;700&display=swap');
+
+        /* ── Layout ───────────────────────────────────────────── */
+        #sidebar {
+            width: 224px;
+            flex-shrink: 0;
+            transition: width 0.22s cubic-bezier(.4,0,.2,1);
+            background: var(--league-sidebar-bg);
+            height: 100vh;
+            position: sticky;
+            top: 0;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            border-right: 1px solid rgba(255,255,255,0.08);
+        }
+        #sidebar.collapsed { width: 56px; }
+        #sidebar.collapsed .nav-label,
+        #sidebar.collapsed .nav-section-label,
+        #sidebar.collapsed .sidebar-wordmark,
+        #sidebar.collapsed .sidebar-footer-text { display: none; }
+        #sidebar.collapsed .nav-item { justify-content: center; padding: 10px 0; }
+
+        .nav-section-label {
+            font-family: var(--font-mono);
+            font-size: 9px;
+            font-weight: 700;
+            color: rgba(255,255,255,0.78);
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            padding: 16px 14px 5px;
+        }
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 12px;
+            font-family: var(--font-sans);
+            font-size: 12px;
+            font-weight: 600;
+            color: rgba(255,255,255,0.78);
+            text-decoration: none;
+            transition: background 0.12s, color 0.12s;
+            white-space: nowrap;
+            border-left: 3px solid transparent;
+            cursor: pointer;
+        }
+        .nav-item:hover { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.9); }
+        .nav-item.active { background: rgba(255,255,255,0.12); color: #fff; border-left-color: var(--league-active-bar); }
+        .nav-icon { font-size: 18px; flex-shrink: 0; width: 20px; text-align: center; line-height: 1; }
+        .league-nav-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+
+        #main-content { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+        #topbar {
+            background: var(--surface);
+            border-bottom: 1.5px solid var(--border);
+            height: 54px;
+            display: flex;
+            align-items: center;
+            padding: 0 24px;
+            gap: 14px;
+            position: sticky;
+            top: 0;
+            z-index: 50;
+        }
+        .topbar-league-pill {
+            background: var(--league-primary);
+            color: var(--league-gold);
+            font-size: 10px;
+            font-weight: 800;
+            padding: 4px 11px;
+            border-radius: 20px;
+            letter-spacing: 0.5px;
+            font-family: var(--font-mono);
+        }
+        .topbar-title { font-size: 14px; font-weight: 800; color: var(--league-primary); letter-spacing: -0.3px; }
+        .topbar-date  { font-size: 12px; color: var(--text-muted); font-family: var(--font-mono); margin-left: auto; }
+
+        #page-content { flex: 1; padding: 20px 24px; overflow-x: hidden; }
+
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--league-light); border-radius: 3px; }
+
+        /* ── NBA theme (official red / blue / white) ──────────── */
+        html[data-league="nba"] {
+            --league-primary:    #1D428A;
+            --league-gold:       #FFFFFF;
+            --league-sidebar-bg: #0B1F3A;
+            --league-active-bar: #C8102E;
+            --league-tint:       #F3F5F9;
+            --league-light:      #C9D3E6;
+        }
+
+        /* ── Sport toggle (football | basketball) ─────────────── */
+        .sport-toggle-wrap {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 14px;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+        }
+        #sidebar.collapsed .sport-toggle-wrap { justify-content: center; padding: 12px 0; }
+        .sport-ball { width: 38px; height: 38px; flex-shrink: 0; }
+        .sport-ball a { cursor: pointer; }
+        .sport-ball .half { transition: opacity 0.15s; }
+        .sport-ball .half.inactive { opacity: 0.32; }
+        .sport-ball a:hover .half.inactive { opacity: 0.7; }
+        .sport-labels { display: flex; flex-direction: column; gap: 2px; font-family: var(--font-mono); font-size: 10px; }
+        .sport-labels a { text-decoration: none; color: rgba(255,255,255,0.35); letter-spacing: 0.08em; text-transform: uppercase; }
+        .sport-labels a.on { color: #fff; font-weight: 700; }
+        .sport-labels a:hover { color: rgba(255,255,255,0.85); }
+        #sidebar.collapsed .sport-labels { display: none; }
+    </style>
+</head>
+<body class="flex min-h-screen" style="background:var(--league-tint)">
+
+<!-- ── SIDEBAR ──────────────────────────────────────────────────── -->
+<div id="sidebar">
+    <div style="padding:18px 14px 14px;border-bottom:1px solid rgba(255,255,255,0.1);
+                display:flex;align-items:center;justify-content:space-between">
+        <div style="display:flex;align-items:center;gap:8px">
+            <div class="league-badge-pill sidebar-wordmark">{{ 'NBA' if is_nba else (league_code | default('PL')) }}</div>
+            <span class="sidebar-wordmark"
+                  style="font-size:12px;font-weight:800;color:#fff;letter-spacing:0.5px;font-family:var(--font-sans)">
+                Melios Dira
+            </span>
+        </div>
+        <button id="sidebar-toggle"
+                style="background:none;border:none;cursor:pointer;color:rgba(255,255,255,0.35);
+                       font-size:11px;padding:4px;line-height:1" title="Toggle sidebar">
+            <span id="toggle-icon">◀</span>
+        </button>
+    </div>
+
+    <!-- ── Sport toggle: left half football, right half basketball ── -->
+    <!-- Placeholder design — swap the SVG later, links/classes stay   -->
+    <div class="sport-toggle-wrap">
+        <svg class="sport-ball" viewBox="0 0 40 40" role="img" aria-label="Switch sport">
+            <defs>
+                <clipPath id="ball-left"><path d="M20 2 A18 18 0 0 0 20 38 Z"/></clipPath>
+                <clipPath id="ball-right"><path d="M20 2 A18 18 0 0 1 20 38 Z"/></clipPath>
+            </defs>
+            <a href="/">
+                <title>Football</title>
+                <g class="half {{ 'inactive' if is_nba else '' }}" clip-path="url(#ball-left)">
+                    <rect x="0" y="0" width="20" height="40" fill="#2E7D32"/>
+                    <circle cx="20" cy="20" r="6" fill="none" stroke="#fff" stroke-width="1"/>
+                    <rect x="2" y="13" width="6" height="14" fill="none" stroke="#fff" stroke-width="1"/>
+                    <circle cx="20" cy="20" r="1" fill="#fff"/>
+                </g>
+            </a>
+            <a href="/nba">
+                <title>Basketball</title>
+                <g class="half {{ '' if is_nba else 'inactive' }}" clip-path="url(#ball-right)">
+                    <rect x="20" y="0" width="20" height="40" fill="#C8763A"/>
+                    <circle cx="20" cy="20" r="6" fill="none" stroke="#fff" stroke-width="1"/>
+                    <rect x="31" y="15" width="7" height="10" fill="none" stroke="#fff" stroke-width="1"/>
+                    <path d="M38 8 A12 12 0 0 0 38 32" fill="none" stroke="#fff" stroke-width="1"/>
+                </g>
+            </a>
+            <line x1="20" y1="2" x2="20" y2="38" stroke="#fff" stroke-width="1.2"/>
+            <circle cx="20" cy="20" r="18" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="1.2"/>
+        </svg>
+        <div class="sport-labels">
+            <a href="/"    class="{{ '' if is_nba else 'on' }}">Football</a>
+            <a href="/nba" class="{{ 'on' if is_nba else '' }}">Basketball</a>
+        </div>
+    </div>
+
+    <nav style="flex:1;overflow-y:auto;overflow-x:hidden;padding:8px 0">
+    {% if is_nba %}
+        <div class="nav-section-label">NBA</div>
+        <a href="/nba"         class="nav-item" data-page="nba-hub">    <span class="nav-icon"><i class="ti ti-layout-dashboard" aria-hidden="true"></i></span><span class="nav-label">Hub</span></a>
+        <a href="/nba/match"   class="nav-item" data-page="nba-match">  <span class="nav-icon"><i class="ti ti-ball-basketball" aria-hidden="true"></i></span><span class="nav-label">Match dashboard</span></a>
+        <a href="/nba/history" class="nav-item" data-page="nba-history"><span class="nav-icon"><i class="ti ti-chart-line" aria-hidden="true"></i></span><span class="nav-label">Prediction history</span></a>
+        <a href="/nba/teams"   class="nav-item" data-page="nba-teams">  <span class="nav-icon"><i class="ti ti-users-group" aria-hidden="true"></i></span><span class="nav-label">Teams</span></a>
+
+        <div class="nav-section-label">Conferences</div>
+        <a href="/nba/teams#east" class="nav-item" data-page="nba-east">
+            <span class="nav-icon"><span class="league-nav-dot" style="background:#1D428A"></span></span>
+            <span class="nav-label">Eastern</span>
+        </a>
+        <a href="/nba/teams#west" class="nav-item" data-page="nba-west">
+            <span class="nav-icon"><span class="league-nav-dot" style="background:#C8102E"></span></span>
+            <span class="nav-label">Western</span>
+        </a>
+
+        <div class="nav-section-label">Coming later</div>
+        <span class="nav-item" style="opacity:0.35;cursor:default"><span class="nav-icon"><i class="ti ti-list-numbers" aria-hidden="true"></i></span><span class="nav-label">Standings · Layer 2</span></span>
+        <span class="nav-item" style="opacity:0.35;cursor:default"><span class="nav-icon"><i class="ti ti-tournament" aria-hidden="true"></i></span><span class="nav-label">Playoffs · Layer 3</span></span>
+    {% else %}
+        <div class="nav-section-label">Navigation</div>
+        <a href="/"       class="nav-item" data-page="home">    <span class="nav-icon"><i class="ti ti-layout-dashboard" aria-hidden="true"></i></span><span class="nav-label">Hub</span></a>
+        <a href="/match?league={{ league|default('pl') }}" class="nav-item" data-page="match"><span class="nav-icon"><i class="ti ti-ball-football" aria-hidden="true"></i></span><span class="nav-label">Match dashboard</span></a>
+        {% if team_map_href|default('/teams') %}
+        <a href="{{ team_map_href|default('/teams') }}" class="nav-item" data-page="teams"><span class="nav-icon"><i class="ti ti-map-2" aria-hidden="true"></i></span><span class="nav-label">Team map</span></a>
+        {% endif %}
+        <a href="/history"class="nav-item" data-page="history"> <span class="nav-icon"><i class="ti ti-chart-line" aria-hidden="true"></i></span><span class="nav-label">Prediction history</span></a>
+        <a href="/tournament" class="nav-item" data-page="tournament"><span class="nav-icon"><i class="ti ti-tournament" aria-hidden="true"></i></span><span class="nav-label">Tournament</span></a>
+
+        <div class="nav-section-label">Leagues</div>
+        {% set leagues_nav = [
+            ("pl","Premier League","#9B59B6"),("laliga","La Liga","#E74C3C"),
+            ("bundesliga","Bundesliga","#C0392B"),("seriea","Serie A","#2563EB"),
+            ("ligue1","Ligue 1","#00A3E0"),
+        ] %}
+        {% for code, name, dot in leagues_nav %}
+        <a href="{% if code in ('pl', 'laliga', 'bundesliga', 'seriea') %}/match?league={{ code }}{% else %}/league/{{ code }}{% endif %}" class="nav-item" data-page="league-{{ code }}"
+           {% if (league|default('pl'))==code %}style="background:rgba(255,255,255,0.12);color:#fff;border-left-color:var(--league-active-bar)"{% endif %}>
+            <span class="nav-icon"><span class="league-nav-dot" style="background:{{ dot }}"></span></span>
+            <span class="nav-label">{{ name }}</span>
+        </a>
+        {% endfor %}
+
+        <div class="nav-section-label">Quick Teams</div>
+        {% for team in team_nav_quick|default([]) %}
+        <a href="{{ team.href }}" class="nav-item" data-page="team-{{ team.name|lower|replace(' ','-') }}">
+            <span class="nav-icon"><img src="/crest/{{ team.name }}" style="width:16px;height:16px;object-fit:contain" onerror="this.style.display='none'"/></span>
+            <span class="nav-label">{{ team.name }}</span>
+        </a>
+        {% endfor %}
+
+        <div class="nav-section-label">All Teams</div>
+        {% for team in team_nav_all|default([]) %}
+        <a href="{{ team.href }}" class="nav-item" data-page="team-{{ team.name|lower|replace(' ','-') }}">
+            <span class="nav-icon"><img src="/crest/{{ team.name }}" style="width:16px;height:16px;object-fit:contain" onerror="this.style.display='none'"/></span>
+            <span class="nav-label">{{ team.name }}</span>
+        </a>
+        {% endfor %}
+    {% endif %}
+    </nav>
+
+    <div style="border-top:1px solid rgba(255,255,255,0.08);padding:10px 14px">
+        <div class="sidebar-footer-text"
+             style="font-size:9px;color:rgba(255,255,255,0.25);font-family:var(--font-mono);
+                    text-transform:uppercase;letter-spacing:0.1em">
+            {{ 'Elo · Neural Net V3' if is_nba else 'Dixon-Coles · Neural Net' }}
+        </div>
+    </div>
+</div>
+
+<!-- ── MAIN CONTENT ──────────────────────────────────────────────── -->
+<div id="main-content">
+    <div id="topbar">
+        <div class="topbar-league-pill">{{ 'NBA' if is_nba else (league_code | default('PL')) }}</div>
+        {% if topbar_title %}<div class="topbar-title">{{ topbar_title }}</div>
+        {% else %}<div class="topbar-title">Melios Dira Odds</div>{% endif %}
+        {% if live_count and live_count > 0 %}<div class="live-badge">{{ live_count }} LIVE</div>{% endif %}
+        <div class="topbar-date" id="topbar-clock"></div>
+    </div>
+    <div id="page-content">{% block content %}{% endblock %}</div>
+</div>
+
+<script>
+// ── EAT clock ─────────────────────────────────────────────────────
+(function(){
+    const el = document.getElementById('topbar-clock');
+    function tick(){
+        el.textContent = new Date().toLocaleString('en-GB',{
+            weekday:'short', day:'numeric', month:'short',
+            hour:'2-digit', minute:'2-digit',
+            timeZone:'Africa/Nairobi'
+        }) + ' EAT';
+    }
+    tick();
+    setInterval(tick, 30000);
+})();
+
+// ── Sidebar collapse ───────────────────────────────────────────────
+const sidebar    = document.getElementById('sidebar');
+const toggleBtn  = document.getElementById('sidebar-toggle');
+const toggleIcon = document.getElementById('toggle-icon');
+const SK = 'md-sidebar-collapsed';
+function setCollapsed(v){
+    sidebar.classList.toggle('collapsed', v);
+    toggleIcon.textContent = v ? '▶' : '◀';
+    try{ sessionStorage.setItem(SK, v?'1':'0'); }catch(e){}
+}
+try{ if(sessionStorage.getItem(SK)==='1') setCollapsed(true); }catch(e){}
+toggleBtn.addEventListener('click', ()=>setCollapsed(!sidebar.classList.contains('collapsed')));
+
+// ── Active nav highlight ───────────────────────────────────────────
+(function(){
+    const path = window.location.pathname;
+    document.querySelectorAll('.nav-item').forEach(link=>{
+        const href = link.getAttribute('href');
+        if(!href) return;
+        // Hub links ('/' and '/nba') must match exactly; others match by prefix
+        const exact = (href==='/'||href==='/nba');
+        if(href.includes('#')) return;
+        if((exact && path===href) || (!exact && path.startsWith(href)))
+            link.classList.add('active');
+    });
+})();
+</script>
+</body>
+</html>

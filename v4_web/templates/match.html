@@ -1,0 +1,909 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="football-match-page space-y-3 max-w-screen-2xl mx-auto">
+
+    <!-- HEADER -->
+    <div class="flex items-center justify-between font-bold uppercase" style="color:var(--text-primary)
+                tracking-wider text-sm">
+        <div class="flex items-center gap-2">
+            <i class="ti ti-ball-football text-xl" style="color:var(--league-gold)" aria-hidden="true"></i>
+            {% if featured.home_name and featured.away_name %}
+                {{ current_league }}: {{ featured.home_name|upper }} vs {{ featured.away_name|upper }}
+            {% else %}
+                QUANTITATIVE MATCH DASHBOARD
+            {% endif %}
+        </div>
+        {% if featured.status %}
+            <span id="match-status-badge"
+                  class="text-[10px] font-mono px-2 py-1 rounded border
+                {% if featured.status in ['Finished','FT'] %}
+                   border" style="color:var(--text-muted);background:var(--surface)
+                {% else %}
+                    border" style="color:#10b981;background:#064e3b
+                {% endif %}">
+                {{ featured.status|upper }}
+                <span id="live-minute">{% if featured.minute and featured.status == 'In Play' %}· {{ featured.minute }}'{% endif %}</span>
+            </span>
+        {% endif %}
+    </div>
+
+    {% if prior and featured.home_name and featured.away_name %}
+    {% set forecast_top = [prior[0], prior[1], prior[2]]|max %}
+    {% if forecast_top == prior[0] %}
+        {% set forecast_pick = featured.home_name %}
+    {% elif forecast_top == prior[1] %}
+        {% set forecast_pick = "Draw" %}
+    {% else %}
+        {% set forecast_pick = featured.away_name %}
+    {% endif %}
+    <section class="match-forecast-card" aria-label="Model forecast">
+        <div class="match-forecast-heading">
+            <div>
+                <div class="match-section-eyebrow">Model forecast</div>
+                <div class="match-forecast-pick">Most likely: {{ forecast_pick }} · {{ forecast_top|round(1) }}%</div>
+            </div>
+            <span class="model-source-label">Dixon–Coles</span>
+        </div>
+        {% if featured.status in ['Finished', 'FT']
+              and featured.h_score is not none
+              and featured.a_score is not none
+              and pregame_pick_correct is not none %}
+        <div role="status" aria-live="polite"
+             style="margin-top:8px;font-size:11px;font-weight:700;
+                    color:{{ '#15803d' if pregame_pick_correct else '#C8102E' }}">
+            {% if pregame_pick_correct %}
+                <i class="ti ti-circle-check" aria-hidden="true"></i> Pregame pick correct
+            {% else %}
+                <i class="ti ti-circle-x" aria-hidden="true"></i> Pregame pick wrong
+            {% endif %}
+        </div>
+        {% endif %}
+        <div class="match-teams-forecast">
+            <div class="match-team-identity">
+                {% if home_crest_url %}
+                <img class="match-team-crest" src="{{ home_crest_url }}" alt="" loading="lazy"
+                     onerror="this.hidden=true;this.nextElementSibling.hidden=false">
+                {% endif %}
+                <span class="match-team-initials" {% if home_crest_url %}hidden{% endif %}>{{ featured.home_name[:2]|upper }}</span>
+                <span>{{ featured.home_name }}</span>
+            </div>
+            <div class="match-outcome-probabilities">
+                <div><span>Home</span><strong>{{ prior[0] }}%</strong></div>
+                <div><span>Draw</span><strong>{{ prior[1] }}%</strong></div>
+                <div><span>Away</span><strong>{{ prior[2] }}%</strong></div>
+            </div>
+            <div class="match-team-identity match-team-away">
+                {% if away_crest_url %}
+                <img class="match-team-crest" src="{{ away_crest_url }}" alt="" loading="lazy"
+                     onerror="this.hidden=true;this.nextElementSibling.hidden=false">
+                {% endif %}
+                <span class="match-team-initials" {% if away_crest_url %}hidden{% endif %}>{{ featured.away_name[:2]|upper }}</span>
+                <span>{{ featured.away_name }}</span>
+            </div>
+        </div>
+    </section>
+    {% endif %}
+
+    {% if vote_match_id %}
+    <section class="fan-vote-card" data-fan-vote data-match-id="{{ vote_match_id }}"
+             aria-label="Fan prediction poll">
+        <div class="fan-vote-header">
+            <div>
+                <div class="match-section-eyebrow">Fan vote · separate from model</div>
+                <div class="fan-vote-question">Who do you think will win?</div>
+            </div>
+            <span class="fan-vote-total" data-vote-total>Loading votes…</span>
+        </div>
+        <div class="fan-vote-options">
+            <button type="button" data-vote-choice="H">{{ featured.home_name }}</button>
+            <button type="button" data-vote-choice="D">Draw</button>
+            <button type="button" data-vote-choice="A">{{ featured.away_name }}</button>
+        </div>
+        <div class="fan-vote-results" data-vote-results hidden>
+            <div><span>Home</span><strong data-vote-pct="H">0%</strong></div>
+            <div><span>Draw</span><strong data-vote-pct="D">0%</strong></div>
+            <div><span>Away</span><strong data-vote-pct="A">0%</strong></div>
+        </div>
+        <div class="fan-vote-message" data-vote-message role="status" aria-live="polite">
+            One vote per browser. Voting closes at kickoff.
+        </div>
+    </section>
+    {% endif %}
+
+    <!-- FIXTURES STRIP -->
+    {% if fixtures %}
+    <div class="fixture-strip-wrap border rounded-xl px-4 py-2.5 shadow-xl">
+        <div class="fixture-strip-label text-[10px] font-mono uppercase tracking-widest mb-1.5">
+            Fixtures · {{ league_name | default("Premier League") }} · All times EAT (UTC+3)
+        </div>
+        <div class="fixtures-strip flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+            {% for f in fixtures %}
+            <a href="/match?match_id={{ f.match_id }}&league={{ league | default('pl') }}"
+               class="flex-none rounded-lg px-3 py-1.5 text-center transition cursor-pointer
+                      {% if f.match_id|string == featured.fixture_id|string %}
+                          fix-card-active
+                      {% else %}
+                          fix-card-default
+                      {% endif %}"
+               style="min-width:110px;border:1.5px solid;text-decoration:none">
+                <div class="fix-card-meta text-[9px] font-mono mb-0.5">{{ f.kickoff_eat }}</div>
+                <div class="fix-card-team text-[11px] font-bold truncate">{{ f.home }}</div>
+                <div class="fix-card-meta text-[9px]">vs</div>
+                <div class="fix-card-team text-[11px] font-bold truncate">{{ f.away }}</div>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!-- TOP ROW: THREE ODDS PANELS (Pre-game → [spacer] → Live)           -->
+    <!-- Matches the screenshot's Prior | Likelihood | Posterior layout     -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <div class="grid grid-cols-3 gap-3">
+
+        <!-- Pre-game (DC) -->
+        <div class="rounded-xl p-4 shadow-xl flex flex-col items-center gap-2" style="background:var(--surface);border:1px solid var(--border)">
+            <div class="text-center">
+                <h3 class="text-xs font-bold uppercase tracking-widest" style="color:var(--league-primary)">
+                    Prior (Static Base)
+                </h3>
+                <span class="text-[10px] font-mono" style="color:var(--league-mid)">
+                    Dixon-Coles · dp 0.10
+                </span>
+            </div>
+            <div class="flex items-end justify-center w-full gap-6" style="height:80px">
+                {% if prior %}
+                    <div class="flex flex-col items-center justify-end h-full">
+                        <span class="text-sm font-mono font-bold mb-1"
+                              style="color:color-mix(in srgb, {{ home_colour }} 55%, var(--text-primary))">{{ prior[0] }}%</span>
+                        <div class="w-14 rounded-sm transition-all duration-500"
+                             style="height:{{ [prior[0],4]|max }}%;
+                                    background:{{ home_colour }};opacity:0.85"></div>
+                        <span class="text-[10px] text-slate-400 mt-2 uppercase tracking-widest">Home</span>
+                    </div>
+                    <div class="flex flex-col items-center justify-end h-full">
+                        <span class="text-sm text-slate-400 font-mono font-bold mb-1">{{ prior[1] }}%</span>
+                        <div class="w-14 rounded-sm transition-all duration-500" style="background:var(--league-light)"
+                             style="height:{{ [prior[1],4]|max }}%"></div>
+                        <span class="text-[10px] text-slate-400 mt-2 uppercase tracking-widest">Draw</span>
+                    </div>
+                    <div class="flex flex-col items-center justify-end h-full">
+                        <span class="text-sm font-mono font-bold mb-1"
+                              style="color:color-mix(in srgb, {{ away_colour }} 55%, var(--text-primary))">{{ prior[2] }}%</span>
+                        <div class="w-14 rounded-sm transition-all duration-500"
+                             style="height:{{ [prior[2],4]|max }}%;
+                                    background:{{ away_colour }};opacity:0.85"></div>
+                        <span class="text-[10px] text-slate-400 mt-2 uppercase tracking-widest">Away</span>
+                    </div>
+                {% else %}
+                    <div class="flex items-center justify-center h-full w-full">
+                        <span class="text-[10px] text-rose-400 font-mono uppercase
+                                    bg-rose-950/40 border border-rose-900 px-3 py-2 rounded">
+                            No prior data
+                        </span>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Centre panel: Lineup Adjusted (when available) or Bookmaker Odds -->
+        <div class="rounded-xl p-4 shadow-xl flex flex-col items-center justify-center gap-3" style="background:var(--surface);border:1px solid var(--border)">
+
+            {% if lineup_prior %}
+            <!-- Lineup-adjusted DC odds -->
+            <div class="text-center w-full">
+                <h3 class="text-xs font-bold text-slate-200 uppercase tracking-widest mb-0.5">
+                    Likelihood (Lineup Adj.)
+                </h3>
+                <span class="text-[10px] text-amber-400/70 font-mono">
+                    Post-Lineup · confirmed XI
+                </span>
+            </div>
+            <div class="flex items-end justify-center w-full gap-6" style="height:80px">
+                <div class="flex flex-col items-center justify-end h-full">
+                    <span class="text-sm font-mono font-bold mb-1"
+                          style="color:color-mix(in srgb, {{ home_colour }} 55%, var(--text-primary))">{{ lineup_prior[0] }}%</span>
+                    <div class="w-14 rounded-sm transition-all duration-500"
+                         style="height:{{ [lineup_prior[0],4]|max }}%;
+                                background:{{ home_colour }};opacity:0.85"></div>
+                    <span class="text-[10px] text-slate-400 mt-2 uppercase tracking-widest">Home</span>
+                </div>
+                <div class="flex flex-col items-center justify-end h-full">
+                    <span class="text-sm text-slate-400 font-mono font-bold mb-1">{{ lineup_prior[1] }}%</span>
+                    <div class="w-14 rounded-sm transition-all duration-500" style="background:var(--league-light)"
+                         style="height:{{ [lineup_prior[1],4]|max }}%"></div>
+                    <span class="text-[10px] text-slate-400 mt-2 uppercase tracking-widest">Draw</span>
+                </div>
+                <div class="flex flex-col items-center justify-end h-full">
+                    <span class="text-sm font-mono font-bold mb-1"
+                          style="color:color-mix(in srgb, {{ away_colour }} 55%, var(--text-primary))">{{ lineup_prior[2] }}%</span>
+                    <div class="w-14 rounded-sm transition-all duration-500"
+                         style="height:{{ [lineup_prior[2],4]|max }}%;
+                                background:{{ away_colour }};opacity:0.85"></div>
+                    <span class="text-[10px] text-slate-400 mt-2 uppercase tracking-widest">Away</span>
+                </div>
+            </div>
+
+            <!-- xG after adjustment + absent key players -->
+            <div class="w-full border-t" style="border-color:var(--border) pt-2 space-y-1.5">
+                {% if adj_lam is not none %}
+                <div class="flex justify-between text-[10px] font-mono">
+                    <span class="text-slate-500">Adj. xG</span>
+                    <span class="text-slate-300">
+                        <span style="color:color-mix(in srgb, {{ home_colour }} 55%, var(--text-primary))">{{ "%.2f"|format(adj_lam) }}</span>
+                        –
+                        <span style="color:color-mix(in srgb, {{ away_colour }} 55%, var(--text-primary))">{{ "%.2f"|format(adj_mu) }}</span>
+                    </span>
+                </div>
+                {% endif %}
+                {% if absent_home %}
+                <div class="text-[9px] font-mono">
+                    <span style="color:color-mix(in srgb, {{ home_colour }} 55%, var(--text-primary))" class="font-bold">OUT:</span>
+                    <span class="text-rose-400">{{ absent_home|join(", ") }}</span>
+                </div>
+                {% endif %}
+                {% if absent_away %}
+                <div class="text-[9px] font-mono">
+                    <span style="color:color-mix(in srgb, {{ away_colour }} 55%, var(--text-primary))" class="font-bold">OUT:</span>
+                    <span class="text-rose-400">{{ absent_away|join(", ") }}</span>
+                </div>
+                {% endif %}
+            </div>
+
+            {% elif featured.odds_home %}
+            <!-- Bookmaker odds fallback -->
+            <div class="text-center">
+                <h3 class="text-xs font-bold text-slate-200 uppercase tracking-widest mb-1">
+                    Bookmaker Odds
+                </h3>
+                <div class="flex items-center gap-4 font-mono">
+                    <div class="text-center">
+                        <div class="text-lg font-bold" style="color:color-mix(in srgb, {{ home_colour }} 55%, var(--text-primary))">
+                            {{ featured.odds_home }}
+                        </div>
+                        <div class="text-[10px] text-slate-500 uppercase">Home</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-lg font-bold text-slate-400">{{ featured.odds_draw }}</div>
+                        <div class="text-[10px] text-slate-500 uppercase">Draw</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-lg font-bold" style="color:color-mix(in srgb, {{ away_colour }} 55%, var(--text-primary))">
+                            {{ featured.odds_away }}
+                        </div>
+                        <div class="text-[10px] text-slate-500 uppercase">Away</div>
+                    </div>
+                </div>
+            </div>
+            {% if featured.referee %}
+            <div class="text-center border-t" style="border-color:var(--border) pt-2 w-full">
+                <span class="text-[10px] text-slate-500 font-mono uppercase">Referee · </span>
+                <span class="text-[10px] text-slate-300 font-mono">{{ featured.referee }}</span>
+            </div>
+            {% endif %}
+
+            {% else %}
+            <!-- Pre-game context (no lineup, no odds yet) -->
+            <div class="text-center space-y-2">
+                <div class="text-[10px] text-slate-500 font-mono uppercase tracking-widest">
+                    Lineup Adjustment
+                </div>
+                <div class="text-[10px] text-slate-600 font-mono">
+                    {% if fotmob_available %}
+                        Awaiting confirmed lineup
+                    {% else %}
+                        Configure PARSE_BOT_KEY to enable
+                    {% endif %}
+                </div>
+                {% if featured.referee %}
+                <div class="border-t" style="border-color:var(--border) pt-2">
+                    <span class="text-[10px] text-slate-300 font-mono">{{ featured.referee }}</span>
+                </div>
+                {% endif %}
+                {% if featured.venue %}
+                <div>
+                    <span class="text-[10px] text-slate-300 font-mono">{{ featured.venue }}</span>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Live (Neural net) -->
+        <div class="rounded-xl p-4 shadow-xl flex flex-col items-center gap-2" style="background:var(--surface);border:1px solid var(--border)">
+            <div class="text-center">
+                <h3 class="text-xs font-bold uppercase tracking-widest" style="color:var(--league-primary)">
+                    Posterior (In-Play Live)
+                </h3>
+                <span class="text-[10px] font-mono
+                   {% if posterior %}text-emerald-400/70{% else %}text-slate-500{% endif %}">
+                    {% if posterior %}Neural net · {{ featured.minute }}' in play
+                    {% elif featured.status == 'Not Started' %}Awaiting kickoff
+                    {% else %}Neural net · score + time{% endif %}
+                </span>
+            </div>
+            <div class="flex items-end justify-center w-full gap-6" style="height:80px">
+                {% if posterior %}
+                    <div class="flex flex-col items-center justify-end h-full">
+                        <span class="text-sm font-mono font-bold mb-1"
+                              style="color:color-mix(in srgb, {{ home_colour }} 55%, var(--text-primary))">{{ posterior[0] }}%</span>
+                        <div class="w-14 rounded-sm transition-all duration-700"
+                             style="height:{{ [posterior[0],4]|max }}%;
+                                    background:{{ home_colour }};opacity:0.75"></div>
+                        <span class="text-[10px] text-slate-400 mt-2 uppercase tracking-widest">Home</span>
+                    </div>
+                    <div class="flex flex-col items-center justify-end h-full">
+                        <span class="text-sm text-slate-400 font-mono font-bold mb-1">{{ posterior[1] }}%</span>
+                        <div class="w-14 bg-slate-500/80 rounded-sm transition-all duration-700"
+                             style="height:{{ [posterior[1],4]|max }}%"></div>
+                        <span class="text-[10px] text-slate-400 mt-2 uppercase tracking-widest">Draw</span>
+                    </div>
+                    <div class="flex flex-col items-center justify-end h-full">
+                        <span class="text-sm font-mono font-bold mb-1"
+                              style="color:color-mix(in srgb, {{ away_colour }} 55%, var(--text-primary))">{{ posterior[2] }}%</span>
+                        <div class="w-14 rounded-sm transition-all duration-700"
+                             style="height:{{ [posterior[2],4]|max }}%;
+                                    background:{{ away_colour }};opacity:0.75"></div>
+                        <span class="text-[10px] text-slate-400 mt-2 uppercase tracking-widest">Away</span>
+                    </div>
+                {% else %}
+                    <div class="flex items-center justify-center h-full w-full">
+                        <span class="text-[10px] text-slate-500 font-mono uppercase
+                                    px-3 py-2 rounded" style="background:var(--surface);border:1px solid var(--border)">
+                            {% if featured.status == 'Not Started' %}Awaiting kickoff
+                            {% else %}No live data{% endif %}
+                        </span>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!-- MAIN BODY: Matrix left | Pitch centre | Team ratings right        -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <div class="grid gap-3 items-stretch" style="grid-template-columns: 1fr 2fr 1fr;">
+
+        <!-- LEFT: Scoreline matrix -->
+        <div class="flex flex-col">
+            {% if matrix_svg %}
+            <div class="border rounded-xl p-3 shadow-xl flex-1" style="background:var(--surface);border:1px solid var(--border)">
+                <div class="text-[10px] font-mono text-slate-400 uppercase tracking-widest mb-1">
+                    Scoreline Probabilities
+                </div>
+                {{ matrix_svg | safe }}
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- CENTRE: Pitch (main focus) -->
+        <div>
+            {% if pitch_svg %}
+            <div class="border rounded-xl p-3 shadow-xl h-full" style="background:var(--surface);border:1px solid var(--border)">
+                <div class="flex items-center justify-between mb-1">
+                    <span class="text-[10px] font-mono uppercase tracking-widest" style="color:var(--text-muted)">
+                        Starting Lineups
+                    </span>
+                    <div class="flex items-center gap-3 text-[9px] font-mono">
+                        {% if featured.home_name %}
+                        <a href="/team/{{ home_team_id }}"
+                           class="flex items-center gap-1 hover:text-white transition"
+                           style="color:color-mix(in srgb, {{ home_colour }} 55%, var(--text-primary))">
+                            <span class="w-1.5 h-1.5 rounded-full inline-block"
+                                  style="background:{{ home_colour }}"></span>
+                            {{ featured.home_name }} · {{ home_formation }}
+                        </a>
+                        <a href="/team/{{ away_team_id }}"
+                           class="flex items-center gap-1 hover:text-white transition"
+                           style="color:color-mix(in srgb, {{ away_colour }} 55%, var(--text-primary))">
+                            <span class="w-1.5 h-1.5 rounded-full inline-block"
+                                  style="background:{{ away_colour }}"></span>
+                            {{ featured.away_name }} · {{ away_formation }}
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+                {{ pitch_svg | safe }}
+                <p class="text-[9px] text-slate-600 font-mono text-center mt-1">
+                    Typical XI · Live lineups require paid API
+                </p>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- RIGHT: Team ratings & DC parameters -->
+        <div class="flex flex-col">
+            {% if featured.home_name and featured.away_name %}
+            <div class="border rounded-xl p-4 shadow-xl flex-1" style="background:var(--surface);border:1px solid var(--border)">
+                <div class="text-[10px] font-mono text-slate-400 uppercase tracking-widest mb-3">
+                    Team Ratings & Parameters
+                </div>
+
+                <!-- Home team gauges -->
+                <div class="mb-3">
+                    <div class="text-[10px] font-bold uppercase tracking-widest mb-2 flex items-center gap-2"
+                         style="color:color-mix(in srgb, {{ home_colour }} 55%, var(--text-primary))">
+                        {{ featured.home_name }}
+                        {% if home_alpha_estimated %}
+                        <span class="text-[8px] text-slate-500 font-normal normal-case
+                                    px-1 py-0.5 rounded" style="border:1px solid var(--border)">est.</span>
+                        {% endif %}
+                    </div>
+                    {% if home_alpha %}
+                    <div class="grid grid-cols-2 gap-2">
+                        <!-- Attack gauge (α): higher = better, range 0.4-1.8) -->
+                        <div>
+                            <svg viewBox="0 0 100 65" class="w-full" xmlns="http://www.w3.org/2000/svg">
+                                {% set pct = ((home_alpha - 0.4) / 1.4) | float %}
+                                {% set pct = [0.0, [1.0, pct] | min] | max %}
+                                {% set angle_deg = -180 + pct * 180 %}
+                                <path d="M 12 52 A 38 38 0 0 1 88 52"
+                                      fill="none" stroke="#1e293b" stroke-width="6" stroke-linecap="round"/>
+                                <path d="M 12 52 A 38 38 0 0 1 88 52"
+                                      fill="none" stroke="{{ home_colour }}" stroke-width="6"
+                                      stroke-linecap="round" opacity="0.2"
+                                      stroke-dasharray="{{ pct * 119.4 }} 119.4"/>
+                                <text x="50" y="46" fill="{{ home_colour }}" font-size="12"
+                                      font-weight="bold" text-anchor="middle"
+                                      font-family="JetBrains Mono,monospace">{{ "%.3f"|format(home_alpha) }}</text>
+                                <text x="50" y="57" fill="#64748b" font-size="6.5"
+                                      text-anchor="middle" font-family="JetBrains Mono,monospace">α Attack</text>
+                                <text x="10" y="60" fill="#334155" font-size="5"
+                                      text-anchor="middle" font-family="JetBrains Mono,monospace">0.4</text>
+                                <text x="90" y="60" fill="#334155" font-size="5"
+                                      text-anchor="middle" font-family="JetBrains Mono,monospace">1.8</text>
+                                <!-- League avg tick at 50% -->
+                                <line x1="50" y1="14" x2="50" y2="22" stroke="#334155" stroke-width="1.2"/>
+                                <text x="50" y="12" fill="#334155" font-size="4.5"
+                                      text-anchor="middle" font-family="JetBrains Mono,monospace">avg</text>
+                            </svg>
+                        </div>
+                        <!-- Defence gauge (β): lower = better, range 0.8-2.1 -->
+                        <div>
+                            <svg viewBox="0 0 100 65" class="w-full" xmlns="http://www.w3.org/2000/svg">
+                                {% set pct = ((home_beta - 0.8) / 1.3) | float %}
+                                {% set pct = [0.0, [1.0, pct] | min] | max %}
+                                {% set inv_pct = 1.0 - pct %}
+                                <path d="M 12 52 A 38 38 0 0 1 88 52"
+                                      fill="none" stroke="#1e293b" stroke-width="6" stroke-linecap="round"/>
+                                <path d="M 12 52 A 38 38 0 0 1 88 52"
+                                      fill="none" stroke="{{ home_colour }}" stroke-width="6"
+                                      stroke-linecap="round" opacity="0.2"
+                                      stroke-dasharray="{{ inv_pct * 119.4 }} 119.4"/>
+                                <text x="50" y="46" fill="{{ home_colour }}" font-size="12"
+                                      font-weight="bold" text-anchor="middle"
+                                      font-family="JetBrains Mono,monospace">{{ "%.3f"|format(home_beta) }}</text>
+                                <text x="50" y="57" fill="#64748b" font-size="6.5"
+                                      text-anchor="middle" font-family="JetBrains Mono,monospace">β Defence</text>
+                                <text x="10" y="60" fill="#334155" font-size="5"
+                                      text-anchor="middle" font-family="JetBrains Mono,monospace">best</text>
+                                <text x="90" y="60" fill="#334155" font-size="5"
+                                      text-anchor="middle" font-family="JetBrains Mono,monospace">weak</text>
+                                <line x1="50" y1="14" x2="50" y2="22" stroke="#334155" stroke-width="1.2"/>
+                                <text x="50" y="12" fill="#334155" font-size="4.5"
+                                      text-anchor="middle" font-family="JetBrains Mono,monospace">avg</text>
+                            </svg>
+                        </div>
+                    </div>
+                    <!-- xG projected -->
+                    <div class="flex justify-between text-[10px] font-mono mt-1 px-1">
+                        <span class="text-slate-500">xG projected</span>
+                        <span class="font-bold" style="color:color-mix(in srgb, {{ home_colour }} 55%, var(--text-primary))">
+                            {{ "%.2f"|format(home_xg_proj) }}
+                        </span>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <div class="border-t" style="border-color:var(--border) my-2"></div>
+
+                <!-- Away team gauges -->
+                <div class="mb-3">
+                    <div class="text-[10px] font-bold uppercase tracking-widest mb-2 flex items-center gap-2"
+                         style="color:color-mix(in srgb, {{ away_colour }} 55%, var(--text-primary))">
+                        {{ featured.away_name }}
+                        {% if away_alpha_estimated %}
+                        <span class="text-[8px] text-slate-500 font-normal normal-case
+                                    px-1 py-0.5 rounded" style="border:1px solid var(--border)">est.</span>
+                        {% endif %}
+                    </div>
+                    {% if away_alpha %}
+                    <div class="grid grid-cols-2 gap-2">
+                        <!-- Attack -->
+                        <div>
+                            <svg viewBox="0 0 100 65" class="w-full" xmlns="http://www.w3.org/2000/svg">
+                                {% set pct = ((away_alpha - 0.4) / 1.4) | float %}
+                                {% set pct = [0.0, [1.0, pct] | min] | max %}
+                                <path d="M 12 52 A 38 38 0 0 1 88 52"
+                                      fill="none" stroke="#1e293b" stroke-width="6" stroke-linecap="round"/>
+                                <path d="M 12 52 A 38 38 0 0 1 88 52"
+                                      fill="none" stroke="{{ away_colour }}" stroke-width="6"
+                                      stroke-linecap="round" opacity="0.2"
+                                      stroke-dasharray="{{ pct * 119.4 }} 119.4"/>
+                                <text x="50" y="46" fill="{{ away_colour }}" font-size="12"
+                                      font-weight="bold" text-anchor="middle"
+                                      font-family="JetBrains Mono,monospace">{{ "%.3f"|format(away_alpha) }}</text>
+                                <text x="50" y="57" fill="#64748b" font-size="6.5"
+                                      text-anchor="middle" font-family="JetBrains Mono,monospace">α Attack</text>
+                                <text x="10" y="60" fill="#334155" font-size="5"
+                                      text-anchor="middle" font-family="JetBrains Mono,monospace">0.4</text>
+                                <text x="90" y="60" fill="#334155" font-size="5"
+                                      text-anchor="middle" font-family="JetBrains Mono,monospace">1.8</text>
+                                <line x1="50" y1="14" x2="50" y2="22" stroke="#334155" stroke-width="1.2"/>
+                                <text x="50" y="12" fill="#334155" font-size="4.5"
+                                      text-anchor="middle" font-family="JetBrains Mono,monospace">avg</text>
+                            </svg>
+                        </div>
+                        <!-- Defence -->
+                        <div>
+                            <svg viewBox="0 0 100 65" class="w-full" xmlns="http://www.w3.org/2000/svg">
+                                {% set pct = ((away_beta - 0.8) / 1.3) | float %}
+                                {% set pct = [0.0, [1.0, pct] | min] | max %}
+                                {% set inv_pct = 1.0 - pct %}
+                                <path d="M 12 52 A 38 38 0 0 1 88 52"
+                                      fill="none" stroke="#1e293b" stroke-width="6" stroke-linecap="round"/>
+                                <path d="M 12 52 A 38 38 0 0 1 88 52"
+                                      fill="none" stroke="{{ away_colour }}" stroke-width="6"
+                                      stroke-linecap="round" opacity="0.2"
+                                      stroke-dasharray="{{ inv_pct * 119.4 }} 119.4"/>
+                                <text x="50" y="46" fill="{{ away_colour }}" font-size="12"
+                                      font-weight="bold" text-anchor="middle"
+                                      font-family="JetBrains Mono,monospace">{{ "%.3f"|format(away_beta) }}</text>
+                                <text x="50" y="57" fill="#64748b" font-size="6.5"
+                                      text-anchor="middle" font-family="JetBrains Mono,monospace">β Defence</text>
+                                <text x="10" y="60" fill="#334155" font-size="5"
+                                      text-anchor="middle" font-family="JetBrains Mono,monospace">best</text>
+                                <text x="90" y="60" fill="#334155" font-size="5"
+                                      text-anchor="middle" font-family="JetBrains Mono,monospace">weak</text>
+                                <line x1="50" y1="14" x2="50" y2="22" stroke="#334155" stroke-width="1.2"/>
+                                <text x="50" y="12" fill="#334155" font-size="4.5"
+                                      text-anchor="middle" font-family="JetBrains Mono,monospace">avg</text>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="flex justify-between text-[10px] font-mono mt-1 px-1">
+                        <span class="text-slate-500">xG projected</span>
+                        <span class="font-bold" style="color:color-mix(in srgb, {{ away_colour }} 55%, var(--text-primary))">
+                            {{ "%.2f"|format(away_xg_proj) }}
+                        </span>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <div class="border-t" style="border-color:var(--border) my-2"></div>
+
+                <!-- League parameters (compact) -->
+                {% if league_gamma %}
+                <div class="grid grid-cols-2 gap-x-2 text-[10px] font-mono">
+                    <div class="text-slate-500">γ Home adv.</div>
+                    <div class="text-slate-300 text-right">{{ "%.3f"|format(league_gamma) }}</div>
+                    <div class="text-slate-500">ρ Draw corr.</div>
+                    <div class="text-slate-300 text-right">{{ "%.4f"|format(league_rho) }}</div>
+                </div>
+                {% endif %}
+
+                <!-- Live xG (populated by JS polling when FotMob key present) -->
+                {% if fotmob_available %}
+                <div class="border-t" style="border-color:var(--border) mt-3 pt-3">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-[10px] text-slate-500 uppercase tracking-widest">
+                            Live xG
+                        </span>
+                        <select id="poll-interval"
+                                class="border text-sm" style="background:var(--surface);border-color:var(--border);color:var(--text-muted)
+                                      text-[9px] font-mono rounded px-1 py-0.5 cursor-pointer">
+                            <option value="60">1 min</option>
+                            <option value="300" selected>5 min</option>
+                            <option value="600">10 min</option>
+                            <option value="0">Paused</option>
+                        </select>
+                    </div>
+                    <div id="xg-display" class="space-y-2 font-mono text-xs">
+                        <div class="flex justify-between items-center">
+                            <span style="color:color-mix(in srgb, {{ home_colour }} 55%, var(--text-primary))" class="font-bold truncate">
+                                {{ featured.home_name if featured.home_name else "Home" }}
+                            </span>
+                            <span id="home-xg" class="text-slate-400">—</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span style="color:color-mix(in srgb, {{ away_colour }} 55%, var(--text-primary))" class="font-bold truncate">
+                                {{ featured.away_name if featured.away_name else "Away" }}
+                            </span>
+                            <span id="away-xg" class="text-slate-400">—</span>
+                        </div>
+                        <div id="xg-status" class="match-data-status">
+                            Live data freshness: awaiting update
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!-- BOTTOM: Win probability timeline (full width)                     -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    {% if timeline_svg %}
+    <div class="rounded-xl p-3 shadow-xl" style="background:var(--surface);border:1px solid var(--border)">
+        <div class="flex items-center justify-between mb-1">
+            <span class="text-[10px] font-mono uppercase tracking-widest" style="color:var(--text-muted)">
+                Win Probability Timeline
+            </span>
+            <span class="text-[9px] font-mono text-slate-600">
+                Neural net · 5 min intervals · goal minutes approximated
+            </span>
+        </div>
+        {{ timeline_svg | safe }}
+    </div>
+    {% endif %}
+
+</div>
+
+<style>
+/* ── Match page league theming ───────────────────────────────── */
+/* Body background comes from base.html / theme.css --league-tint */
+
+/* Fixture strip wrapper */
+.fixture-strip-wrap {
+    background: var(--league-primary) !important;
+    border: 1px solid var(--league-vivid) !important;
+}
+.fixture-strip-label { color: var(--league-gold) !important; opacity: 1; }
+
+/* Fixture cards inside strip — sit on the dark primary background */
+.fix-card-default {
+    border: 1.5px solid rgba(255,255,255,0.2) !important;
+    background: rgba(255,255,255,0.08) !important;
+    color: #fff !important;
+}
+.fix-card-meta { color: rgba(255,255,255,0.88) !important; }
+.fix-card-team { color: #fff !important; }
+.fix-card-default:hover {
+    border-color: rgba(255,255,255,0.5) !important;
+    background: rgba(255,255,255,0.15) !important;
+    color: #fff !important;
+}
+.fix-card-active {
+    border-color: var(--league-gold) !important;
+    background: rgba(255,255,255,0.2) !important;
+    color: var(--league-gold) !important;
+}
+
+/* Scrollbar */
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+</style>
+<script>
+// ── Fixtures strip scroll persistence ─────────────────────────────────────────
+(function () {
+    const KEY = "fixtures-scroll";
+    const strip = document.querySelector(".fixtures-strip");
+    if (!strip) return;
+    const saved = sessionStorage.getItem(KEY);
+    if (saved !== null) strip.scrollLeft = parseInt(saved, 10);
+    strip.querySelectorAll("a").forEach(function (link) {
+        link.addEventListener("click", function () {
+            sessionStorage.setItem(KEY, strip.scrollLeft);
+        });
+    });
+})();
+
+// ── Live xG polling (FotMob via /live/{match_id}) ─────────────────────────────
+(function () {
+    const matchId   = "{{ featured.fixture_id if featured.fixture_id else '' }}";
+    const fotmobId  = "{{ featured.fotmob_id if featured.fotmob_id else '' }}";
+    const kickoffUtc = "{{ featured.kickoff_utc if featured.kickoff_utc else '' }}";
+    const status    = "{{ featured.status if featured.status else '' }}";
+    const homeXgEl  = document.getElementById("home-xg");
+    const awayXgEl  = document.getElementById("away-xg");
+    const statusEl  = document.getElementById("xg-status");
+    const intervalSel = document.getElementById("poll-interval");
+
+    // Only poll for live or finished matches with a valid match ID
+    if (!matchId || !homeXgEl || !intervalSel) return;
+    if (status === "Not Started") {
+        if (statusEl) statusEl.textContent = "Live data freshness: waiting for kickoff";
+        return;
+    }
+
+    let pollTimer = null;
+
+    function fmt(v) {
+        return (typeof v === "number") ? v.toFixed(2) : "—";
+    }
+
+    async function poll() {
+        try {
+            const params = new URLSearchParams();
+            if (fotmobId) params.set("fotmob_id", fotmobId);
+            if (kickoffUtc) params.set("kickoff_utc", kickoffUtc);
+            const query = params.toString();
+            const resp = await fetch(`/live/${matchId}${query ? '?' + query : ''}`);
+            if (resp.status === 204) {
+                if (statusEl) statusEl.textContent = "Live data freshness: unavailable (FotMob key not configured)";
+                return;
+            }
+            const data = await resp.json();
+            if (data.status === "ok") {
+                // xG display
+                if (homeXgEl && data.home_xg !== undefined)
+                    homeXgEl.textContent = fmt(data.home_xg);
+                if (awayXgEl && data.away_xg !== undefined)
+                    awayXgEl.textContent = fmt(data.away_xg);
+
+                // Live score update — targets SVG text element inside the pitch
+                if (data.home_score !== undefined && data.away_score !== undefined) {
+                    const scoreEl = document.getElementById("live-score");
+                    if (scoreEl)
+                        scoreEl.textContent = `${data.home_score}  –  ${data.away_score}`;
+                    // Also update status badge inside SVG
+                    const badgeEl = document.getElementById("live-status-badge");
+                    if (badgeEl && data.match_status) {
+                        const badgeMap = {
+                            "Half Time":"HT","Finished":"FT","In Play":""
+                        };
+                        const st = data.match_status;
+                        badgeEl.textContent = badgeMap[st] !== undefined
+                            ? badgeMap[st]
+                            : data.minute_str || "";
+                    }
+                }
+
+                // Live minute/status display
+                const minEl  = document.getElementById("live-minute");
+                const stEl   = document.getElementById("match-status-badge");
+                const st     = (data.match_status || "").toLowerCase();
+                const isLive = ["in play","half time","ongoing"].includes(st);
+
+                if (minEl) {
+                    if (data.minute_str === "HT") {
+                        minEl.textContent = "· HT";
+                    } else if (data.minute_str === "FT") {
+                        minEl.textContent = "· FT";
+                    } else if (data.live_minute) {
+                        minEl.textContent = `· ${data.live_minute}'`;
+                    }
+                }
+
+                if (stEl) {
+                    const displayMap = {
+                        "in play":"IN PLAY","half time":"HALF TIME",
+                        "finished":"FINISHED","not started":"NOT STARTED",
+                    };
+                    const display = displayMap[st] || (data.match_status || "").toUpperCase();
+                    stEl.childNodes[0].textContent = display + " ";
+                    stEl.style.color = isLive ? "#34d399" : "#94a3b8";
+                    stEl.style.borderColor = isLive ? "#065f46" : "#334155";
+                }
+
+                if (statusEl) {
+                    const now = new Date().toLocaleTimeString("en-GB",
+                        {hour: "2-digit", minute: "2-digit"});
+                    statusEl.textContent = `Live data freshness: updated ${now}`;
+                }
+            } else {
+                if (statusEl) statusEl.textContent = "Live data freshness: no update received";
+            }
+        } catch (e) {
+            if (statusEl) statusEl.textContent = "Live data freshness: stale (refresh failed)";
+        }
+    }
+
+    function startPolling(intervalSeconds) {
+        if (pollTimer) clearInterval(pollTimer);
+        if (intervalSeconds === 0) {
+            if (statusEl) statusEl.textContent = "Paused";
+            return;
+        }
+        poll();  // immediate first poll
+        pollTimer = setInterval(poll, intervalSeconds * 1000);
+    }
+
+    intervalSel.addEventListener("change", function () {
+        startPolling(parseInt(this.value, 10));
+    });
+
+    // Start with the default selected value (5 min)
+    startPolling(parseInt(intervalSel.value, 10));
+})();
+
+// ── Anonymous community poll ──────────────────────────────────────────────────
+(function () {
+    const poll = document.querySelector("[data-fan-vote]");
+    if (!poll) return;
+
+    const matchId = poll.dataset.matchId;
+    const voterKey = "football-fan-voter-id";
+    function createVoterId() {
+        if (crypto.randomUUID) return crypto.randomUUID();
+        const bytes = new Uint8Array(16);
+        crypto.getRandomValues(bytes);
+        bytes[6] = (bytes[6] & 0x0f) | 0x40;
+        bytes[8] = (bytes[8] & 0x3f) | 0x80;
+        const hex = Array.from(bytes, function (byte) {
+            return byte.toString(16).padStart(2, "0");
+        }).join("");
+        return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+    }
+    let voterId;
+    try {
+        voterId = localStorage.getItem(voterKey);
+        if (!voterId) {
+            voterId = createVoterId();
+            localStorage.setItem(voterKey, voterId);
+        }
+    } catch (error) {
+        voterId = createVoterId();
+    }
+
+    const totalEl = poll.querySelector("[data-vote-total]");
+    const resultsEl = poll.querySelector("[data-vote-results]");
+    const messageEl = poll.querySelector("[data-vote-message]");
+    const buttons = Array.from(poll.querySelectorAll("[data-vote-choice]"));
+    const endpoint = `/api/fan-vote/${encodeURIComponent(matchId)}`;
+
+    function render(data) {
+        const total = data.total || 0;
+        if (totalEl) totalEl.textContent = `${total} ${total === 1 ? "vote" : "votes"}`;
+        if (resultsEl) resultsEl.hidden = total === 0;
+        ["H", "D", "A"].forEach(function (choice) {
+            const value = total ? Math.round((data.counts[choice] / total) * 100) : 0;
+            const el = poll.querySelector(`[data-vote-pct="${choice}"]`);
+            if (el) el.textContent = `${value}%`;
+        });
+        if (data.has_voted) {
+            buttons.forEach(function (button) { button.disabled = true; });
+            if (messageEl) messageEl.textContent = "Your vote is included. Poll results are community opinion, not the model forecast.";
+        }
+        if (data.closed) {
+            buttons.forEach(function (button) { button.disabled = true; });
+            if (messageEl) messageEl.textContent = "Voting is closed for this match.";
+        }
+    }
+
+    async function refresh() {
+        const params = new URLSearchParams({voter_id: voterId});
+        const response = await fetch(`${endpoint}?${params}`);
+        if (!response.ok) throw new Error("Could not load poll results");
+        render(await response.json());
+    }
+
+    buttons.forEach(function (button) {
+        button.addEventListener("click", async function () {
+            buttons.forEach(function (item) { item.disabled = true; });
+            if (messageEl) messageEl.textContent = "Submitting your vote…";
+            try {
+                const response = await fetch(endpoint, {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({choice: button.dataset.voteChoice, voter_id: voterId})
+                });
+                const payload = await response.json();
+                if (!response.ok) {
+                    if (payload.detail && payload.detail.reason === "already_voted") {
+                        render(payload.detail);
+                    } else if (payload.detail === "poll_closed") {
+                        if (messageEl) messageEl.textContent = "Voting is closed for this match.";
+                    } else {
+                        throw new Error("Vote could not be submitted");
+                    }
+                    return;
+                }
+                render(payload);
+            } catch (error) {
+                buttons.forEach(function (item) { item.disabled = false; });
+                if (messageEl) messageEl.textContent = "Could not submit your vote. Please try again.";
+            }
+        });
+    });
+
+    refresh().catch(function () {
+        if (totalEl) totalEl.textContent = "Poll unavailable";
+    });
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,1941 @@
+"""
+main.py  —  V4.2 Quant Terminal
+=================================
+FastAPI app for the league football win-probability dashboard.
+
+Architecture (confirmed by Phase 3 validation):
+  PRE-GAME  ->  Dixon-Coles bivariate Poisson (v4_priors.json)
+                draw_propensity = 0.10
+  LIVE      ->  Neural net (football_v4.pth) once minute > 0
+                Score + time features dominate mid-match
+
+Data sources:
+  Fixtures / scores  ->  football-data.org free tier (X-Auth-Token)
+  Upcoming fixtures  ->  FPL API (no key, free, EAT timezone)
+
+Run:  uvicorn main:app --reload --port 8000
+"""
+
+# ── Standard library ──────────────────────────────────────────────────────────
+import concurrent.futures
+import json
+import os
+import pickle
+import sys
+import time
+import urllib.request as _urllib_req
+from collections import defaultdict
+from datetime import datetime, timezone, timedelta
+from pathlib import Path
+from urllib.parse import quote
+
+_PROCESS_START = time.perf_counter()
+
+# ── Third-party ───────────────────────────────────────────────────────────────
+import numpy as np
+import torch
+import torch.nn as nn
+import uvicorn
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from scipy.stats import poisson
+from starlette.responses import Response as _Response
+
+_THIRD_PARTY_IMPORTS_READY = time.perf_counter()
+
+# ── Project root ──────────────────────────────────────────────────────────────
+ROOT = Path(__file__).resolve().parent
+sys.path.append(str(ROOT.parent))
+
+# ── Local modules — data sources ──────────────────────────────────────────────
+from bbs import (
+    get_match_detail as bbs_get_match_detail,
+    get_today_matches as bbs_get_today_matches,
+    get_upcoming_fixtures as bbs_get_upcoming_fixtures,
+    has_key as bbs_ok,
+)
+from football_co_uk import get_team_results_historical, get_pl_standings_historical
+from footballdata import (
+    get_live_match_data,
+    get_last_completed_pl_match,
+    get_finished_match,
+    find_finished_match_by_teams,
+    get_upcoming_fixtures_fd,
+    get_fixtures_by_date_fd,
+    get_competition_teams_fd,
+    get_team_details_fd,
+    get_team_matches_fd,
+    get_competition_standings_fd,
+    _populate_finished_cache,
+    PL_CODE,
+    PD_CODE,
+)
+from fotmob import (
+    get_lineup,
+    get_live_xg,
+    get_fotmob_match_id,
+    get_match_status_from_date_cache,
+    fotmob_to_fpl_team_name,
+    has_key as fotmob_available,
+    _lineup_cache,
+    _refresh_date_cache_if_stale,
+)
+from fpl import (
+    get_upcoming_fixtures,
+    get_team_map,
+    warm_cache as fpl_warm,
+    _cache as fpl_cache,
+    _CACHE_TTLS,
+)
+from lineup_adjustment import compute_lineup_adjusted_odds, get_absent_key_players
+from prediction_job import run_prediction_job_sync
+from predictions import (
+    get_all_predictions,
+    get_accuracy_stats,
+    predicted_outcome,
+    find_pregame_prediction,
+    prediction_correct_for_score,
+)
+from scoreline_matrix import build_scoreline_svg
+from simulate import simulate_cl_tournament, simulate_pl_season
+from teamdata import (
+    get_team_profile,
+    get_team_season_results,
+    get_next_fixture,
+    get_last_n_results,
+    get_standings,
+    _flag_img,
+)
+from thesportsdb import search_player, get_career_history
+from timeline import build_match_timeline_svg
+from utils import (
+    generate_pitch_svg_horizontal,
+    generate_pitch_svg_vertical,
+    get_theme_for_team,
+    get_formation_for_team,
+    get_squad_for_team,
+    get_crest_url,
+    get_crest_proxy_url,
+    _CREST_IDS,
+    _KITS_PUBLIC,
+    TEAM_MANAGERS,
+)
+from v4_backend.feature_builder import DCStrengthLookup, TEAM_NAME_ALIASES
+from routes.match import router as match_router, setup as match_setup, dc_pregame, get_effective_gamma
+from routes.nba import router as nba_router, nba_setup
+from nba_model import nba_model
+from constants import EAT, DRAW_PROPENSITY, LEAGUE_FILTERS, LEAGUE_MAP, MATCH_LEAGUES
+from football_player_stats import get_player_season_stats
+
+_PROJECT_IMPORTS_READY = time.perf_counter()
+
+# ── Constants ─────────────────────────────────────────────────────────────────
+# DRAW_PROPENSITY, EAT, LEAGUE_FILTERS, LEAGUE_MAP imported from constants.py
+LEAGUE_KEY = "ENG-Premier League"   # default league for backward compat
+
+# ── Paths ─────────────────────────────────────────────────────────────────────
+_ARTIFACT_LOOKUP_START = time.perf_counter()
+_FOOTBALL_MODEL_DIR = (
+    ROOT.parent / "v4_backend" / "notebooks" / "v4_backend" / "models"
+)
+PRIORS_PATH = Path(os.environ.get(
+    "FOOTBALL_PRIORS_PATH",
+    ROOT.parent / "v4_backend" / "v4_priors.json",
+))
+MODEL_PATH = Path(os.environ.get(
+    "FOOTBALL_MODEL_PATH", _FOOTBALL_MODEL_DIR / "football_v4.pth"
+))
+SCALER_PATH = Path(os.environ.get(
+    "FOOTBALL_SCALER_PATH", _FOOTBALL_MODEL_DIR / "scaler_v4.pkl"
+))
+_ARTIFACTS_RESOLVED_AT = time.perf_counter()
+
+# ── Load DC priors ─────────────────────────────────────────────────────────────
+if PRIORS_PATH.is_file():
+    with open(PRIORS_PATH) as f:
+        priors_db = json.load(f)
+    dc_lookup = DCStrengthLookup(PRIORS_PATH)
+else:
+    priors_db = {}
+    dc_lookup = None
+    print("WARNING: v4_priors.json not found")
+
+# ── Load neural net ────────────────────────────────────────────────────────────
+class FootballWinProbNet(nn.Module):
+    def __init__(self, n_features=11, n_classes=3, h1=40, h2=20, dropout=0.30):
+        super().__init__()
+        self.fc1  = nn.Linear(n_features, h1)
+        self.fc2  = nn.Linear(h1, h2)
+        self.head = nn.Linear(h2, n_classes)
+        self.drop = nn.Dropout(dropout)
+        self.act  = nn.ReLU()
+
+    def forward(self, x):
+        x = self.drop(self.act(self.fc1(x)))
+        x = self.drop(self.act(self.fc2(x)))
+        return self.head(x)
+
+
+nn_model, nn_scaler, nn_T = None, None, 1.0
+if MODEL_PATH.is_file() and SCALER_PATH.is_file():
+    ckpt = torch.load(MODEL_PATH, map_location="cpu", weights_only=False)
+    nn_model = FootballWinProbNet(**ckpt["arch"])
+    nn_model.load_state_dict(ckpt["model_state"])
+    nn_model.eval()
+    nn_T = ckpt.get("temperature", 1.0)
+    with open(SCALER_PATH, "rb") as f:
+        nn_scaler = pickle.load(f)
+    print(f"Loaded football_v4.pth  T={nn_T:.3f}")
+else:
+    print("WARNING: football_v4.pth or scaler not found")
+
+_BOOTSTRAP_COMPLETE = time.perf_counter()
+print(
+    "[startup] module timing: "
+    f"third-party imports={_THIRD_PARTY_IMPORTS_READY - _PROCESS_START:.2f}s, "
+    f"project imports={_PROJECT_IMPORTS_READY - _THIRD_PARTY_IMPORTS_READY:.2f}s, "
+    f"artifact lookup={_ARTIFACTS_RESOLVED_AT - _ARTIFACT_LOOKUP_START:.3f}s, "
+    f"artifact loading={_BOOTSTRAP_COMPLETE - _ARTIFACTS_RESOLVED_AT:.2f}s, "
+    f"total module bootstrap={_BOOTSTRAP_COMPLETE - _PROCESS_START:.2f}s"
+)
+
+import asyncio
+from contextlib import asynccontextmanager
+from prediction_job import schedule_prediction_job
+from fan_votes import cast_vote, get_vote_summary, init_fan_votes
+from predictions import (DB_PATH as FOOTBALL_PREDICTIONS_DB, init_db,
+                         log_pre_lineup, log_post_lineup,
+                         log_result, get_all_predictions,
+                         save_match_snapshot, get_match_snapshot)
+
+@asynccontextmanager
+async def lifespan(app):
+    """Initialize critical state, then run cache warming and jobs in background."""
+    startup_started = time.perf_counter()
+    phase_started = startup_started
+    init_db()
+    init_fan_votes(FOOTBALL_PREDICTIONS_DB)
+    print(
+        "[startup] football database initialized in "
+        f"{time.perf_counter() - phase_started:.2f}s"
+    )
+
+    if priors_db:
+        phase_started = time.perf_counter()
+        try:
+            from model_updates import refresh_football_ratings
+            refresh_football_ratings(FOOTBALL_PREDICTIONS_DB, priors_db)
+        except Exception:
+            print("[startup] Football rating evaluation failed")
+            import traceback
+            traceback.print_exc()
+        finally:
+            print(
+                "[startup] football rating restore/evaluation completed in "
+                f"{time.perf_counter() - phase_started:.2f}s"
+            )
+
+    phase_started = time.perf_counter()
+    match_setup(
+        priors_db, nn_model, nn_scaler, nn_T, dc_lookup,
+        templates, TEAM_NAME_ALIASES, LEAGUE_KEY, LEAGUE_CONTEXTS,
+    )
+    print(
+        "[startup] football routes initialized in "
+        f"{time.perf_counter() - phase_started:.2f}s"
+    )
+
+    phase_started = time.perf_counter()
+    nba_model.setup()
+    print(
+        "[startup] NBA model setup completed in "
+        f"{time.perf_counter() - phase_started:.2f}s"
+    )
+
+    phase_started = time.perf_counter()
+    # Shared predictions DB — create table if it doesn't exist yet
+    try:
+        import sqlite3
+        _nba_db = sqlite3.connect(str(ROOT / "predictions.db"), check_same_thread=False)
+        _nba_db.execute("""
+            CREATE TABLE IF NOT EXISTS predictions (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                league        TEXT    NOT NULL DEFAULT 'football',
+                game_id       TEXT,
+                home_team     TEXT,
+                away_team     TEXT,
+                home_team_id  INTEGER,
+                away_team_id  INTEGER,
+                conference    TEXT,
+                game_time_utc TEXT,
+                model_version TEXT NOT NULL DEFAULT 'nba-elo-static-v0',
+                pregame_logged_at TEXT,
+                home_win_prob REAL,
+                away_win_prob REAL,
+                home_score    INTEGER,
+                away_score    INTEGER,
+                correct       INTEGER,
+                brier         REAL,
+                created_at    TEXT    DEFAULT (datetime('now'))
+            )
+        """)
+        for column, definition in (
+            ("game_time_utc", "TEXT"),
+            ("model_version", "TEXT NOT NULL DEFAULT 'nba-elo-static-v0'"),
+            ("pregame_logged_at", "TEXT"),
+        ):
+            try:
+                _nba_db.execute(
+                    f"ALTER TABLE predictions ADD COLUMN {column} {definition}"
+                )
+            except sqlite3.OperationalError as exc:
+                if "duplicate column name" not in str(exc).lower():
+                    raise
+        _nba_db.execute("CREATE INDEX IF NOT EXISTS idx_pred_league ON predictions(league)")
+        _nba_db.execute("CREATE INDEX IF NOT EXISTS idx_pred_game   ON predictions(game_id)")
+        _nba_db.commit()
+        print("[startup] predictions.db ready")
+    except Exception as e:
+        print(f"[startup] predictions.db error: {e}")
+        _nba_db = None
+    nba_setup(nba_model, _nba_db)
+    print(f"[startup] NBA model loaded: {nba_model.loaded}  "
+          f"(AUC={nba_model.info().get('roc_auc','—')}  "
+          f"Elo teams={nba_model.info().get('n_teams_elo','—')})")
+    print(
+        "[startup] NBA database and Elo setup completed in "
+        f"{time.perf_counter() - phase_started:.2f}s"
+    )
+
+    async def warm_and_schedule_jobs():
+        warm_started = time.perf_counter()
+        try:
+            await asyncio.to_thread(fpl_warm)
+            print(
+                "[startup] FPL cache warmed in "
+                f"{time.perf_counter() - warm_started:.2f}s"
+            )
+        except Exception:
+            print("[startup] FPL cache warm failed")
+            import traceback
+            traceback.print_exc()
+
+        if priors_db:
+            print("[startup] Prediction logging job scheduled (every 30 min)")
+            await schedule_prediction_job(
+                priors_db, LEAGUE_KEY, interval_minutes=30
+            )
+        else:
+            print("[startup] No priors loaded — prediction job skipped")
+
+    background_task = asyncio.create_task(
+        warm_and_schedule_jobs(), name="startup-background-jobs"
+    )
+    app.state.startup_background_task = background_task
+    print(
+        "[startup] application ready in "
+        f"{time.perf_counter() - startup_started:.2f}s"
+    )
+
+    try:
+        yield
+    finally:
+        background_task.cancel()
+        await asyncio.gather(background_task, return_exceptions=True)
+        # SQLite handles its own flush.
+
+from fastapi.staticfiles import StaticFiles
+
+app = FastAPI(title="Melios Dira Odds", lifespan=lifespan)
+app.include_router(match_router)
+app.include_router(nba_router, prefix="/nba")
+app.mount("/static", StaticFiles(directory=ROOT / "static"), name="static")
+templates = Jinja2Templates(directory=ROOT / "templates")
+
+
+@app.middleware("http")
+async def log_slow_requests(request: Request, call_next):
+    started = time.perf_counter()
+    response = await call_next(request)
+    elapsed = time.perf_counter() - started
+    if elapsed >= 1.0:
+        print(
+            f"[request] {request.method} {request.url.path} "
+            f"completed in {elapsed:.2f}s"
+        )
+    return response
+
+
+@app.get("/health")
+async def health():
+    return JSONResponse({
+        "status": "ready",
+        "football_model_loaded": nn_model is not None,
+        "nba_model_loaded": nba_model.loaded,
+    })
+
+
+@app.get("/api/fan-vote/{match_id}")
+async def fan_vote_summary(match_id: str, request: Request):
+    voter_id = request.query_params.get("voter_id")
+    return await asyncio.to_thread(
+        get_vote_summary, FOOTBALL_PREDICTIONS_DB, match_id, voter_id
+    )
+
+
+@app.post("/api/fan-vote/{match_id}")
+async def submit_fan_vote(match_id: str, request: Request):
+    try:
+        body = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Expected a JSON vote payload") from exc
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="Expected a JSON vote payload")
+
+    result = await asyncio.to_thread(
+        cast_vote,
+        FOOTBALL_PREDICTIONS_DB,
+        match_id,
+        body.get("choice"),
+        body.get("voter_id"),
+    )
+    if result["reason"] in ("invalid_choice", "invalid_voter"):
+        raise HTTPException(status_code=422, detail=result["reason"])
+    if result["reason"] == "unknown_match":
+        raise HTTPException(status_code=404, detail="Match not found")
+    if result["reason"] in ("invalid_kickoff", "poll_closed"):
+        raise HTTPException(status_code=409, detail=result["reason"])
+    if result["reason"] == "already_voted":
+        raise HTTPException(
+            status_code=409,
+            detail={"reason": "already_voted", **result},
+        )
+    return result
+
+
+# ── League context helper ──────────────────────────────────────────
+LEAGUE_CONTEXTS = {
+    "pl":         {"league": "pl",         "league_code": "PL",  "league_name": "Premier League"},
+    "laliga":     {"league": "laliga",     "league_code": "LL",  "league_name": "La Liga"},
+    "bundesliga": {"league": "bundesliga", "league_code": "BL",  "league_name": "Bundesliga"},
+    "seriea":     {"league": "seriea",     "league_code": "SA",  "league_name": "Serie A"},
+    "ligue1":     {"league": "ligue1",     "league_code": "L1",  "league_name": "Ligue 1"},
+}
+
+def league_ctx(league_key: str = "pl") -> dict:
+    """Returns template context dict for the given league."""
+    context = LEAGUE_CONTEXTS.get(league_key, LEAGUE_CONTEXTS["pl"])
+    return context
+
+
+def _team_navigation(
+    league_key: str, team_names: set[str] | None = None
+) -> tuple[list[dict], list[dict]]:
+    if league_key == "pl":
+        quick_teams = [
+            ("Arsenal", 57),
+            ("Liverpool", 64),
+            ("Manchester City", 65),
+            ("Manchester United", 66),
+            ("Chelsea", 61),
+            ("Tottenham", 73),
+        ]
+        all_teams = [
+            ("Aston Villa", 58),
+            ("Bournemouth", 1044),
+            ("Brentford", 402),
+            ("Brighton", 397),
+            ("Crystal Palace", 354),
+            ("Everton", 62),
+            ("Fulham", 63),
+            ("Ipswich", 610),
+            ("Leeds", 341),
+            ("Newcastle United", 67),
+            ("Nottingham Forest", 351),
+            ("Sunderland", 71),
+            ("West Ham", 563),
+            ("Wolverhampton Wanderers", 76),
+        ]
+
+        def pl_item(name: str, team_id: int) -> dict:
+            return {
+                "name": name,
+                "colour": get_theme_for_team(name).get("primary", "#64748b"),
+                "href": f"/team/{team_id}",
+            }
+
+        return (
+            [
+                pl_item(name, team_id)
+                for name, team_id in sorted(quick_teams, key=lambda team: team[0].casefold())
+            ],
+            [
+                pl_item(name, team_id)
+                for name, team_id in sorted(all_teams, key=lambda team: team[0].casefold())
+            ],
+        )
+
+    league_cfg = MATCH_LEAGUES.get(league_key)
+    if not league_cfg:
+        return [], []
+    teams = priors_db.get(league_cfg["priors"], {}).get("teams", {})
+    names = team_names if team_names is not None else set(teams)
+    ranked = sorted(
+        ((name, teams.get(name, {})) for name in names),
+        key=lambda item: (-item[1].get("alpha", 0), item[0]),
+    )
+    quick_names = {name for name, _ in ranked[:6]}
+
+    def item(name: str) -> dict:
+        return {
+            "name": name,
+            "colour": get_theme_for_team(name).get("primary", "#64748b"),
+            "href": f"/league-team?league={league_key}&team={quote(name)}",
+        }
+
+    quick = [item(name) for name in sorted(quick_names, key=str.casefold)]
+    remaining = [item(name) for name in sorted(names - quick_names, key=str.casefold)]
+    return quick, remaining
+
+
+for _league_key, _context in LEAGUE_CONTEXTS.items():
+    _quick, _all = _team_navigation(_league_key)
+    _context["team_nav_quick"] = _quick
+    _context["team_nav_all"] = _all
+    _context["team_map_href"] = (
+        "/teams/laliga" if _league_key == "laliga"
+        else "/teams/seriea" if _league_key == "seriea"
+        else None if _league_key == "bundesliga"
+        else "/teams"
+    )
+
+
+def _set_current_league_roster(league_key: str, team_names: set[str]) -> None:
+    if len(team_names) < 18:
+        return
+    quick, all_teams = _team_navigation(league_key, team_names)
+    LEAGUE_CONTEXTS[league_key]["team_nav_quick"] = quick
+    LEAGUE_CONTEXTS[league_key]["team_nav_all"] = all_teams
+
+
+def _find_league_team_info(season_teams: list[dict], team_name: str) -> dict | None:
+    return next(
+        (
+            candidate for candidate in season_teams
+            if TEAM_NAME_ALIASES.get(candidate["name"], candidate["name"]) == team_name
+        ),
+        None,
+    )
+
+
+def _next_fixture_from_team_fixtures(
+    fixtures: list[dict], team_name: str
+) -> dict | None:
+    if not fixtures:
+        return None
+    fixture = fixtures[0]
+    home = fixture.get("home", "")
+    is_home = fixture.get(
+        "is_home",
+        TEAM_NAME_ALIASES.get(home, home) == team_name,
+    )
+    return {
+        "match_id": fixture.get("match_id"),
+        "date": fixture.get("kickoff_eat") or fixture.get("date", ""),
+        "opponent": fixture.get("away" if is_home else "home", ""),
+        "is_home": is_home,
+    }
+
+
+_TEAM_PROFILE_FALLBACKS = {
+    "Inter": {
+        "id": 108,
+        "venue": "San Siro",
+        "founded": 1908,
+        "colours": "Blue and black",
+    },
+}
+
+
+# ── DC pre-game ───────────────────────────────────────────────────────────────
+
+@app.get("/crest/{team_name}")
+async def crest_proxy(team_name: str):
+    """Proxy crest images to avoid CORS issues in SVG <image> tags."""
+    url = get_crest_url(team_name)
+    if not url:
+        return _Response(status_code=404)
+    try:
+        req = _urllib_req.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with _urllib_req.urlopen(req, timeout=5) as resp:
+            data = resp.read()
+        return _Response(content=data, media_type="image/png",
+                        headers={"Cache-Control": "public, max-age=86400"})
+    except Exception:
+        return _Response(status_code=404)
+
+
+
+@app.get("/teams", response_class=HTMLResponse)
+async def teams_hub(request: Request):
+    """Teams hub — England map with all PL clubs plotted."""
+    team_colours = {
+        name: get_theme_for_team(name)["primary"]
+        for name in _CREST_IDS
+    }
+    return templates.TemplateResponse(
+        request=request, name="teams.html",
+        context={
+            "request"      : request,
+            "team_colours" : team_colours,
+            **league_ctx("pl"),
+        }
+    )
+
+
+@app.get("/teams/laliga", response_class=HTMLResponse)
+async def teams_laliga(request: Request):
+    """Spain map — all La Liga clubs with zoom tiers."""
+    return templates.TemplateResponse(
+        request=request, name="teams_laliga.html",
+        context={
+            "request": request,
+            **league_ctx("laliga"),
+        }
+    )
+
+
+@app.get("/teams/seriea", response_class=HTMLResponse)
+async def teams_seriea(request: Request):
+    """Stadium-location map and alphabetical Serie A club directory."""
+    locations = {
+        "AC Milan": ("Milan", "San Siro", 45.4781, 9.1240, -12, -12),
+        "Atalanta": ("Bergamo", "Gewiss Stadium", 45.7091, 9.6808, 18, -8),
+        "Bari": ("Bari", "Stadio San Nicola", 41.0840, 16.8400, 0, 0),
+        "Bologna": ("Bologna", "Stadio Renato Dall'Ara", 44.4925, 11.3096, 0, 0),
+        "Cagliari": ("Cagliari", "Unipol Domus", 39.1994, 9.1367, 0, 0),
+        "Como": ("Como", "Stadio Giuseppe Sinigaglia", 45.8080, 9.0852, -14, -12),
+        "Cremonese": ("Cremona", "Stadio Giovanni Zini", 45.1362, 10.0320, 0, 0),
+        "Empoli": ("Empoli", "Stadio Carlo Castellani", 43.7262, 10.9470, 0, 0),
+        "Fiorentina": ("Florence", "Stadio Artemio Franchi", 43.7808, 11.2820, 0, -15),
+        "Frosinone": ("Frosinone", "Stadio Benito Stirpe", 41.6459, 13.3480, 0, 0),
+        "Genoa": ("Genoa", "Stadio Luigi Ferraris", 44.4162, 8.9524, -12, -12),
+        "Inter": ("Milan", "San Siro", 45.4781, 9.1240, 12, 12),
+        "Juventus": ("Turin", "Allianz Stadium", 45.1096, 7.6413, -12, -12),
+        "Lazio": ("Rome", "Stadio Olimpico", 41.9339, 12.4547, -12, -12),
+        "Lecce": ("Lecce", "Stadio Via del Mare", 40.3515, 18.2084, 0, 0),
+        "Monza": ("Monza", "U-Power Stadium", 45.5869, 9.2012, 12, -14),
+        "Napoli": ("Naples", "Stadio Diego Armando Maradona", 40.8279, 14.1930, 0, 0),
+        "Palermo": ("Palermo", "Stadio Renzo Barbera", 38.1260, 13.3500, 0, 0),
+        "Parma": ("Parma", "Stadio Ennio Tardini", 44.7832, 10.3390, 0, 0),
+        "Parma Calcio 1913": ("Parma", "Stadio Ennio Tardini", 44.7832, 10.3390, 0, 0),
+        "Pisa": ("Pisa", "Arena Garibaldi", 43.7270, 10.3950, 0, 0),
+        "Roma": ("Rome", "Stadio Olimpico", 41.9339, 12.4547, 12, 12),
+        "Salernitana": ("Salerno", "Stadio Arechi", 40.6242, 14.8290, 0, 0),
+        "Sampdoria": ("Genoa", "Stadio Luigi Ferraris", 44.4162, 8.9524, 12, 12),
+        "Sassuolo": ("Reggio Emilia", "MAPEI Stadium", 44.7157, 10.6500, 0, 18),
+        "Spezia": ("La Spezia", "Stadio Alberto Picco", 44.1080, 9.8600, 0, 0),
+        "Torino": ("Turin", "Stadio Olimpico Grande Torino", 45.0417, 7.6500, 12, 12),
+        "Udinese": ("Udine", "Bluenergy Stadium", 46.0819, 13.1990, 0, 0),
+        "Venezia": ("Venice", "Stadio Pier Luigi Penzo", 45.4340, 12.3388, 0, 0),
+        "Verona": ("Verona", "Stadio Marcantonio Bentegodi", 45.4352, 10.9686, 0, 0),
+    }
+    priors = priors_db.get(MATCH_LEAGUES["seriea"]["priors"], {}).get("teams", {})
+    team_names = set(priors)
+    team_crests = {}
+    now = datetime.now(timezone.utc)
+    current_season = now.year if now.month >= 7 else now.year - 1
+    try:
+        season_teams = get_competition_teams_fd("SA", current_season)
+        team_crests = {
+            team["name"]: team.get("crest", "")
+            for team in season_teams
+            if team.get("name") and team.get("crest")
+        }
+        if len(season_teams) >= 18:
+            team_names = {team["name"] for team in season_teams}
+            _set_current_league_roster("seriea", team_names)
+    except Exception as e:
+        print(f"[seriea map] team crest fetch error: {e}")
+    try:
+        fixtures = get_upcoming_fixtures_fd("SA", max_fixtures=50)
+        current_names = {
+            TEAM_NAME_ALIASES.get(fixture[side], fixture[side])
+            for fixture in fixtures
+            for side in ("home", "away")
+            if fixture.get(side)
+        }
+        if len(current_names) >= 18:
+            team_names = current_names
+            _set_current_league_roster("seriea", current_names)
+    except Exception as e:
+        print(f"[seriea map] current team fetch error: {e}")
+
+    team_list = []
+    for index, name in enumerate(sorted(team_names, key=str.casefold), start=1):
+        location = locations.get(name)
+        point = None
+        if location:
+            city, stadium, latitude, longitude, offset_x, offset_y = location
+            x = round(30 + (longitude - 6.0) * 39, 1)
+            y = round(25 + (47.8 - latitude) * 54, 1)
+            point = {
+                "x": x,
+                "y": y,
+                "pin_x": round(x + offset_x, 1),
+                "pin_y": round(y + offset_y, 1),
+                "leader": bool(offset_x or offset_y),
+                "city": city,
+                "stadium": stadium,
+            }
+        team_list.append({
+            "name": name,
+            "index": index,
+            "point": point,
+            "map_key": f"club-{index}",
+            "crest": team_crests.get(name) or get_crest_url(name),
+            "colour": get_theme_for_team(name).get("primary", "#2563EB"),
+            "href": f"/league-team?league=seriea&team={quote(name)}",
+        })
+
+    return templates.TemplateResponse(
+        request=request,
+        name="teams_seriea.html",
+        context={
+            "request": request,
+            **league_ctx("seriea"),
+            "teams": team_list,
+            "mapped_count": sum(team["point"] is not None for team in team_list),
+        },
+    )
+
+
+@app.get("/league-team", response_class=HTMLResponse)
+async def league_team_page(
+    request: Request, league: str, team: str, season: int | None = None
+):
+    """League-specific team profile for clubs outside the FPL team directory."""
+    league_key = league.lower()
+    league_cfg = MATCH_LEAGUES.get(league_key)
+    if not league_cfg:
+        return HTMLResponse("Unknown league", status_code=404)
+
+    teams = priors_db.get(league_cfg["priors"], {}).get("teams", {})
+    team_key = TEAM_NAME_ALIASES.get(team, team)
+    params = teams.get(team_key)
+    if not teams:
+        return HTMLResponse("Team not found in this league's priors", status_code=404)
+
+    league_data = priors_db[league_cfg["priors"]]
+    team_estimated = params is None
+    if team_estimated:
+        params = {
+            "alpha": float(np.percentile(
+                [values["alpha"] for values in teams.values()], 25
+            )),
+            "beta": float(np.percentile(
+                [values["beta"] for values in teams.values()], 75
+            )),
+        }
+    mean_defence = float(np.mean([values["beta"] for values in teams.values()]))
+    gamma = get_effective_gamma(
+        league_data.get("meta", {}).get("gamma_home_advantage", 1.25)
+    )
+    if league_key in ("laliga", "seriea", "bundesliga", "ligue1"):
+        now = datetime.now(timezone.utc)
+        season = season or (now.year if now.month >= 7 else now.year - 1)
+        season_teams = get_competition_teams_fd(league_cfg["comp"], season)
+        team_info = _find_league_team_info(season_teams, team_key)
+        if not team_info:
+            team_info = _find_league_team_info(
+                get_competition_teams_fd(league_cfg["comp"], season - 1),
+                team_key,
+            )
+        if not team_info:
+            fallback = _TEAM_PROFILE_FALLBACKS.get(team_key, {})
+            team_info = {
+                "id": fallback.get("id", _CREST_IDS.get(team_key)),
+                "name": team_key,
+                "short_name": "",
+                "tla": "",
+                "crest": "",
+                "venue": fallback.get("venue", ""),
+                "founded": fallback.get("founded"),
+                "colours": fallback.get("colours", ""),
+                "coach": "",
+                "squad": [],
+            }
+        team_id = team_info.get("id")
+        if team_info is not None:
+            if team_id and not team_info.get("squad"):
+                details = get_team_details_fd(team_id)
+                team_info.update({
+                    key: value for key, value in details.items()
+                    if value
+                })
+            squad_by_position: dict[str, list[dict]] = {
+                "Goalkeeper": [],
+                "Defender": [],
+                "Midfielder": [],
+                "Forward": [],
+            }
+            pitch_players = []
+            provider_squad = team_info.get("squad", [])
+            for player in provider_squad:
+                raw_position = (player.get("position") or "").lower()
+                position = (
+                    "Goalkeeper" if "goal" in raw_position
+                    else "Defender" if any(
+                        term in raw_position for term in ("def", "back")
+                    )
+                    else "Midfielder" if any(
+                        term in raw_position for term in ("mid", "wing")
+                    )
+                    else "Forward" if any(
+                        term in raw_position
+                        for term in ("forward", "attack", "striker", "off")
+                    )
+                    else None
+                )
+                if not position:
+                    continue
+                nationality = player.get("nationality", "")
+                age = ""
+                date_of_birth = player.get("dateOfBirth", "")
+                if date_of_birth:
+                    try:
+                        born = datetime.fromisoformat(date_of_birth).date()
+                        age = str((datetime.now(timezone.utc).date() - born).days // 365)
+                    except (TypeError, ValueError):
+                        pass
+                player_name = player.get("name", "")
+                squad_by_position[position].append({
+                    "id": player.get("id"),
+                    "name": player_name,
+                    "nationality": nationality,
+                    "flag": _flag_img(nationality),
+                    "age": age,
+                    "position": position,
+                })
+            if not provider_squad:
+                default_players = get_squad_for_team(team_key)
+                if default_players and not all(
+                    name == f"P{index + 1}"
+                    for index, name in enumerate(default_players)
+                ):
+                    formation_positions = [
+                        int(count) for count in (get_formation_for_team(team_key) or "")
+                        .split("-") if count.isdigit()
+                    ]
+                    position_groups = ["Goalkeeper"]
+                    position_groups.extend(
+                        ["Defender"] * (formation_positions[0] if formation_positions else 4)
+                    )
+                    position_groups.extend(
+                        ["Midfielder"] * (
+                            formation_positions[1] if len(formation_positions) > 1 else 4
+                        )
+                    )
+                    position_groups.extend(
+                        ["Forward"] * (
+                            sum(formation_positions[2:]) if len(formation_positions) > 2 else 2
+                        )
+                    )
+                    for index, player_name in enumerate(default_players):
+                        position = position_groups[min(index, len(position_groups) - 1)]
+                        squad_by_position[position].append({
+                            "id": None,
+                            "name": player_name,
+                            "nationality": "",
+                            "flag": "",
+                            "age": "",
+                            "position": position,
+                        })
+            for position in ("Goalkeeper", "Defender", "Midfielder", "Forward"):
+                pitch_players.extend(
+                    player["name"] for player in squad_by_position[position]
+                    if player["name"]
+                )
+            formation = get_formation_for_team(team_key)
+            pitch_svg = generate_pitch_svg_vertical(
+                formation=formation,
+                team_color=get_theme_for_team(team_key)["primary"],
+                players=pitch_players[:11],
+                team_name=team_key,
+                league=league_key,
+                team_id=team_id,
+            )
+            profile = {
+                **team_info,
+                "name": team_key,
+                "squad": squad_by_position,
+            }
+            theme = get_theme_for_team(team_key)
+            matches = (
+                get_team_matches_fd(team_id, league_cfg["comp"], season)
+                if team_id else []
+            )
+            last_5 = [match for match in matches if match["result"]][:5]
+            team_id = team_info.get("id") or team_id
+            next_fixture = next(
+                (
+                    match for match in reversed(matches)
+                    if match["status"] in ("SCHEDULED", "TIMED")
+                ),
+                None,
+            )
+            fixtures = [
+                {
+                    **match,
+                    "match_id": str(match["match_id"]),
+                }
+                for match in matches
+                if match["status"] in ("SCHEDULED", "TIMED", "IN_PLAY", "PAUSED")
+            ]
+            fixtures.sort(key=lambda match: match["utc_date"])
+            next_fixture = next_fixture or _next_fixture_from_team_fixtures(
+                fixtures, team_key
+            )
+            standings = get_competition_standings_fd(league_cfg["comp"], season)
+            for row in standings:
+                row["is_current"] = row["team_id"] == team_id
+                row["team_href"] = (
+                    f"/league-team?league={league_key}&team={quote(row['team_name'])}"
+                )
+            crest_url = team_info.get("crest") or get_crest_proxy_url(team_key)
+            ctx = {
+                "request": request,
+                **league_ctx(league_key),
+                "profile": profile,
+                "coach": profile.get("coach") or TEAM_MANAGERS.get(
+                    team_key, "Not available"
+                ),
+                "team_colour": theme["primary"],
+                "crest_url": crest_url,
+                "formation": formation,
+                "pitch_svg": pitch_svg,
+                "pitch_player_count": min(len(pitch_players), 11),
+                "squad_is_fallback": not bool(provider_squad),
+                "dc_alpha": params["alpha"],
+                "dc_beta": params["beta"],
+                "xg_proj": round(params["alpha"] * mean_defence * gamma, 2),
+                "dc_estimated": team_estimated,
+                "all_results": matches,
+                "last_5": last_5,
+                "next_fixture": next_fixture,
+                "standings": standings,
+                "team_id": team_id,
+                "current_season": season,
+                "team_fixtures": fixtures[:5],
+                "league_key": league_key,
+                "season_options": [season, season - 1, season - 2],
+                "team_estimated": team_estimated,
+                "trained_seasons": ", ".join(
+                    league_data.get("meta", {}).get("trained_on_seasons", [])
+                ),
+                "team_page_league": league_key,
+                "match_data_available": bool(team_id),
+                "league_name": league_cfg["name"],
+            }
+            return templates.TemplateResponse(
+                request=request, name="team.html", context=ctx
+            )
+    return templates.TemplateResponse(
+        request=request,
+        name="league_team.html",
+        context={
+            "request": request,
+            **league_ctx(league_key),
+            "team_name": team_key,
+            "team_alpha": round(params["alpha"], 3),
+            "team_beta": round(params["beta"], 3),
+            "home_xg": round(params["alpha"] * mean_defence * gamma, 2),
+            "team_estimated": team_estimated,
+            "trained_seasons": ", ".join(
+                league_data.get("meta", {}).get("trained_on_seasons", [])
+            ),
+        },
+    )
+
+
+@app.get("/team/{team_id}", response_class=HTMLResponse)
+async def team_profile(request: Request, team_id: int, season: int = 2025):
+    """Team profile page — squad, ratings, form, season results."""
+
+    profile  = get_team_profile(team_id)
+    if not profile:
+        return HTMLResponse("<h1>Team not found</h1>", status_code=404)
+
+    team_name = profile["name"]
+
+    # Coach: API often returns null -- fall back to our dict
+    coach = profile.get("coach") or TEAM_MANAGERS.get(team_name, "Unknown")
+
+    # Theme
+    theme       = get_theme_for_team(team_name)
+    team_colour = theme["primary"]
+    crest_url   = get_crest_proxy_url(team_name) or profile.get("crest", "")
+
+    # Formation + squad
+    formation = get_formation_for_team(team_name)
+    players   = get_squad_for_team(team_name)
+
+    # Vertical pitch SVG
+    pitch_svg = generate_pitch_svg_vertical(
+        formation=formation,
+        team_color=team_colour,
+        players=players,
+        team_name=team_name,
+        league="pl",
+        team_id=team_id,
+    )
+
+    # DC ratings
+    dc_alpha = dc_beta = xg_proj = None
+    dc_estimated = False
+    if priors_db:
+        league_data = priors_db.get(LEAGUE_KEY, {})
+        teams_data  = league_data.get("teams", {})
+        meta        = league_data.get("meta", {})
+        all_alpha   = [v["alpha"] for v in teams_data.values()]
+        all_beta    = [v["beta"]  for v in teams_data.values()]
+        q25_alpha   = float(np.percentile(all_alpha, 25))
+        q75_beta    = float(np.percentile(all_beta,  75))
+        tkey        = TEAM_NAME_ALIASES.get(team_name, team_name)
+        t_params    = teams_data.get(tkey)
+        if t_params:
+            dc_alpha = t_params["alpha"]
+            dc_beta  = t_params["beta"]
+            gamma    = get_effective_gamma(meta.get("gamma_home_advantage", 1.25))
+            # xG projection = how many goals this team expects at home vs average defence
+            avg_beta = float(np.mean(all_beta))
+            xg_proj  = round(dc_alpha * avg_beta * gamma, 2)
+        else:
+            dc_alpha     = q25_alpha
+            dc_beta      = q75_beta
+            dc_estimated = True
+
+    # Season results
+    # Upcoming fixtures strip — filter to this team's games
+    # FPL uses short names (e.g. "Man City", "Nott'm Forest") while
+    # profile["name"] uses full names ("Manchester City", "Nottingham Forest")
+    # Build a set of all name variants for this team to match against
+    all_fixtures = get_upcoming_fixtures(max_fixtures=60)
+    _fpl_short_map = {
+        "Man City"      : "Manchester City",
+        "Man United"    : "Manchester United",
+        "Nott'm Forest" : "Nottingham Forest",
+        "Spurs"         : "Tottenham",
+        "Wolves"        : "Wolverhampton Wanderers",
+        "Newcastle"     : "Newcastle United",
+        "Leeds"         : "Leeds",
+        "Leicester"     : "Leicester",
+        "Brighton"      : "Brighton",
+        "Brentford"     : "Brentford",
+        "Bournemouth"   : "Bournemouth",
+        "Fulham"        : "Fulham",
+        "Everton"       : "Everton",
+        "Burnley"       : "Burnley",
+        "Sunderland"    : "Sunderland",
+        "Ipswich"       : "Ipswich",
+        "Coventry"      : "Coventry",
+        "Hull"          : "Hull City",
+    }
+    # All FPL names that map to this team
+    _this_team_fpl_names = {team_name} | {
+        fpl for fpl, canonical in _fpl_short_map.items()
+        if canonical == team_name
+    }
+    # Also add aliases from feature_builder
+    _this_team_fpl_names |= {
+        alias for alias, canonical in TEAM_NAME_ALIASES.items()
+        if canonical == team_name
+    }
+
+    def _fixture_involves_team(f):
+        home = f.get("home", "")
+        away = f.get("away", "")
+        return (
+            home in _this_team_fpl_names or
+            away in _this_team_fpl_names or
+            # Fallback: partial match on first word
+            team_name.split()[0].lower() in home.lower() or
+            team_name.split()[0].lower() in away.lower()
+        )
+
+    team_fixtures = [f for f in all_fixtures if _fixture_involves_team(f)][:5]
+    next_fixture = _next_fixture_from_team_fixtures(team_fixtures, team_name)
+
+    # Season data — use fdco CSVs for historical, football-data.org for recent
+    # football-data.org free tier: current + ~2 recent seasons
+    # fdco: free CSVs back to 1888, we offer 2014-present
+    USE_FDCO = season < 2023
+
+    if USE_FDCO:
+        all_results = get_team_results_historical(team_name, season)
+        standings   = get_pl_standings_historical(season)
+        # Map fdco standings team_id using our _CREST_IDS
+        for row in standings:
+            row["team_id"] = _CREST_IDS.get(row["team_name"])
+    else:
+        all_results = get_team_season_results(team_id, season=season)
+        standings   = get_standings(season=season)
+
+    last_5       = get_last_n_results(all_results, n=5)
+    next_fixture = get_next_fixture(all_results) or next_fixture
+
+    ctx = {
+        "request"        : request,
+        "profile"        : profile,
+        "coach"          : coach,
+        "team_colour"    : team_colour,
+        "crest_url"      : crest_url,
+        "formation"      : formation,
+        "pitch_svg"      : pitch_svg,
+        "dc_alpha"       : dc_alpha,
+        "dc_beta"        : dc_beta,
+        "xg_proj"        : xg_proj,
+        "dc_estimated"   : dc_estimated,
+        "all_results"    : all_results,
+        "last_5"         : last_5,
+        "next_fixture"   : next_fixture,
+        "standings"      : standings,
+        "team_id"        : team_id,
+        "current_season" : season,
+        "team_fixtures"  : team_fixtures,
+    }
+    return templates.TemplateResponse(
+        request=request, name="team.html", context=ctx
+    )
+
+
+@app.get("/admin/run-predictions")
+async def admin_run_predictions():
+    """Manually trigger the prediction job — useful for initial setup."""
+    try:
+        await asyncio.to_thread(
+            run_prediction_job_sync, priors_db, LEAGUE_KEY
+        )
+        stats = get_accuracy_stats()
+        return JSONResponse({
+            "status": "ok",
+            "message": "Prediction job completed",
+            "stats": stats,
+        })
+    except Exception as e:
+        return JSONResponse({"status": "error", "message": str(e)}, status_code=500)
+
+
+@app.get("/admin/predictions-status")
+async def admin_predictions_status():
+    """Check what's in the predictions DB."""
+    try:
+        preds = get_all_predictions()
+        stats = get_accuracy_stats()
+        return JSONResponse({
+            "total": len(preds),
+            "stats": stats,
+            "recent": [
+                {
+                    "match_id"   : p["match_id"],
+                    "home"       : p["home_team"],
+                    "away"       : p["away_team"],
+                    "kickoff"    : p["kickoff_utc"],
+                    "pre_logged" : bool(p["pre_logged_at"]),
+                    "adj_logged" : bool(p["adj_logged_at"]),
+                    "result"     : p["actual_result"],
+                }
+                for p in preds[:20]
+            ]
+        })
+    except Exception as e:
+        return JSONResponse({"status": "error", "message": str(e)}, status_code=500)
+
+
+@app.get("/admin/cache-status")
+async def admin_cache_status():
+    """Check FPL cache state — what's cached and how stale it is."""
+    now = time.time()
+    status = {}
+    for key, (data, ts) in _cache.items():
+        ttl     = _CACHE_TTLS.get(key, 3600)
+        age_s   = int(now - ts)
+        expires = max(0, ttl - age_s)
+        size    = len(data) if isinstance(data, list) else len(str(data))
+        status[key] = {
+            "cached"         : True,
+            "age_seconds"    : age_s,
+            "expires_seconds": expires,
+            "ttl_seconds"    : ttl,
+            "size"           : size,
+        }
+    for key in _CACHE_TTLS:
+        if key not in status:
+            status[key] = {"cached": False}
+    return JSONResponse({"cache": status})
+
+
+@app.get("/player", response_class=HTMLResponse)
+async def player_page(request: Request):
+    """Player profile — powered by TheSportsDB + DC priors."""
+    name    = request.query_params.get("name", "").strip()
+    team    = request.query_params.get("team", "").strip()
+    league  = request.query_params.get("league", "pl").lower()
+    selected_stats_season = request.query_params.get("stats_season") or None
+    if league not in LEAGUE_CONTEXTS or league not in MATCH_LEAGUES:
+        league = "pl"
+
+    # Resolve team_id for crest proxy
+    team_id = request.query_params.get("team_id", "")
+    if not team_id and team:
+        team_id = str(_CREST_IDS.get(team, ""))
+
+    # ── TheSportsDB: player profile + career history ───────────────────────
+    tsdb_player  = None
+    career       = []
+    try:
+        tsdb_player = search_player(name)
+        if tsdb_player and tsdb_player.get("id"):
+            career = get_career_history(tsdb_player["id"])
+    except Exception as e:
+        print(f"[player] TheSportsDB error: {e}")
+
+    # ── DC priors for this player's team ──────────────────────────────────
+    priors_key = MATCH_LEAGUES[league]["priors"]
+    team_priors = {}
+    try:
+        league_data = priors_db.get(priors_key, {})
+        teams_data  = league_data.get("teams", {})
+        meta        = league_data.get("meta", {})
+        # Try exact match then fuzzy
+        team_key = TEAM_NAME_ALIASES.get(team, team)
+        team_priors = teams_data.get(team_key, {})
+        if not team_priors:
+            team_lower = team.lower()
+            for k, v in teams_data.items():
+                if k.lower() in team_lower or team_lower in k.lower():
+                    team_priors = v
+                    break
+    except Exception as e:
+        print(f"[player] priors lookup error: {e}")
+
+    alpha   = team_priors.get("alpha")
+    beta    = team_priors.get("beta")
+    gamma   = meta.get("gamma_home_advantage", 1.25) if 'meta' in dir() else 1.25
+    try:
+        gamma = priors_db.get(priors_key, {}).get("meta", {}).get("gamma_home_advantage", 1.25)
+    except Exception:
+        gamma = 1.25
+
+    # α bar width: scale 0-2 range to 0-100%
+    alpha_pct = round(min(100, (alpha / 2.0) * 100)) if alpha else 0
+    beta_pct  = round(min(100, (beta  / 2.0) * 100)) if beta  else 0
+
+    # ── Next match for this team from predictions DB ───────────────────────
+    next_match = None
+    try:
+        now_str = datetime.now(timezone.utc).isoformat()
+        season  = datetime.now(timezone.utc).year
+        if datetime.now(timezone.utc).month < 8:
+            season -= 1
+        preds = get_all_predictions(season)
+        upcoming = [
+            p for p in preds
+            if not p.get("actual_result")
+            and p.get("kickoff_utc", "") > now_str
+            and p.get("league", "pl") == league
+            and (team.lower() in p.get("home_team","").lower()
+                 or team.lower() in p.get("away_team","").lower())
+        ]
+        if upcoming:
+            upcoming.sort(key=lambda x: x.get("kickoff_utc",""))
+            p = upcoming[0]
+            # Convert kickoff to EAT display
+            ko_display = ""
+            try:
+                ko_dt = datetime.fromisoformat(p["kickoff_utc"].replace("Z","+00:00"))
+                eat   = ko_dt.astimezone(EAT)
+                ko_display = eat.strftime("%a %d %b · %H:%M EAT")
+            except Exception:
+                ko_display = p.get("kickoff_utc","")[:10]
+            next_match = {
+                "home"       : p.get("home_team",""),
+                "away"       : p.get("away_team",""),
+                "kickoff_eat": ko_display,
+                "match_id"   : p.get("match_id",""),
+                "dc_home"    : p.get("pre_dc_home"),
+                "dc_draw"    : p.get("pre_dc_draw"),
+                "dc_away"    : p.get("pre_dc_away"),
+                "league"     : league,
+            }
+    except Exception as e:
+        print(f"[player] next match error: {e}")
+
+    # ── Kit for this team ──────────────────────────────────────────────────
+    try:
+        kit = _KITS_PUBLIC.get(team, {"fill": "#14b8a6", "stroke": "#fff", "abbr": team[:3].upper()})
+    except Exception:
+        kit = {"fill": "#14b8a6", "stroke": "#fff", "abbr": team[:3].upper() if team else "---"}
+
+    league_display = MATCH_LEAGUES[league]["name"]
+    stats_player_name = tsdb_player["name"] if tsdb_player else name
+    player_stats = get_player_season_stats(
+        stats_player_name,
+        league,
+        current_team=team,
+        selected_season=selected_stats_season,
+    )
+
+    return templates.TemplateResponse(
+        request=request, name="player.html",
+        context={
+            "request"       : request,
+            "player_name"   : stats_player_name,
+            "team_name"     : team,
+            "team_id"       : team_id,
+            "league"        : league,
+            "league_display": league_display,
+            "tsdb"          : tsdb_player,
+            "career"        : career,
+            "player_stats"  : player_stats,
+            "alpha"         : round(alpha, 3) if alpha else None,
+            "beta"          : round(beta,  3) if beta  else None,
+            "gamma"         : round(gamma, 3),
+            "alpha_pct"     : alpha_pct,
+            "beta_pct"      : beta_pct,
+            "kit"           : kit,
+            "next_match"    : next_match,
+            **league_ctx(league),
+        }
+    )
+
+
+@app.get("/tournament", response_class=HTMLResponse)
+async def tournament_page(request: Request):
+    """Tournament simulator — CL knockout + PL season Monte Carlo."""
+
+    # Build team list per league from priors
+    all_teams: dict[str, list[dict]] = {}
+    for league_key, league_name in [
+        ("ENG-Premier League", "pl"),
+        ("ESP-La Liga",        "laliga"),
+        ("GER-Bundesliga",     "bundesliga"),
+        ("ITA-Serie A",        "seriea"),
+        ("FRA-Ligue 1",        "ligue1"),
+    ]:
+        data  = priors_db.get(league_key, {})
+        teams = data.get("teams", {})
+        ranked = sorted(teams.items(), key=lambda x: x[1]["alpha"], reverse=True)
+        all_teams[league_name] = [
+            {
+                "name"  : t,
+                "alpha" : round(v["alpha"], 3),
+                "abbr"  : _KITS_PUBLIC.get(t, {}).get("abbr", t[:3].upper()),
+                "fill"  : _KITS_PUBLIC.get(t, {}).get("fill", "#14b8a6"),
+                "stroke": _KITS_PUBLIC.get(t, {}).get("stroke", "#fff"),
+            }
+            for t, v in ranked
+        ]
+
+    return templates.TemplateResponse(
+        request=request, name="tournament.html",
+        context={
+            "request"  : request,
+            "all_teams": json.dumps(all_teams),
+            **league_ctx("pl"),
+        }
+    )
+
+
+
+@app.get("/history", response_class=HTMLResponse)
+async def history_page(request: Request):
+    """Prediction history — model accuracy tracker, filterable by league."""
+
+    # League filter from query param: ?league=pl|laliga|seriea|bundesliga / (all)
+    league_filter = request.query_params.get("league", "all").lower()
+    if league_filter not in ("all", "pl", "laliga", "seriea", "bundesliga"):
+        league_filter = "all"
+
+    try:
+        season   = datetime.now(timezone.utc).year
+        if datetime.now(timezone.utc).month < 8:
+            season -= 1
+
+        all_pred = get_all_predictions(season)
+        for prediction in all_pred:
+            prediction["pre_pred"] = predicted_outcome(
+                prediction.get("pre_dc_home"),
+                prediction.get("pre_dc_draw"),
+                prediction.get("pre_dc_away"),
+            )
+            prediction["adj_pred"] = predicted_outcome(
+                prediction.get("adj_home"),
+                prediction.get("adj_draw"),
+                prediction.get("adj_away"),
+            )
+            if prediction.get("actual_result"):
+                prediction["pre_correct"] = (
+                    int(prediction["pre_pred"] == prediction["actual_result"])
+                    if prediction["pre_pred"] else None
+                )
+                prediction["adj_correct"] = (
+                    int(prediction["adj_pred"] == prediction["actual_result"])
+                    if prediction["adj_pred"] else None
+                )
+
+        # Apply league filter
+        if league_filter == "pl":
+            all_pred = [p for p in all_pred if p.get("league","pl") == "pl"]
+        elif league_filter == "laliga":
+            all_pred = [p for p in all_pred if p.get("league","pl") == "laliga"]
+        elif league_filter == "seriea":
+            all_pred = [p for p in all_pred if p.get("league","pl") == "seriea"]
+        elif league_filter == "bundesliga":
+            all_pred = [p for p in all_pred if p.get("league","pl") == "bundesliga"]
+
+        finished = [p for p in all_pred if p["actual_result"]]
+        upcoming = [p for p in all_pred if not p["actual_result"]]
+
+        # Per-league counts for tabs
+        all_preds_all = get_all_predictions(season)
+        pl_count  = sum(1 for p in all_preds_all if p.get("league","pl") == "pl")
+        ll_count  = sum(1 for p in all_preds_all if p.get("league","pl") == "laliga")
+        sa_count  = sum(1 for p in all_preds_all if p.get("league","pl") == "seriea")
+        bl_count  = sum(1 for p in all_preds_all if p.get("league","pl") == "bundesliga")
+
+        # Accuracy stats
+        def _stats(preds):
+            fin = [p for p in preds if p["actual_result"]]
+            if not fin:
+                return {"total_logged": len(preds), "total_finished": 0,
+                        "pre_accuracy": 0, "pre_correct": 0, "pre_total": 0,
+                        "adj_accuracy": 0, "adj_correct": 0, "adj_total": 0}
+            pre_total   = len(fin)
+            pre_correct = sum(1 for p in fin if p.get("pre_correct") == 1)
+            adj_set     = [p for p in fin if p.get("adj_logged_at")]
+            adj_correct = sum(1 for p in adj_set if p.get("adj_correct") == 1)
+            return {
+                "total_logged"  : len(preds),
+                "total_finished": pre_total,
+                "pre_accuracy"  : round(pre_correct/pre_total*100,1) if pre_total else 0,
+                "pre_correct"   : pre_correct,
+                "pre_total"     : pre_total,
+                "adj_accuracy"  : round(adj_correct/len(adj_set)*100,1) if adj_set else 0,
+                "adj_correct"   : adj_correct,
+                "adj_total"     : len(adj_set),
+            }
+
+        stats = _stats(all_pred)
+
+        # Per-league stats for tab badges
+        pl_preds  = [p for p in all_preds_all if p.get("league","pl") == "pl"]
+        ll_preds  = [p for p in all_preds_all if p.get("league","pl") == "laliga"]
+        sa_preds  = [p for p in all_preds_all if p.get("league","pl") == "seriea"]
+        bl_preds  = [p for p in all_preds_all if p.get("league","pl") == "bundesliga"]
+        pl_stats  = _stats(pl_preds)
+        ll_stats  = _stats(ll_preds)
+        sa_stats  = _stats(sa_preds)
+        bl_stats  = _stats(bl_preds)
+
+        # Confidence band breakdown
+        bands = {
+            "High (>60%)"  : [],
+            "Mid (40-60%)" : [],
+            "Low (<40%)"   : [],
+        }
+        for p in finished:
+            if p["pre_dc_home"] is None:
+                continue
+            conf = max(p["pre_dc_home"], p["pre_dc_draw"], p["pre_dc_away"])
+            if conf > 60:   bands["High (>60%)"].append(p)
+            elif conf >= 40: bands["Mid (40-60%)"].append(p)
+            else:            bands["Low (<40%)"].append(p)
+
+        band_stats = {}
+        for label, games in bands.items():
+            if not games:
+                band_stats[label] = {"n": 0, "correct": 0, "pct": 0}
+                continue
+            correct = sum(1 for g in games if g["pre_correct"])
+            band_stats[label] = {
+                "n"      : len(games),
+                "correct": correct,
+                "pct"    : round(correct/len(games)*100, 1),
+            }
+
+        draws_actual    = sum(1 for p in finished if p["actual_result"] == "D")
+        draws_predicted = sum(
+            1 for p in finished
+            if p["pre_dc_draw"] and
+            p["pre_dc_draw"] > (p["pre_dc_home"] or 0) and
+            p["pre_dc_draw"] > (p["pre_dc_away"] or 0)
+        )
+
+    except Exception as e:
+        print(f"[history] error: {e}")
+        stats = pl_stats = ll_stats = sa_stats = bl_stats = None
+        finished = upcoming = []
+        band_stats = {}
+        draws_actual = draws_predicted = 0
+        pl_count = ll_count = sa_count = bl_count = 0
+        league_filter = "all"
+
+    return templates.TemplateResponse(
+        request=request, name="history.html",
+        context={
+            "request"         : request,
+            "stats"           : stats,
+            "pl_stats"        : pl_stats,
+            "ll_stats"        : ll_stats,
+            "sa_stats"        : sa_stats,
+            "bl_stats"        : bl_stats,
+            "pl_count"        : pl_count,
+            "ll_count"        : ll_count,
+            "sa_count"        : sa_count,
+            "bl_count"        : bl_count,
+            "league_filter"   : league_filter,
+            "finished"        : finished,
+            "upcoming"        : upcoming[:10],
+            "band_stats"      : band_stats,
+            "draws_actual"    : draws_actual,
+            "draws_predicted" : draws_predicted,
+            "season"          : season,
+            **league_ctx(league_filter if league_filter in LEAGUE_CONTEXTS else "pl"),
+        }
+    )
+
+
+@app.get("/", response_class=HTMLResponse)
+async def hub(request: Request):
+
+    today_date = datetime.now(EAT).date()
+    today = today_date.isoformat()
+
+    season = today_date.year if today_date.month >= 7 else today_date.year - 1
+    season_label = f"{season}/{str(season + 1)[-2:]}"
+    league_stats = {}
+    for league in ("pl", "laliga", "bundesliga", "seriea", "ligue1"):
+        try:
+            league_stats[league] = get_accuracy_stats(
+                season=season, league=league
+            )
+        except Exception as e:
+            print(f"[hub] {league} accuracy lookup error: {e}")
+            league_stats[league] = None
+    pl_stats = league_stats["pl"]
+    ll_stats = league_stats["laliga"]
+    bl_stats = league_stats["bundesliga"]
+    sa_stats = league_stats["seriea"]
+    l1_stats = league_stats["ligue1"]
+
+    # Include today's games plus completed matches from the current/most recent
+    # weekend so results remain visible after the final whistle.
+    # Include recent matches (last 5 days) and upcoming weekend matches (next 5 days)
+    # This guarantees we cover the previous weekend, today, and the upcoming weekend.
+    weekend_start = (
+        today_date + timedelta(days=5 - today_date.weekday())
+        if today_date.weekday() < 5
+        else today_date - timedelta(days=today_date.weekday() - 5)
+    )
+    weekend_end = weekend_start + timedelta(days=1)
+    date_from = (today_date - timedelta(days=5)).isoformat()
+    date_to = (today_date + timedelta(days=5)).isoformat()
+    leagues = {
+        "pl": {"colour": "#9B59B6"},
+        "laliga": {"colour": "#E74C3C"},
+        "bundesliga": {"colour": "#C0392B"},
+        "seriea": {"colour": "#2563EB"},
+        "ligue1": {"colour": "#00A3E0"},
+    }
+    fixtures_by_league = {}
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(leagues)) as pool:
+        requests = {
+            pool.submit(
+                get_fixtures_by_date_fd,
+                MATCH_LEAGUES[league]["comp"],
+                date_from,
+                date_to,
+            ): league
+            for league in leagues
+        }
+        for future in concurrent.futures.as_completed(requests):
+            league = requests[future]
+            try:
+                fixtures_by_league[league] = future.result()
+            except Exception as e:
+                print(f"[hub] {league} fixture fetch error: {e}")
+                fixtures_by_league[league] = []
+
+    try:
+        saved_predictions = get_all_predictions()
+    except Exception as e:
+        print(f"[hub] saved prediction lookup error: {e}")
+        saved_predictions = []
+
+    today_matches = []
+    for league, league_data in leagues.items():
+        for fixture in fixtures_by_league.get(league, []):
+            fixture_date = fixture.get("local_date", "")
+            if fixture_date == today:
+                pass
+            elif weekend_start.isoformat() <= fixture_date <= weekend_end.isoformat():
+                if fixture["status"] != "Finished":
+                    continue
+            else:
+                continue
+
+            prediction = find_pregame_prediction(
+                saved_predictions,
+                league=league,
+                match_id=str(fixture.get("match_id", "")),
+                home_team=str(fixture.get("home", "")),
+                away_team=str(fixture.get("away", "")),
+                kickoff_utc=str(fixture.get("kickoff_utc", "")),
+                team_aliases=TEAM_NAME_ALIASES,
+            )
+
+            actual_pick_correct = None
+            if prediction and fixture.get("status") == "Finished":
+                actual_pick_correct = prediction_correct_for_score(
+                    prediction.get("pre_dc_home"),
+                    prediction.get("pre_dc_draw"),
+                    prediction.get("pre_dc_away"),
+                    fixture.get("home_score"),
+                    fixture.get("away_score"),
+                )
+
+            today_matches.append({
+                **fixture,
+                "league": league,
+                "league_name": MATCH_LEAGUES[league]["name"],
+                "league_colour": league_data["colour"],
+                "is_live": fixture["status"] in ("In Play", "Half Time"),
+                "pregame_correct": actual_pick_correct,
+            })
+
+    live_matches = [fixture for fixture in today_matches if fixture["is_live"]]
+    other_matches = [fixture for fixture in today_matches if not fixture["is_live"]]
+    league_order = {league: index for index, league in enumerate(leagues)}
+
+    def group_matches(matches, *, live_first=False):
+        grouped = {}
+        for fixture in matches:
+            grouped.setdefault(fixture["league"], []).append(fixture)
+
+        for fixtures in grouped.values():
+            def fixture_order(fixture):
+                try:
+                    kickoff = datetime.fromisoformat(
+                        fixture["kickoff_utc"].replace("Z", "+00:00")
+                    ).timestamp()
+                except (ValueError, TypeError):
+                    kickoff = 0
+                if fixture["status"] == "Finished":
+                    return (1, -kickoff)
+                if fixture["status"] in ("Postponed", "Cancelled"):
+                    return (2, kickoff)
+                return (0, kickoff)
+
+            fixtures.sort(key=fixture_order)
+
+        ordered_leagues = sorted(
+            grouped,
+            key=lambda league: (
+                not any(fixture["is_live"] for fixture in grouped[league])
+                if live_first else False,
+                league_order[league],
+            ),
+        )
+        return [
+            {
+                "league": league,
+                "league_name": MATCH_LEAGUES[league]["name"],
+                "league_colour": leagues[league]["colour"],
+                "fixtures": grouped[league],
+            }
+            for league in ordered_leagues
+        ]
+
+    # Put every live match ahead of all other fixtures; within each league,
+    # completed games are then shown newest-first.
+    live_match_groups = group_matches(live_matches, live_first=True)
+    today_match_groups = group_matches(other_matches)
+    today_count_laliga = sum(
+        1 for fixture in today_matches
+        if fixture["league"] == "laliga" and fixture["local_date"] == today
+    )
+
+    # Fetch standings for hub page
+    all_standings = {}
+    for lg, code in [("pl", "PL"), ("laliga", "PD"), ("bundesliga", "BL1"), ("seriea", "SA"), ("ligue1", "FL1")]:
+        try:
+            st = get_competition_standings_fd(code)
+            all_standings[lg] = st
+        except:
+            all_standings[lg] = []
+
+    return templates.TemplateResponse(
+        request=request, name="index.html",
+        context={
+            "request"         : request,
+            "league"          : "pl",
+            "league_code"     : "PL",
+            "season_label"    : season_label,
+            "all_standings"   : all_standings,
+            "all_standings"   : all_standings,
+            "pl_stats"        : pl_stats,
+            "ll_stats"        : ll_stats,
+            "bl_stats"        : bl_stats,
+            "sa_stats"        : sa_stats,
+            "l1_stats"        : l1_stats,
+            "today_matches"   : today_matches,
+            "live_match_groups": live_match_groups,
+            "today_match_groups": today_match_groups,
+            "today"           : today,
+            "today_count_laliga": today_count_laliga,
+            "live_count"      : 0,
+            "live_count_pl"   : 0,
+        }
+    )
+
+
+@app.get("/league/{league_key}", response_class=HTMLResponse)
+async def league_page(request: Request, league_key: str):
+    """
+    League dashboard router.
+    Premier League, La Liga, Serie A and Bundesliga share the match dashboard.
+    Other leagues show their development status.
+    """
+
+    if league_key not in LEAGUE_CONTEXTS:
+        return RedirectResponse(url="/")
+
+    if league_key in ("pl", "laliga", "bundesliga", "seriea"):
+        return RedirectResponse(
+            url=f"/match?league={league_key}",
+            status_code=302,
+        )
+
+    # All other leagues — under construction
+    LEAGUE_FEATURES = {
+        "ligue1": [
+            ("DC prior odds (18 teams)",          90),
+            ("Live match scores via FotMob",      60),
+            ("France team map",                   10),
+            ("Lineup-adjusted predictions",       10),
+            ("Prediction history logging",        10),
+            ("Neural net live model",             10),
+        ],
+    }
+    ctx = LEAGUE_CONTEXTS[league_key]
+    return templates.TemplateResponse(
+        request=request, name="under_construction.html",
+        context={
+            "request"    : request,
+            "league"     : league_key,
+            "league_key" : league_key,
+            "league_code": ctx["league_code"],
+            "league_name": ctx["league_name"],
+            "features"   : LEAGUE_FEATURES.get(league_key, []),
+        }
+    )
+
+
+async def football_league_dashboard(request: Request, league_key: str):
+    """League overview with recent scores, today's fixtures and DC predictions."""
+    league_cfg = MATCH_LEAGUES[league_key]
+    priors = priors_db.get(league_cfg["priors"], {})
+    teams = priors.get("teams", {})
+    meta = priors.get("meta", {})
+    today_date = datetime.now(EAT).date()
+    yesterday_date = today_date - timedelta(days=1)
+
+    recent_matches = []
+    try:
+        recent_matches = get_fixtures_by_date_fd(
+            league_cfg["comp"],
+            date_from=yesterday_date.isoformat(),
+            date_to=today_date.isoformat(),
+        )
+    except Exception as e:
+        print(f"[{league_key}] recent fixture fetch error: {e}")
+
+    upcoming_raw = []
+    try:
+        upcoming_raw = get_upcoming_fixtures_fd(
+            league_cfg["comp"], max_fixtures=50
+        )
+    except Exception as e:
+        print(f"[{league_key}] upcoming fixture fetch error: {e}")
+
+    current_team_names = {
+        TEAM_NAME_ALIASES.get(fixture[side], fixture[side])
+        for fixture in upcoming_raw
+        for side in ("home", "away")
+        if fixture.get(side)
+    }
+    _set_current_league_roster(league_key, current_team_names)
+
+    def enrich_fixture(fixture):
+        dc = dc_pregame(fixture["home"], fixture["away"], league_cfg["priors"])
+        home_key = TEAM_NAME_ALIASES.get(fixture["home"], fixture["home"])
+        away_key = TEAM_NAME_ALIASES.get(fixture["away"], fixture["away"])
+        return {
+            **fixture,
+            "status": fixture.get("status", "Not Started"),
+            "home_score": fixture.get("home_score"),
+            "away_score": fixture.get("away_score"),
+            "dc_home": dc[0] if dc else None,
+            "dc_draw": dc[1] if dc else None,
+            "dc_away": dc[2] if dc else None,
+            "pred": (
+                "H" if dc and dc[0] >= dc[1] and dc[0] >= dc[2]
+                else "D" if dc and dc[1] >= dc[2]
+                else "A"
+            ) if dc else None,
+            "home_has_prior": home_key in teams,
+            "away_has_prior": away_key in teams,
+        }
+
+    yesterday_matches = [
+        enrich_fixture(match) for match in recent_matches
+        if match["local_date"] == yesterday_date.isoformat()
+    ]
+    today_by_id = {
+        match["match_id"]: enrich_fixture(match)
+        for match in recent_matches
+        if match["local_date"] == today_date.isoformat()
+    }
+    for fixture in upcoming_raw:
+        if (
+            fixture.get("local_date") == today_date.isoformat()
+            and fixture["match_id"] not in today_by_id
+        ):
+            today_by_id[fixture["match_id"]] = enrich_fixture(fixture)
+
+    today_matches = sorted(
+        today_by_id.values(), key=lambda fixture: fixture.get("kickoff_utc", "")
+    )
+    upcoming = [
+        enrich_fixture(fixture) for fixture in upcoming_raw
+        if fixture.get("local_date", "") > today_date.isoformat()
+    ][:15]
+    trained_seasons = meta.get("trained_on_seasons", [])
+
+    return templates.TemplateResponse(
+        request=request,
+        name="league_dashboard.html",
+        context={
+            "request": request,
+            **league_ctx(league_key),
+            "league_key": league_key,
+            "title": league_cfg["name"],
+            "country": "Germany" if league_key == "bundesliga" else "Italy",
+            "history_href": f"/history?league={league_key}",
+            "today": today_date.isoformat(),
+            "yesterday": yesterday_date.isoformat(),
+            "today_matches": today_matches,
+            "yesterday_matches": yesterday_matches,
+            "upcoming": upcoming,
+            "team_count": len(teams),
+            "home_advantage": round(meta.get("gamma_home_advantage", 1.0), 3),
+            "trained_seasons": ", ".join(trained_seasons),
+            "fallback_fixture_count": sum(
+                not (fixture["home_has_prior"] and fixture["away_has_prior"])
+                for fixture in today_matches + yesterday_matches + upcoming
+            ),
+        },
+    )
+
+
+async def laliga_dashboard(request: Request):
+    """
+    La Liga dashboard — upcoming fixtures with DC odds,
+    today's matches, accuracy stats, team map link.
+    Fixture source: football-data.org /competitions/PD/matches
+    DC odds: ESP-La Liga priors from v4_priors.json
+    """
+
+    LL_KEY = "ESP-La Liga"
+    EAT    = timezone(timedelta(hours=3))
+    today  = datetime.now(EAT).date().isoformat()
+
+    # Recent fixtures include finished matches and scores; upcoming stays scheduled-only.
+    yesterday_date = datetime.now(EAT).date() - timedelta(days=1)
+    today_date = datetime.now(EAT).date()
+    recent_matches = []
+    try:
+        recent_matches = get_fixtures_by_date_fd(
+            PD_CODE,
+            date_from=yesterday_date.isoformat(),
+            date_to=today_date.isoformat(),
+        )
+    except Exception as e:
+        print(f"[laliga] recent fixture fetch error: {e}")
+
+    yesterday_matches = [
+        match for match in recent_matches
+        if match["local_date"] == yesterday_date.isoformat()
+    ]
+    today_matches = [
+        match for match in recent_matches
+        if match["local_date"] == today_date.isoformat()
+    ]
+
+    # Upcoming La Liga fixtures
+    upcoming_raw = []
+    try:
+        upcoming_raw = get_upcoming_fixtures_fd(PD_CODE, max_fixtures=20)
+    except Exception as e:
+        print(f"[laliga] fixture fetch error: {e}")
+
+    # Enrich with DC odds
+    upcoming = []
+    for f in upcoming_raw:
+        dc = dc_pregame(f["home"], f["away"], LL_KEY)
+        upcoming.append({
+            **f,
+            "dc_home": dc[0] if dc else None,
+            "dc_draw": dc[1] if dc else None,
+            "dc_away": dc[2] if dc else None,
+            "pred"   : ("H" if dc and dc[0]>dc[1] and dc[0]>dc[2]
+                        else "D" if dc and dc[1]>dc[2] else "A") if dc else None,
+        })
+
+    weekend_start = (
+        today_date + timedelta(days=5 - today_date.weekday())
+        if today_date.weekday() < 5
+        else today_date - timedelta(days=today_date.weekday() - 5)
+    )
+    weekend_end = weekend_start + timedelta(days=1)
+    future = [
+        fixture for fixture in upcoming
+        if today < fixture.get("local_date", fixture.get("kickoff_utc", "")[:10])
+        and weekend_start.isoformat()
+        <= fixture.get("local_date", fixture.get("kickoff_utc", "")[:10])
+        <= weekend_end.isoformat()
+    ]
+
+    # La Liga accuracy from predictions DB (season=2025, league tagged laliga)
+    ll_stats = None
+    try:
+        ll_stats = get_accuracy_stats(season=2025)
+    except Exception:
+        pass
+
+    return templates.TemplateResponse(
+        request=request, name="laliga_dashboard.html",
+        context={
+            "request"      : request,
+            **league_ctx("laliga"),
+            "today_matches": today_matches,
+            "yesterday_matches": yesterday_matches,
+            "upcoming"     : future[:15],
+            "ll_stats"     : ll_stats,
+            "today"        : today,
+            "yesterday"    : yesterday_date.isoformat(),
+        }
+    )

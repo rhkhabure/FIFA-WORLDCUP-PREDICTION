@@ -1,0 +1,384 @@
+{% extends "base.html" %}
+{#
+  nba_team.html — /nba/team/{team_id}
+  Context: team (dict with elo, team_id, name, city, tricode, primary, secondary,
+                       conference, division),
+           recent (list of prediction DB rows),
+           upcoming (list of enriched game dicts from today's scoreboard),
+           sport
+#}
+{% block content %}
+<style>
+  .tp-card{background:var(--surface,#fff);border:1.5px solid var(--border,#e2e8f0);
+           border-radius:12px;padding:14px 16px}
+  .tp-label{font-family:var(--font-mono);font-size:10px;font-weight:700;text-transform:uppercase;
+            letter-spacing:.12em;color:var(--text-muted,#64748b);margin-bottom:10px}
+  .nba-logo{border-radius:50%;display:inline-flex;align-items:center;justify-content:center;
+            position:relative;overflow:hidden;flex-shrink:0}
+  .nba-logo img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;
+                background:#fff;padding:5px;z-index:1}
+  .nba-logo span{font-family:var(--font-mono);font-size:11px;font-weight:800;color:#fff}
+  .elo-bar{height:5px;border-radius:99px;background:var(--border,#e2e8f0);overflow:hidden}
+  .elo-bar>div{height:100%;border-radius:99px}
+  .form-pip{width:34px;height:34px;border-radius:9px;display:inline-flex;align-items:center;
+            justify-content:center;font-size:15px;font-weight:900;
+            color:var(--text-primary)}
+  .form-w{background:#DCFCE7;border:1px solid #86EFAC;color:#166534}
+  .form-l{background:#FEE2E2;border:1px solid #FCA5A5;color:#991B1B}
+  .ok{color:#15803d;font-size:16px} .bad{color:#C8102E;font-size:16px}
+  .prob-track{display:flex;height:5px;border-radius:99px;overflow:hidden;
+              background:var(--border,#e2e8f0)}
+  .game-row{display:grid;grid-template-columns:1fr 90px 26px;
+            align-items:center;gap:10px;padding:8px 12px;
+            border-bottom:1px solid var(--border,#e2e8f0)}
+  .game-row:last-child{border-bottom:none}
+  .roster-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
+  .player-card{display:flex;align-items:center;gap:11px;padding:10px;
+               border:1px solid var(--border,#e2e8f0);border-radius:10px;
+               text-decoration:none;color:inherit;transition:border-color .12s,transform .12s}
+  .player-card:hover{border-color:{{ team.primary }};transform:translateY(-1px)}
+  .player-avatar{width:48px;height:48px;border-radius:50%;display:flex;align-items:center;
+                 justify-content:center;position:relative;overflow:hidden;background:{{ team.primary }};
+                 color:white;font-weight:800;font-size:12px;flex:none}
+  .player-avatar img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
+                     object-position:top}
+  .team-header{display:grid;grid-template-columns:minmax(220px,1fr) minmax(0,2.4fr) auto;
+               align-items:center;gap:22px}
+  .team-identity{display:flex;align-items:center;gap:16px;min-width:0}
+  .team-header-widgets{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+  .team-header-widget{min-width:0;background:var(--surface-2,#f8fafc);border-radius:9px;padding:10px 12px}
+  .team-header-widget .tp-label{margin-bottom:6px}
+  .team-record-value{font-size:22px;font-weight:900;line-height:1.1}
+  .team-elo{text-align:right}
+  .team-standing{font-size:11px;font-weight:700;color:{{ col }};margin-top:5px}
+  .standings-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:12px}
+  .standings-table{border-collapse:collapse;font-size:11px;width:100%;white-space:nowrap}
+  .standings-table th{color:var(--text-muted,#64748b);font:700 9px var(--font-mono);
+                      padding:6px 5px;text-align:right}
+  .standings-table th:nth-child(2),.standings-table td:nth-child(2){text-align:left}
+  .standings-table td{border-top:1px solid var(--border,#e2e8f0);padding:6px 5px;text-align:right}
+  .standings-team{display:flex;align-items:center;gap:6px;font-weight:700}
+  .standings-team img{height:18px;object-fit:contain;width:18px}
+  @media(max-width:1100px){
+    .team-header{grid-template-columns:minmax(0,1fr) auto}
+    .team-header-widgets{grid-column:1/-1}
+  }
+  @media(max-width:700px){
+    .team-header{grid-template-columns:1fr}
+    .team-identity{align-items:flex-start}
+    .team-header-widgets{grid-column:auto;grid-template-columns:1fr}
+    .team-elo{display:flex;align-items:center;gap:12px;text-align:left}
+  }
+</style>
+
+<style>
+.toggle-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 10px;
+    font-family: var(--font-mono);
+    font-weight: 700;
+    color: var(--text-muted);
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: all 0.15s;
+}
+.toggle-btn:hover {
+    background: var(--surface-2);
+}
+.toggle-btn.active {
+    background: var(--text-primary);
+    color: var(--surface);
+    border-color: var(--text-primary);
+}
+</style>
+
+
+{% set col = team.primary %}
+{% set elo = team.elo %}
+{% set bar_pct = [[(elo - 1300) / 4, 3]|max, 100]|min %}
+{% set completed_recent = recent|selectattr('team_won','ne',none)|list %}
+
+<div style="max-width:1600px;margin:0 auto;display:flex;flex-direction:column;gap:16px">
+
+  <!-- ── Header ──────────────────────────────────────────────────── -->
+  <div class="tp-card team-header" style="border-left:5px solid {{ col }}">
+    <div class="team-identity">
+      <div class="nba-logo" style="width:64px;height:64px;background:{{ col }}">
+        <img src="https://cdn.nba.com/logos/nba/{{ team.team_id }}/global/L/logo.svg"
+             alt="{{ team.tricode }}" loading="lazy" onerror="this.remove()">
+        <span>{{ team.tricode }}</span>
+      </div>
+      <div style="min-width:0">
+        <div style="font-size:22px;font-weight:900;line-height:1.1">
+          {{ team.city }} {{ team.name }}
+        </div>
+        <div style="font-size:12px;color:var(--text-muted,#64748b);margin-top:4px">
+          {{ team.conference }}ern Conference · {{ team.division }} Division
+        </div>
+        <div class="team-standing">
+          {% if team.standing_label %}{{ team.standing_label }} in the conference{% else %}Conference position unavailable{% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="team-header-widgets">
+      <div class="team-header-widget">
+        <div class="tp-label">Season record</div>
+        <div class="team-record-value">{{ team_record.wins }}–{{ team_record.losses }}</div>
+        <div style="font-size:10px;color:var(--text-muted,#64748b);margin-top:4px">
+          {{ "%.0f"|format(team_record.wins/team_record.played*100) if team_record.played else 0 }}% · {{ team_record.played }} games
+        </div>
+      </div>
+      <div class="team-header-widget">
+        <div class="tp-label">Recent form · last 10</div>
+        {% if completed_recent %}
+        <div style="display:flex;gap:4px;flex-wrap:wrap">
+          {% for r in completed_recent %}
+          {% set won = r.team_won == 1 %}
+          <span class="form-pip {{ 'form-w' if won else 'form-l' }}"
+                title="{{ 'W' if won else 'L' }}">{{ 'W' if won else 'L' }}</span>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div style="font-size:11px;color:var(--text-muted,#64748b)">No completed games logged yet.</div>
+        {% endif %}
+      </div>
+      {% if upcoming %}
+      {% set g = upcoming[0] %}
+      {% set is_home = g.home_team_id == team.team_id %}
+      {% set opp_tri = g.away_tricode if is_home else g.home_tricode %}
+      {% set opp_col = g.away_colour if is_home else g.home_colour %}
+      {% set our_prob = ((g.home_win_prob if is_home else 1-g.home_win_prob)*100)|round(0)|int %}
+      <a class="team-header-widget" href="/nba/match?game_id={{ g.game_id }}&game_date={{ g.game_date }}"
+         style="text-decoration:none;color:inherit">
+        <div class="tp-label">{{ 'Live game' if g.status == 'live' else 'Next game' }}</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+          <div style="font-size:13px;font-weight:800">
+            {{ 'vs' if is_home else '@' }} <span style="color:color-mix(in srgb, {{ opp_col }} 55%, var(--text-primary))">{{ opp_tri }}</span>
+            <div style="font-size:10px;font-weight:500;color:var(--text-muted,#64748b);margin-top:4px">
+              {{ g.tip_off_eat if g.status == 'pre' else g.status_text }}
+            </div>
+          </div>
+          <div style="color:color-mix(in srgb, {{ col }} 55%, var(--text-primary));font:800 16px var(--font-mono)">{{ our_prob }}%</div>
+        </div>
+        <div class="prob-track" style="height:6px;margin-top:8px">
+          {% if is_home %}
+          <div style="width:{{ 100-our_prob }}%;background:{{ opp_col }}"></div>
+          <div style="width:{{ our_prob }}%;background:{{ col }}"></div>
+          {% else %}
+          <div style="width:{{ our_prob }}%;background:{{ col }}"></div>
+          <div style="width:{{ 100-our_prob }}%;background:{{ opp_col }}"></div>
+          {% endif %}
+        </div>
+      </a>
+      {% else %}
+      <div class="team-header-widget">
+        <div class="tp-label">Next game</div>
+        <div style="font-size:11px;color:var(--text-muted,#64748b)">No game in the next two weeks.</div>
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="team-elo">
+      <div style="font-size:32px;font-weight:900;color:color-mix(in srgb, {{ col }} 55%, var(--text-primary));font-family:var(--font-mono)">
+        {{ elo|int }}
+      </div>
+      <div style="font-size:11px;color:var(--text-muted,#64748b)">Elo rating</div>
+      <div class="elo-bar" style="width:120px;margin-top:6px">
+        <div style="width:{{ bar_pct }}%;background:{{ col }}"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="standings-grid">
+      {% set conference_name = team.conference %}
+      <section class="tp-card" style="padding:0;overflow:hidden">
+        <div style="padding:12px 14px;border-bottom:1px solid var(--border,#e2e8f0)">
+          <div class="tp-label" style="margin:0">{{ 'Eastern' if conference_name == 'East' else 'Western' }} Conference standings</div>
+        </div>
+        {% set rows = standings.get(conference_name, []) %}
+        {% if rows %}
+        <div style="overflow-x:auto;padding:0 10px 8px">
+          <table class="standings-table">
+            <thead><tr><th>#</th><th>Team</th><th>W</th><th>L</th><th>PCT</th></tr></thead>
+            <tbody>
+              {% for row in rows %}
+              <tr style="{% if row.team_id == team.team_id %}background:var(--league-tint);font-weight:800{% endif %}">
+                <td>{{ row.rank }}</td>
+                <td><a class="standings-team" href="/nba/team/{{ row.team_id }}"
+                       style="color:var(--text-primary);text-decoration:none">
+                  <img src="https://cdn.nba.com/logos/nba/{{ row.team_id }}/global/L/logo.svg"
+                       alt="" loading="lazy" onerror="this.hidden=true">
+                  {{ row.tricode }}
+                </a></td>
+                <td>{{ row.wins }}</td><td>{{ row.losses }}</td>
+                <td>{{ "%.3f"|format(row.win_pct) }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div style="padding:16px;font-size:11px;color:var(--text-muted,#64748b)">
+          Standings are temporarily unavailable.
+        </div>
+        {% endif %}
+      </section>
+  </div>
+
+  <section class="tp-card">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:12px">
+      <div class="tp-label" style="margin:0">Roster · {{ roster_season }}</div>
+      <span style="font-size:10px;color:var(--text-muted,#64748b)">NBA official roster data</span>
+    </div>
+    {% if roster %}
+    <div class="roster-grid">
+      {% for player in roster %}
+      {% set player_id = player.get('PLAYER_ID') %}
+      {% set player_name = player.get('PLAYER', 'Player') %}
+      <a class="player-card" href="/nba/player/{{ player_id }}">
+        <span class="player-avatar">
+          {{ player_name[:1] }}
+          <img src="https://cdn.nba.com/headshots/nba/latest/260x190/{{ player_id }}.png"
+               alt="{{ player_name }}" loading="lazy" onerror="this.remove()">
+        </span>
+        <span style="min-width:0;flex:1">
+          <span style="display:block;font-size:12px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+            {{ player_name }}
+          </span>
+          <span style="display:block;font-size:10px;color:var(--text-muted,#64748b);margin-top:3px">
+            #{{ player.get('NUM') or '—' }} · {{ player.get('POSITION') or 'Position unavailable' }}
+            {% if player.get('HEIGHT') %} · {{ player.get('HEIGHT') }}{% endif %}
+          </span>
+        </span>
+        <i class="ti ti-chevron-right" style="color:var(--text-muted,#64748b)" aria-hidden="true"></i>
+      </a>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div style="padding:12px;text-align:center;color:var(--text-muted,#64748b);font-size:12px">
+      The official roster feed is temporarily unavailable for {{ roster_season }}.
+      Please try again later.
+    </div>
+    {% endif %}
+  </section>
+
+  <section class="tp-card" style="overflow-x:auto">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:5px">
+      <div class="tp-label" style="margin:0">Historical regular-season records</div>
+      <span style="font-size:10px;color:var(--text-muted,#64748b)">Through {{ historical_season_cutoff }}</span>
+    </div>
+    <div style="font-size:11px;color:var(--text-muted,#64748b);margin-bottom:12px">
+      Local game history; current and previous seasons remain API-backed.
+      {% if team_history_unavailable %} Historical database unavailable for this request.{% endif %}
+    </div>
+    {% if historical_seasons %}
+    <table style="width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap">
+      <thead>
+        <tr style="text-align:right;color:var(--text-muted,#64748b);font:10px var(--font-mono)">
+          <th style="padding:7px;text-align:left">Season</th>
+          <th style="padding:7px">GP</th>
+          <th style="padding:7px">W</th>
+          <th style="padding:7px">L</th>
+          <th style="padding:7px">PF</th>
+          <th style="padding:7px">PA</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in historical_seasons %}
+        <tr style="text-align:right;border-top:1px solid var(--border,#e2e8f0)">
+          <td style="padding:8px;text-align:left;font-weight:700">{{ row.get('season_year') }}</td>
+          <td style="padding:8px">{{ row.get('games_played') }}</td>
+          <td style="padding:8px">{{ row.get('wins') }}</td>
+          <td style="padding:8px">{{ row.get('losses') }}</td>
+          <td style="padding:8px">{{ row.get('points_for') }}</td>
+          <td style="padding:8px">{{ row.get('points_against') }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div style="font-size:12px;color:var(--text-muted,#64748b);padding:8px 0">
+      No historical team records are available.
+    </div>
+    {% endif %}
+  </section>
+
+  <section class="tp-card" style="padding:0;overflow:hidden">
+    <div style="padding:12px 14px;border-bottom:1.5px solid var(--border,#e2e8f0)">
+      <div class="tp-label" style="margin:0">Recent predictions</div>
+    </div>
+    {% if not recent %}
+    <div style="padding:20px;text-align:center;color:var(--text-muted,#64748b);font-size:12px">
+      No predictions on record yet for this team.
+    </div>
+    {% else %}
+    {% for r in recent %}
+    {% if r.pregame_verified %}
+    {% set hw = r.home_win_prob if r.home_win_prob else 0.5 %}
+    {% set fav_home = hw >= 0.5 %}
+    {% set fav_pct = ((hw if fav_home else 1-hw)*100)|round(0)|int %}
+    {% set fav_tri = r.home_team if fav_home else r.away_team %}
+    {% endif %}
+    <div class="game-row">
+      <div>
+        <div style="font-size:12px;font-weight:700">
+          {{ r.away_team }} <span style="color:var(--text-muted,#64748b);font-weight:400">@</span> {{ r.home_team }}
+        </div>
+        {% if r.pregame_verified %}
+        <div style="display:flex;align-items:center;gap:6px;margin-top:4px">
+          <div class="prob-track" style="width:70px">
+            <div style="width:{{ 100-fav_pct }}%;background:#94a3b8"></div>
+            <div style="width:{{ fav_pct }}%;background:{{ col }}"></div>
+          </div>
+          <span style="font-size:10px;font-family:var(--font-mono);color:var(--text-muted,#64748b)">
+            {{ fav_tri }} {{ fav_pct }}%
+          </span>
+        </div>
+        {% else %}
+        <div style="font-size:10px;color:var(--text-muted,#64748b);margin-top:4px">
+          Legacy pick not verifiable
+        </div>
+        {% endif %}
+      </div>
+      <div style="text-align:right">
+        <div style="font-family:var(--font-mono);font-size:12px;font-weight:700">
+          {% if r.away_score is not none %}{{ r.away_score|int }}–{{ r.home_score|int }}{% else %}—{% endif %}
+        </div>
+        <div style="font-size:10px;color:var(--text-muted,#64748b)">
+          {{ r.created_at[:10] if r.created_at else '' }}
+        </div>
+      </div>
+      <div>
+        {% if not r.pregame_verified %}
+        <span style="font-size:10px;color:var(--text-muted,#64748b)">Unverified</span>
+        {% elif r.correct == 1 %}
+        <i class="ti ti-circle-check ok" aria-label="Correct"></i>
+        {% elif r.correct == 0 %}
+        <i class="ti ti-circle-x bad" aria-label="Wrong"></i>
+        {% else %}
+        <span style="color:var(--text-muted,#64748b)">—</span>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+    {% endif %}
+  </section>
+
+</div>
+
+
+<script>
+function switchTeamConf(conf, btn) {
+    document.getElementById('east-standings-team').style.display = conf === 'East' ? 'block' : 'none';
+    document.getElementById('west-standings-team').style.display = conf === 'West' ? 'block' : 'none';
+    
+    document.querySelectorAll('.team-conf-btn').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+}
+</script>
+
+{% endblock %}

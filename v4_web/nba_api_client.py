@@ -1,0 +1,1397 @@
+"""
+nba_api_client.py  —  NBA live data layer for v4_web
+=====================================================
+Wraps nba_api live endpoints with in-memory caching and stale-serve
+fallback, following the same pattern as footballdata.py and bbs.py.
+
+Exposes:
+    get_today_scoreboard()          -> list[dict]   all games today
+    get_live_game(game_id)          -> dict          one game's live state
+    get_live_pbp(game_id)           -> list[dict]   play-by-play actions
+    get_box_score(game_id)          -> dict          team + player stats
+    build_live_snapshot(game_id)    -> dict          feature dict for nba_model
+
+The nba_api library is rate-limited by stats.nba.com. All calls are
+cached (TTL 15s for live data, 300s for static) and serve stale data
+on any API failure so the dashboard never crashes mid-game.
+
+Drop this file in v4_web/.
+"""
+
+import logging
+import math
+import time
+from datetime import datetime, timezone, timedelta
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
+import json
+from typing import Any
+
+from constants import nba_team
+
+log = logging.getLogger(__name__)
+
+# ── TTL constants (seconds) ───────────────────────────────────────────────────
+TTL_LIVE    = 15    # play-by-play during live games
+TTL_SCOREBOARD_LIVE = 15  # live score and game clock
+TTL_BOX_SCORE = 15  # player stats and on-court lineup
+TTL_TEAM_ROSTER = 21600  # roster changes infrequently
+TTL_PLAYER_PROFILE = 21600  # player bio and headline stats
+TTL_LINEUP_FALLBACK = 30  # ESPN scoreboard/box-score fallback
+TTL_PREGAME = 60    # scoreboard before tip-off
+TTL_STANDINGS = 21600
+TTL_HISTORICAL = 21600
+
+EAT_TZ = timezone(timedelta(hours=3))
+
+# ── In-memory cache: {cache_key: (data, expires_at)} ─────────────────────────
+_cache: dict[str, tuple[Any, float]] = {}
+
+
+def _get(key: str) -> Any | None:
+    entry = _cache.get(key)
+    if entry and time.monotonic() < entry[1]:
+        return entry[0]
+    return None
+
+
+def _set(key: str, data: Any, ttl: int) -> None:
+    _cache[key] = (data, time.monotonic() + ttl)
+
+
+def _get_stale(key: str) -> Any | None:
+    """Return cached data regardless of TTL (serve-stale-on-error)."""
+    entry = _cache.get(key)
+    return entry[0] if entry else None
+
+
+# ── nba_api imports (lazy so the module loads even without nba_api) ───────────
+def _scoreboard():
+    from nba_api.live.nba.endpoints import scoreboard as sb
+    return sb.ScoreBoard()
+
+
+def _scoreboard_v3(game_date: str):
+    """
+    ScoreboardV3 from stats endpoint — accepts any date string MM/DD/YYYY.
+    ScoreboardV2 has a known bug for the 2025-26 season; V3 is the replacement.
+    """
+    from nba_api.stats.endpoints import scoreboardv3
+    return scoreboardv3.ScoreboardV3(game_date=game_date, league_id="00")
+
+
+def _today_str() -> str:
+    """Today's EAT calendar date as MM/DD/YYYY for ScoreboardV3."""
+    d = datetime.now(EAT_TZ).date()
+    return f"{d.month:02d}/{d.day:02d}/{d.year}"
+
+
+def _playbyplay(game_id: str):
+    from nba_api.live.nba.endpoints import playbyplay as pbp
+    return pbp.PlayByPlay(game_id=game_id)
+
+
+def _boxscore(game_id: str, timeout: int = 8):
+    from nba_api.live.nba.endpoints import boxscore as bs
+    return bs.BoxScore(game_id=game_id, timeout=timeout)
+
+
+def current_nba_season() -> str:
+    """Return the NBA season containing today's EAT date, e.g. 2026-27."""
+    today = datetime.now(EAT_TZ).date()
+    start_year = today.year if today.month >= 10 else today.year - 1
+    return f"{start_year}-{str(start_year + 1)[-2:]}"
+
+
+def _records(dataset) -> list[dict]:
+    """Convert an nba_api dataset to JSON/template-friendly plain records."""
+    records = dataset.get_data_frame().to_dict("records")
+    cleaned = []
+    for record in records:
+        row = {}
+        for key, value in record.items():
+            try:
+                missing = value is None or bool(math.isnan(value))
+            except (TypeError, ValueError):
+                missing = value is None
+            row[key] = None if missing else value.item() if hasattr(value, "item") else value
+        cleaned.append(row)
+    return cleaned
+
+
+def get_team_roster(team_id: int, season: str | None = None) -> list[dict]:
+    """Return a team's roster for a given NBA season, with a six-hour cache."""
+    season = season or current_nba_season()
+    key = f"team_roster_{team_id}_{season}"
+    cached = _get(key)
+    if cached is not None:
+        return cached
+    try:
+        from nba_api.stats.endpoints import commonteamroster
+        roster = _records(commonteamroster.CommonTeamRoster(
+            team_id=team_id, season=season, timeout=10
+        ).common_team_roster)
+        _set(key, roster, TTL_TEAM_ROSTER)
+        return roster
+    except Exception as exc:
+        log.warning("NBA roster request failed for team %s (%s): %s", team_id, season, exc)
+        stale = _get_stale(key)
+        return stale if stale is not None else []
+
+
+def get_player_profile(player_id: int) -> dict:
+    """Return a player's NBA bio, full career season rows, and awards."""
+    key = f"player_profile_{player_id}"
+    cached = _get(key)
+    if cached is not None:
+        return cached
+    try:
+        from nba_api.stats.endpoints import commonplayerinfo
+        endpoint = commonplayerinfo.CommonPlayerInfo(player_id=player_id, timeout=10)
+        info = _records(endpoint.common_player_info)
+        headline = _records(endpoint.player_headline_stats)
+        try:
+            from nba_api.stats.endpoints import playercareerstats
+            career = playercareerstats.PlayerCareerStats(
+                player_id=player_id, timeout=10
+            )
+            career_seasons = _records(career.season_totals_regular_season)
+        except Exception as exc:
+            log.warning("NBA season stats unavailable for player %s: %s", player_id, exc)
+            career_seasons = []
+        awards_available = False
+        awards = []
+        try:
+            from nba_api.stats.endpoints import playerawards
+            awards = _records(
+                playerawards.PlayerAwards(player_id=player_id, timeout=10).player_awards
+            )
+            awards_available = True
+        except Exception as exc:
+            log.warning("NBA awards unavailable for player %s: %s", player_id, exc)
+        profile = {
+            "info": info[0] if info else {},
+            "headline": headline[0] if headline else {},
+            "seasons": list(reversed(career_seasons[-5:])),
+            "career_seasons": career_seasons,
+            "career_history_available": bool(career_seasons),
+            "awards": awards,
+            "awards_available": awards_available,
+        }
+        _set(key, profile, TTL_PLAYER_PROFILE)
+        return profile
+    except Exception as exc:
+        log.warning("NBA player profile request failed for player %s: %s", player_id, exc)
+        stale = _get_stale(key)
+        return stale if stale is not None else {}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SECTION 1 — Scoreboard (today's games)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def get_today_scoreboard() -> list[dict]:
+    """
+    Return games whose tip-off falls on today's EAT calendar date.
+
+    NBA game dates follow the US schedule, so games starting after midnight
+    EAT may be listed under the previous US calendar date. Query both dates,
+    then merge in the live scoreboard so current scores stay fresh.
+    """
+    today = datetime.now(EAT_TZ).date()
+    key = f"scoreboard_today_{today.isoformat()}"
+    cached = _get(key)
+    if cached is not None:
+        return cached
+
+    games_by_id: dict[str, dict] = {}
+    live_by_id: dict[str, dict] = {}
+
+    # ScoreboardV3 is date-specific. Fetch both NBA dates that can contribute
+    # games to one EAT calendar day, then keep only games that actually tip
+    # during that EAT day.
+    for nba_date in (today, today - timedelta(days=1)):
+        date_str = f"{nba_date.month:02d}/{nba_date.day:02d}/{nba_date.year}"
+        for game in get_scoreboard_by_date(date_str):
+            game_utc = game.get("game_time_utc", "")
+            try:
+                tip_eat = datetime.fromisoformat(
+                    game_utc.replace("Z", "+00:00")
+                ).astimezone(EAT_TZ).date()
+            except (AttributeError, ValueError):
+                tip_eat = nba_date
+            if tip_eat == today and game.get("game_id"):
+                games_by_id[game["game_id"]] = game
+
+    # Live feed gives the freshest status, clock, and score. It can return a
+    # different US-local slate than EAT, so only merge matching EAT-day games.
+    try:
+        board = _scoreboard()
+        raw_games = board.games.get_dict()
+        if raw_games:
+            for game in _parse_live_scoreboard(raw_games):
+                game_utc = game.get("game_time_utc", "")
+                try:
+                    tip_eat = datetime.fromisoformat(
+                        game_utc.replace("Z", "+00:00")
+                    ).astimezone(EAT_TZ).date()
+                except (AttributeError, ValueError):
+                    tip_eat = today
+                if tip_eat == today and game.get("game_id"):
+                    live_by_id[game["game_id"]] = game
+    except Exception as exc:
+        log.warning("Live scoreboard failed (%s) — using date scoreboards", exc)
+
+    games_by_id.update(live_by_id)
+    games = list(games_by_id.values())
+    if not games:
+        stale = _get_stale(key)
+        if stale is not None:
+            log.info("Serving stale scoreboard (%d games)", len(stale))
+            return stale
+        return []
+
+    order = {"live": 0, "pre": 1, "final": 2}
+    games.sort(key=lambda g: (order[g["status"]], g["game_time_utc"]))
+    ttl = (
+        TTL_SCOREBOARD_LIVE
+        if any(g["status"] == "live" for g in games)
+        else TTL_PREGAME
+    )
+    _set(key, games, ttl)
+    return games
+
+
+def get_scoreboard_by_date(date_str: str) -> list[dict]:
+    """
+    Returns games for any date using ScoreboardV3 (stats endpoint).
+    date_str format: 'MM/DD/YYYY'  e.g. '10/08/2026'
+    """
+    try:
+        parsed_date = datetime.strptime(date_str, "%m/%d/%Y").date()
+        date_str = f"{parsed_date.month:02d}/{parsed_date.day:02d}/{parsed_date.year}"
+    except ValueError:
+        raise ValueError(f"date_str must be MM/DD/YYYY, got {date_str!r}")
+
+    key = f"scoreboard_{date_str}"
+    cached = _get(key)
+    if cached is not None:
+        return cached
+    try:
+        games = _parse_scoreboardv3(_scoreboard_v3(date_str))
+        _set(key, games, TTL_PREGAME)
+        return games
+    except Exception as exc:
+        log.warning("ScoreboardV3 for %s failed: %s", date_str, exc)
+        return _get_stale(key) or []
+
+
+def get_yesterday_scoreboard() -> list[dict]:
+    """Return games tipping on yesterday's EAT date across NBA date boundaries."""
+    target_date = datetime.now(EAT_TZ).date() - timedelta(days=1)
+    key = f"scoreboard_eat_{target_date.isoformat()}"
+    cached = _get(key)
+    if cached is not None:
+        return cached
+
+    games_by_id: dict[str, dict] = {}
+    for nba_date in (target_date, target_date - timedelta(days=1)):
+        date_str = f"{nba_date.month:02d}/{nba_date.day:02d}/{nba_date.year}"
+        for game in get_scoreboard_by_date(date_str):
+            game_utc = game.get("game_time_utc", "")
+            try:
+                tip_eat = datetime.fromisoformat(
+                    game_utc.replace("Z", "+00:00")
+                ).astimezone(EAT_TZ).date()
+            except (AttributeError, ValueError):
+                tip_eat = target_date
+            if tip_eat == target_date and game.get("game_id"):
+                games_by_id[game["game_id"]] = game
+
+    games = sorted(games_by_id.values(), key=lambda g: g["game_time_utc"])
+    _set(key, games, TTL_STATIC)
+    return games
+
+
+def get_tomorrow_scoreboard() -> list[dict]:
+    """Return games tipping on tomorrow's EAT date across NBA date boundaries."""
+    target_date = datetime.now(EAT_TZ).date() + timedelta(days=1)
+    key = f"scoreboard_eat_{target_date.isoformat()}"
+    cached = _get(key)
+    if cached is not None:
+        return cached
+
+    games_by_id: dict[str, dict] = {}
+    for nba_date in (target_date, target_date - timedelta(days=1)):
+        date_str = f"{nba_date.month:02d}/{nba_date.day:02d}/{nba_date.year}"
+        for game in get_scoreboard_by_date(date_str):
+            game_utc = game.get("game_time_utc", "")
+            try:
+                tip_eat = datetime.fromisoformat(
+                    game_utc.replace("Z", "+00:00")
+                ).astimezone(EAT_TZ).date()
+            except (AttributeError, ValueError):
+                log.warning(
+                    "Skipping NBA game %s with invalid tip time %r",
+                    game.get("game_id"),
+                    game_utc,
+                )
+                continue
+            if tip_eat == target_date and game.get("game_id"):
+                games_by_id[game["game_id"]] = game
+
+    games = list(games_by_id.values())
+    games.sort(key=lambda game: game.get("game_time_utc", ""))
+    if games:
+        _set(key, games, TTL_PREGAME)
+    return games
+
+
+def get_next_team_game(
+    team_id: int,
+    *,
+    days_ahead: int = 14,
+    now: datetime | None = None,
+) -> dict | None:
+    """Find a team's next scheduled game within the date-specific scoreboards."""
+    now = now or datetime.now(EAT_TZ)
+    if now.tzinfo is None:
+        raise ValueError("now must be timezone-aware")
+    now_utc = now.astimezone(timezone.utc)
+
+    for offset in range(days_ahead + 1):
+        target_date = now.astimezone(EAT_TZ).date() + timedelta(days=offset)
+        candidates: dict[str, dict] = {}
+        for nba_date in (target_date, target_date - timedelta(days=1)):
+            date_str = f"{nba_date.month:02d}/{nba_date.day:02d}/{nba_date.year}"
+            for game in get_scoreboard_by_date(date_str):
+                if team_id not in (game.get("home_team_id"), game.get("away_team_id")):
+                    continue
+                game_id = str(game.get("game_id", ""))
+                if not game_id or game.get("status") != "pre":
+                    continue
+                try:
+                    tip = datetime.fromisoformat(
+                        game.get("game_time_utc", "").replace("Z", "+00:00")
+                    )
+                    if tip.tzinfo is None or tip.astimezone(timezone.utc) <= now_utc:
+                        continue
+                    if tip.astimezone(EAT_TZ).date() == target_date:
+                        candidates[game_id] = game
+                except (AttributeError, TypeError, ValueError):
+                    log.warning("Skipping NBA game with invalid tip time: %r", game)
+        if candidates:
+            return min(candidates.values(), key=lambda game: game["game_time_utc"])
+    return None
+
+
+def get_scheduled_game(
+    game_id: str,
+    *,
+    game_date: str = "",
+    days_ahead: int = 14,
+    now: datetime | None = None,
+) -> dict | None:
+    """Look up a game by NBA game ID, using a supplied date or a short horizon."""
+    now = now or datetime.now(EAT_TZ)
+    if now.tzinfo is None:
+        raise ValueError("now must be timezone-aware")
+    now_eat = now.astimezone(EAT_TZ)
+
+    if game_date:
+        try:
+            start_date = datetime.strptime(game_date, "%Y-%m-%d").date()
+        except ValueError:
+            return None
+        nba_dates = (
+            start_date - timedelta(days=1),
+            start_date,
+            start_date + timedelta(days=1),
+        )
+    else:
+        nba_dates = tuple(
+            now_eat.date() + timedelta(days=offset)
+            for offset in range(-1, days_ahead + 1)
+        )
+
+    seen_dates: set[str] = set()
+    for nba_date in nba_dates:
+        for date in (nba_date, nba_date - timedelta(days=1)):
+            date_str = f"{date.month:02d}/{date.day:02d}/{date.year}"
+            if date_str in seen_dates:
+                continue
+            seen_dates.add(date_str)
+            for game in get_scoreboard_by_date(date_str):
+                if str(game.get("game_id", "")) == str(game_id):
+                    return game
+    return None
+
+
+def get_conference_standings() -> dict[str, list[dict]]:
+    """Return cached current NBA standings grouped and ranked by conference."""
+    key = f"conference_standings_{current_nba_season()}"
+    cached = _get(key)
+    if cached is not None:
+        return cached
+    try:
+        from nba_api.stats.endpoints import leaguestandingsv3
+
+        response = leaguestandingsv3.LeagueStandingsV3(
+            league_id="00",
+            season=current_nba_season(),
+            season_type="Regular Season",
+            timeout=10,
+        )
+        source = getattr(response, "standings", None)
+        if source is None:
+            raise RuntimeError("NBA standings response is missing its standings dataset")
+
+        grouped = {"East": [], "West": []}
+        for row in _records(source):
+            conference = str(row.get("Conference") or row.get("CONFERENCE") or "")
+            if conference not in grouped:
+                continue
+            team_id = row.get("TeamID", row.get("TEAM_ID"))
+            team = nba_team(int(team_id)) if team_id is not None else {}
+            if not team:
+                continue
+
+            def value(*keys, default=None):
+                return next(
+                    (row[name] for name in keys if row.get(name) is not None),
+                    default,
+                )
+
+            grouped[conference].append({
+                "team_id": int(team_id),
+                "team": team.get("name", ""),
+                "city": team.get("city", ""),
+                "tricode": team.get("tricode", ""),
+                "wins": int(value("WINS", "W", default=0)),
+                "losses": int(value("LOSSES", "L", default=0)),
+                "win_pct": float(value("WinPCT", "WIN_PCT", default=0)),
+                "rank": int(value("PlayoffRank", "PLAYOFF_RANK", default=99)),
+            })
+        for rows in grouped.values():
+            rows.sort(key=lambda row: row["rank"])
+        if not any(grouped.values()):
+            raise RuntimeError("NBA standings response contained no conference teams")
+        _set(key, grouped, TTL_STANDINGS)
+        return grouped
+    except Exception as exc:
+        log.warning("NBA standings request failed: %s", exc)
+        stale = _get_stale(key)
+        return stale if stale is not None else {"East": [], "West": []}
+
+
+def get_espn_lineup(
+    game_time_utc: str,
+    home_tricode: str,
+    away_tricode: str,
+) -> dict[str, Any]:
+    """Fetch announced starters from ESPN when the NBA live box score is empty."""
+    try:
+        tip = datetime.fromisoformat(game_time_utc.replace("Z", "+00:00"))
+    except (AttributeError, ValueError):
+        log.warning("Cannot find ESPN lineup for invalid game time %r", game_time_utc)
+        return {}
+
+    key = (
+        f"espn_lineup_{tip.date().isoformat()}_"
+        f"{home_tricode.upper()}_{away_tricode.upper()}"
+    )
+    cached = _get(key)
+    if cached is not None:
+        return cached
+
+    def espn_code(code: str) -> str:
+        return {
+            "GSW": "GS",
+            "NYK": "NY",
+            "NOP": "NO",
+            "WAS": "WSH",
+            "UTA": "UTAH",
+            "SAS": "SA",
+        }.get(code.upper(), code.upper())
+
+    def fetch_json(url: str) -> dict:
+        request = Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urlopen(request, timeout=8) as response:
+            return json.loads(response.read())
+
+    try:
+        expected = {espn_code(home_tricode), espn_code(away_tricode)}
+        candidates_by_id: dict[str, dict] = {}
+        for scoreboard_date in (tip.date(), tip.date() - timedelta(days=1)):
+            scoreboard_url = (
+                "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?"
+                + urlencode({"dates": scoreboard_date.strftime("%Y%m%d")})
+            )
+            scoreboard = fetch_json(scoreboard_url)
+            for event in scoreboard.get("events", []):
+                competition = (event.get("competitions") or [{}])[0]
+                competitors = competition.get("competitors", [])
+                codes = {
+                    espn_code(item.get("team", {}).get("abbreviation", ""))
+                    for item in competitors
+                }
+                if codes == expected and event.get("id"):
+                    candidates_by_id[event["id"]] = event
+        candidates = list(candidates_by_id.values())
+        if not candidates:
+            _set(key, {}, TTL_LINEUP_FALLBACK)
+            return {}
+
+        event = min(
+            candidates,
+            key=lambda item: abs(
+                (
+                    datetime.fromisoformat(item["date"].replace("Z", "+00:00"))
+                    - tip
+                ).total_seconds()
+            ),
+        )
+        summary_url = (
+            "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?"
+            + urlencode({"event": event["id"]})
+        )
+        summary = fetch_json(summary_url)
+
+        lineups: dict[str, list[dict[str, str]]] = {"home": [], "away": []}
+        for team_data in summary.get("boxscore", {}).get("players", []):
+            code = espn_code(team_data.get("team", {}).get("abbreviation", ""))
+            side = (
+                "home" if code == espn_code(home_tricode)
+                else "away" if code == espn_code(away_tricode)
+                else None
+            )
+            if side is None:
+                continue
+            statistics = team_data.get("statistics") or []
+            athletes = next(
+                (
+                    stat.get("athletes", [])
+                    for stat in statistics
+                    if isinstance(stat.get("athletes"), list)
+                ),
+                [],
+            )
+            lineups[side] = [
+                {
+                    "name": athlete.get("athlete", {}).get("displayName", "Player"),
+                    "jersey": athlete.get("athlete", {}).get("jersey", ""),
+                    "position": athlete.get("athlete", {})
+                        .get("position", {}).get("abbreviation", ""),
+                    "headshot": athlete.get("athlete", {})
+                        .get("headshot", {}).get("href", ""),
+                }
+                for athlete in athletes
+                if athlete.get("starter")
+            ][:5]
+
+        result = {
+            **lineups,
+            "available": bool(lineups["home"] or lineups["away"]),
+            "used_starters": bool(lineups["home"] or lineups["away"]),
+            "source": "ESPN",
+        }
+        _set(key, result, TTL_LINEUP_FALLBACK)
+        return result
+    except Exception as exc:
+        log.warning(
+            "ESPN lineup fallback failed for %s (%s @ %s): %s",
+            game_time_utc,
+            away_tricode,
+            home_tricode,
+            exc,
+        )
+        return _get_stale(key) or {}
+
+
+# ── Scoreboard parsers ────────────────────────────────────────────────────────
+
+def _parse_live_scoreboard(raw_games: list) -> list[dict]:
+    """Parse the live endpoint game list into our standard game dict format."""
+    games = []
+    for g in raw_games:
+        period      = g.get("period", 0)
+        game_status = g.get("gameStatus", 1)
+        status      = {1: "pre", 2: "live", 3: "final"}.get(game_status, "pre")
+        clock       = g.get("gameClock", "")
+
+        if status == "live":
+            period_label = f"OT{period - 4}" if period > 4 else f"Q{period}"
+            status_text  = f"{period_label} {_format_clock(clock)}"
+        elif status == "final":
+            status_text = "Final"
+        else:
+            status_text = g.get("gameStatusText", "")
+
+        ht = g.get("homeTeam", {})
+        at = g.get("awayTeam", {})
+        games.append({
+            "game_id":       g.get("gameId", ""),
+            "home_team_id":  ht.get("teamId"),
+            "away_team_id":  at.get("teamId"),
+            "home_tricode":  ht.get("teamTricode", ""),
+            "away_tricode":  at.get("teamTricode", ""),
+            "home_name":     ht.get("teamName", ""),
+            "away_name":     at.get("teamName", ""),
+            "home_city":     ht.get("teamCity", ""),
+            "away_city":     at.get("teamCity", ""),
+            "home_score":    int(ht.get("score", 0) or 0),
+            "away_score":    int(at.get("score", 0) or 0),
+            "status":        status,
+            "status_text":   status_text,
+            "period":        period,
+            "clock":         clock,
+            "game_time_utc": g.get("gameTimeUTC", ""),
+        })
+    return games
+
+
+def _parse_scoreboardv3(board) -> list[dict]:
+    """
+    Parse a ScoreboardV3 response into our standard game dict format.
+
+    V3 column names (confirmed from live diagnostic):
+      GameHeader: gameId, gameCode, gameStatus, gameStatusText, period,
+                  gameClock, gameTimeUTC, gameEt, regulationPeriods, ...
+      LineScore:  gameId, teamId, teamCity, teamName, teamTricode,
+                  teamSlug, wins, losses, score, seed, timeoutsRemaining
+
+    Key structural difference from V2:
+      - GameHeader has NO home/away team columns.
+      - Team identity comes entirely from LineScore.
+      - In LineScore, away team is always the FIRST row for a game,
+        home team is always the SECOND row (confirmed from game code:
+        e.g. '20261008/BOSCLE' = BOS(away) @ CLE(home)).
+    """
+    try:
+        header    = board.game_header.get_data_frame()
+        linescore = board.line_score.get_data_frame()
+    except Exception as exc:
+        log.warning("ScoreboardV3 parse error: %s", exc)
+        return []
+
+    if header.empty:
+        return []
+
+    def _safe(val, default=0):
+        try:
+            return default if val != val else val   # NaN → default
+        except Exception:
+            return default
+
+    games = []
+    for _, row in header.iterrows():
+        gid     = str(row.get("gameId", ""))
+        gstatus = int(_safe(row.get("gameStatus"), 1))
+        status  = {1: "pre", 2: "live", 3: "final"}.get(gstatus, "pre")
+
+        # Pull the two team rows for this game — away first, home second
+        game_ls = linescore[linescore["gameId"] == gid]
+        if len(game_ls) >= 2:
+            away_r = game_ls.iloc[0]
+            home_r = game_ls.iloc[1]
+        elif len(game_ls) == 1:
+            away_r = game_ls.iloc[0]
+            home_r = {}
+        else:
+            away_r = home_r = {}
+
+        def get(r, col, default=""):
+            try:
+                v = r[col]
+                return default if v != v else v
+            except Exception:
+                return default
+
+        clock    = str(row.get("gameClock", "") or "")
+        period   = int(_safe(row.get("period"), 0))
+
+        if status == "live" and period > 0:
+            period_label = f"OT{period - 4}" if period > 4 else f"Q{period}"
+            status_text  = f"{period_label} {_format_clock(clock)}"
+        else:
+            status_text  = str(row.get("gameStatusText", "") or "")
+
+        home_score = int(_safe(get(home_r, "score", 0), 0))
+        away_score = int(_safe(get(away_r, "score", 0), 0))
+
+        games.append({
+            "game_id":       gid,
+            "home_team_id":  int(_safe(get(home_r, "teamId", 0), 0)),
+            "away_team_id":  int(_safe(get(away_r, "teamId", 0), 0)),
+            "home_tricode":  str(get(home_r, "teamTricode", "")),
+            "away_tricode":  str(get(away_r, "teamTricode", "")),
+            "home_name":     str(get(home_r, "teamName", "")),
+            "away_name":     str(get(away_r, "teamName", "")),
+            "home_city":     str(get(home_r, "teamCity", "")),
+            "away_city":     str(get(away_r, "teamCity", "")),
+            "home_score":    home_score,
+            "away_score":    away_score,
+            "status":        status,
+            "status_text":   status_text,
+            "period":        period,
+            "clock":         clock,
+            "game_time_utc": str(row.get("gameTimeUTC", "") or ""),
+        })
+    return games
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SECTION 2 — Live game state (single game)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def get_live_game(game_id: str, game_date: str = "") -> dict:
+    """
+    Return one game's state from the cached today/tomorrow scoresheets.
+    Upcoming fixtures outside those windows are resolved by their NBA date.
+    """
+    games = [*get_today_scoreboard(), *get_tomorrow_scoreboard()]
+    for g in games:
+        if str(g.get("game_id", "")) == str(game_id):
+            return g
+    scheduled = get_scheduled_game(game_id, game_date=game_date) if game_date else None
+    if scheduled:
+        return scheduled
+    return {}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SECTION 3 — Play-by-play
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _espn_team_code(code: str) -> str:
+    return {
+        "GS": "GSW",
+        "NY": "NYK",
+        "NO": "NOP",
+        "WSH": "WAS",
+        "UTAH": "UTA",
+        "SA": "SAS",
+    }.get(code.upper(), code.upper())
+
+
+def _get_espn_game_plays(
+    game: dict,
+) -> tuple[list[dict], dict[str, int], bool]:
+    """Fetch ESPN play-by-play for a game when the NBA live feed is unavailable."""
+    game_id = str(game.get("game_id", ""))
+    key = f"espn_plays_{game_id}"
+    cached = _get(key)
+    if cached is not None:
+        return cached
+
+    try:
+        tip = datetime.fromisoformat(
+            game.get("game_time_utc", "").replace("Z", "+00:00")
+        )
+        if tip.tzinfo is None:
+            raise ValueError("game tip-off time must include a timezone")
+        home_code = _espn_team_code(game.get("home_tricode", ""))
+        away_code = _espn_team_code(game.get("away_tricode", ""))
+        expected = {home_code, away_code}
+        candidates: dict[str, dict] = {}
+
+        for date in (tip.date(), tip.date() - timedelta(days=1)):
+            url = (
+                "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?"
+                + urlencode({"dates": date.strftime("%Y%m%d")})
+            )
+            request = Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            with urlopen(request, timeout=8) as response:
+                scoreboard = json.loads(response.read())
+            for event in scoreboard.get("events", []):
+                competition = (event.get("competitions") or [{}])[0]
+                competitors = competition.get("competitors", [])
+                codes = {
+                    _espn_team_code(item.get("team", {}).get("abbreviation", ""))
+                    for item in competitors
+                }
+                if codes == expected and event.get("id"):
+                    candidates[event["id"]] = event
+
+        if not candidates:
+            raise LookupError(f"ESPN event not found for NBA game {game_id}")
+        event = min(
+            candidates.values(),
+            key=lambda item: abs(
+                (
+                    datetime.fromisoformat(item["date"].replace("Z", "+00:00"))
+                    - tip
+                ).total_seconds()
+            ),
+        )
+        competition = (event.get("competitions") or [{}])[0]
+        team_ids = {}
+        espn_home_code = home_code
+        for competitor in competition.get("competitors", []):
+            code = _espn_team_code(
+                competitor.get("team", {}).get("abbreviation", "")
+            )
+            if competitor.get("homeAway") == "home":
+                espn_home_code = code
+            if code == home_code:
+                team_ids[str(competitor.get("id", ""))] = int(game["home_team_id"])
+            elif code == away_code:
+                team_ids[str(competitor.get("id", ""))] = int(game["away_team_id"])
+
+        summary_url = (
+            "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?"
+            + urlencode({"event": event["id"]})
+        )
+        request = Request(summary_url, headers={"User-Agent": "Mozilla/5.0"})
+        with urlopen(request, timeout=8) as response:
+            summary = json.loads(response.read())
+        result = (summary.get("plays", []), team_ids, espn_home_code != home_code)
+        if not result[0]:
+            raise LookupError(f"ESPN play-by-play is empty for NBA game {game_id}")
+        ttl = TTL_LIVE if game.get("status") == "live" else TTL_HISTORICAL
+        _set(key, result, ttl)
+        return result
+    except Exception as exc:
+        log.warning("ESPN play-by-play fallback failed for %s: %s", game_id, exc)
+        return [], {}
+
+
+def _normalize_espn_plays(
+    plays: list[dict],
+    team_ids: dict[str, int],
+    home_team_id: int,
+    scores_reversed: bool = False,
+) -> list[dict]:
+    """Convert ESPN events to the shared play-by-play shape used by the model."""
+    actions = []
+    last_home = last_away = 0
+    for play in plays:
+        try:
+            espn_home_score = int(play.get("homeScore") or 0)
+            espn_away_score = int(play.get("awayScore") or 0)
+            home_score, away_score = (
+                (espn_away_score, espn_home_score)
+                if scores_reversed else (espn_home_score, espn_away_score)
+            )
+            period = int((play.get("period") or {}).get("number") or 1)
+        except (TypeError, ValueError):
+            continue
+        team_id = team_ids.get(str((play.get("team") or {}).get("id", "")))
+        if team_id is None:
+            if home_score != last_home:
+                team_id = home_team_id
+            elif away_score != last_away:
+                team_id = next(
+                    (candidate for candidate in team_ids.values()
+                     if candidate != home_team_id),
+                    None,
+                )
+        kind = str((play.get("type") or {}).get("text", ""))
+        actions.append({
+            "actionType": "foul" if "foul" in kind.lower() else kind,
+            "subType": "",
+            "description": play.get("text") or play.get("shortDescription", ""),
+            "teamId": team_id,
+            "period": period,
+            "clock": str((play.get("clock") or {}).get("displayValue", "")),
+            "scoreHome": home_score,
+            "scoreAway": away_score,
+        })
+        last_home, last_away = home_score, away_score
+    return actions
+
+
+def get_live_pbp(game_id: str, game: dict | None = None) -> list[dict]:
+    """
+    Returns the raw play-by-play action list for a live game.
+    Each action is a dict with keys: actionNumber, clock, period,
+    teamId, actionType, subType, scoreHome, scoreAway, description, etc.
+    """
+    key = f"pbp_{game_id}"
+    cached = _get(key)
+    if cached is not None:
+        return cached
+
+    try:
+        pbp  = _playbyplay(game_id)
+        acts = pbp.actions.get_dict()
+        _set(key, acts, TTL_LIVE)
+        return acts
+    except Exception as exc:
+        log.warning("PBP fetch failed for %s: %s", game_id, exc)
+        if game:
+            plays, team_ids, scores_reversed = _get_espn_game_plays(game)
+            actions = _normalize_espn_plays(
+                plays,
+                team_ids,
+                int(game.get("home_team_id") or 0),
+                scores_reversed,
+            )
+            if actions:
+                ttl = TTL_LIVE if game.get("status") == "live" else TTL_HISTORICAL
+                _set(key, actions, ttl)
+                return actions
+        stale = _get_stale(key)
+        return stale if stale is not None else []
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SECTION 4 — Box score
+# ─────────────────────────────────────────────────────────────────────────────
+
+def get_box_score(game_id: str) -> dict:
+    """
+    Returns team and player stats for a game.
+    Cached briefly so the on-court lineup stays current during games.
+    """
+    key = f"box_{game_id}"
+    cached = _get(key)
+    if cached is not None:
+        return cached
+
+    try:
+        box  = _boxscore(game_id)
+        data = {
+            "home": box.home_team.get_dict(),
+            "away": box.away_team.get_dict(),
+        }
+        _set(key, data, TTL_BOX_SCORE)
+        return data
+    except Exception as exc:
+        log.warning("BoxScore fetch failed for %s: %s", game_id, exc)
+        stale = _get_stale(key)
+        return stale if stale is not None else {}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SECTION 5 — Live snapshot builder
+# Converts raw PBP + game state into a feature dict for nba_model.predict_live
+# ─────────────────────────────────────────────────────────────────────────────
+
+def build_live_snapshot(
+    game_id: str,
+    home_elo: float = 1500.0,
+    away_elo: float = 1500.0,
+    is_playoffs: int = 0,
+    home_avail_delta: float = 0.0,
+    away_avail_delta: float = 0.0,
+) -> dict:
+    """
+    Builds the feature snapshot for nba_model.predict_live() from live data.
+
+    This is the glue between nba_api_client and nba_model — it fetches
+    the current game state, processes the PBP, and returns a dict with
+    all 16 features pre-computed and ready for inference.
+
+    Returns {} if no live data is available.
+    """
+    game = get_live_game(game_id)
+    if not game:
+        return {}
+
+    pbp = get_live_pbp(game_id, game)
+    if not pbp:
+        # Return a partial snapshot using only scoreboard data
+        return _snapshot_from_scoreboard(game, home_elo, away_elo,
+                                         is_playoffs, home_avail_delta,
+                                         away_avail_delta)
+
+    return _snapshot_from_pbp(game, pbp, home_elo, away_elo,
+                               is_playoffs, home_avail_delta, away_avail_delta)
+
+
+def _snapshot_from_scoreboard(
+    game: dict,
+    home_elo: float,
+    away_elo: float,
+    is_playoffs: int,
+    home_avail_delta: float,
+    away_avail_delta: float,
+) -> dict:
+    """Minimal snapshot using scoreboard data only (no PBP)."""
+    period     = game.get("period", 1) or 1
+    clock      = game.get("clock", "")
+    clock_sec  = _parse_clock(clock)
+    time_rem   = _time_remaining(period, clock_sec)
+    score_diff = game.get("home_score", 0) - game.get("away_score", 0)
+    period_len = 300.0 if period >= 5 else 720.0
+    qte        = 1.0 - min(clock_sec / period_len, 1.0) if period_len > 0 else 0.0
+
+    return {
+        "score_diff":              score_diff,
+        "time_remaining_sec":      time_rem,
+        "quarter":                 period,
+        "quarter_time_elapsed_pct": qte,
+        "home_elo":                home_elo,
+        "away_elo":                away_elo,
+        "is_playoffs":             is_playoffs,
+        "is_overtime":             int(period >= 5),
+        "lead_changes_norm":       0.0,   # unknown without PBP
+        "possession":              0.5,   # unknown without PBP
+        "home_in_bonus":           0,
+        "away_in_bonus":           0,
+        "home_avail_delta":        home_avail_delta,
+        "away_avail_delta":        away_avail_delta,
+    }
+
+
+def _snapshot_from_pbp(
+    game: dict,
+    pbp: list[dict],
+    home_elo: float,
+    away_elo: float,
+    is_playoffs: int,
+    home_avail_delta: float,
+    away_avail_delta: float,
+) -> dict:
+    """
+    Full snapshot computed from the play-by-play action list.
+    Mirrors the two-pass logic from Phase 1 phase1_data_pipeline.py.
+    """
+    home_team_id = game.get("home_team_id")
+    period       = game.get("period", 1) or 1
+    clock        = game.get("clock", "")
+    clock_sec    = _parse_clock(clock)
+    time_rem     = _time_remaining(period, clock_sec)
+    home_score   = game.get("home_score", 0)
+    away_score   = game.get("away_score", 0)
+    score_diff   = home_score - away_score
+
+    period_len   = 300.0 if period >= 5 else 720.0
+    qte          = 1.0 - min(clock_sec / period_len, 1.0)
+
+    # ── Walk the full PBP once; take the state after the last event ──────────
+    state = None
+    for state in _walk_pbp(pbp, home_team_id, emit_every_event=True):
+        pass
+    if state is None:
+        return _snapshot_from_scoreboard(game, home_elo, away_elo, is_playoffs,
+                                         home_avail_delta, away_avail_delta)
+    possession        = state["possession"]
+    home_bonus        = state["home_in_bonus"]
+    away_bonus        = state["away_in_bonus"]
+    lead_changes_norm = state["lead_changes_norm"]
+
+    return {
+        "score_diff":               score_diff,
+        "time_remaining_sec":       time_rem,
+        "quarter":                  period,
+        "quarter_time_elapsed_pct": qte,
+        "home_elo":                 home_elo,
+        "away_elo":                 away_elo,
+        "is_playoffs":              is_playoffs,
+        "is_overtime":              int(period >= 5),
+        "lead_changes_norm":        lead_changes_norm,
+        "possession":               possession,
+        "home_in_bonus":            home_bonus,
+        "away_in_bonus":            away_bonus,
+        "home_avail_delta":         home_avail_delta,
+        "away_avail_delta":         away_avail_delta,
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SECTION 5b — Shared PBP walker
+# Works on BOTH spellings:
+#   live endpoint  (nba_api.live):  "foul", "freethrow", "2pt", "3pt"
+#   stats V3       (training data): "Foul", "Free Throw", "Made Shot"
+# A "scoring play" = an event where the running score changed. This matches
+# Phase 1, where lead_changes_norm was divided by scored plays only.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _walk_pbp(pbp: list[dict], home_team_id, emit_every_event: bool = False):
+    """
+    Yield running game state. By default yields once per scoring play
+    (for the chart curve); with emit_every_event=True yields after every
+    event (so the caller can take the very latest state).
+    """
+    home_fouls = away_fouls = 0
+    prev_per   = None
+    possession = 0.5
+    lead_changes = 0
+    prev_leader  = 0
+    scored_plays = 0
+    last_h = last_a = 0
+
+    for action in pbp:
+        atype = str(action.get("actionType", "")).lower().replace(" ", "")
+        sub   = str(action.get("subType", "")).lower()
+        desc  = str(action.get("description", "")).lower()
+        tid   = action.get("teamId")
+        per   = int(action.get("period") or 1)
+        clock = str(action.get("clock", ""))
+
+        if per != prev_per:                      # team fouls reset each quarter
+            home_fouls = away_fouls = 0
+            prev_per   = per
+
+        # Team fouls for bonus. MUST match Phase 1 training, which counted every
+        # "Foul" event (offensive included). Real NBA rules exclude offensive
+        # fouls — change BOTH here and in phase1_data_pipeline.py, then retrain,
+        # if we ever want the rule-accurate version. Never change only one side.
+        if atype == "foul":
+            if tid == home_team_id:
+                home_fouls += 1
+            elif tid:
+                away_fouls += 1
+
+        # Possession = team that scored the most recent basket. This is exactly
+        # how Phase 1 built the training feature. The live feed's own
+        # "possession" field is deliberately ignored to avoid train/serve skew.
+        try:
+            h = int(action.get("scoreHome") or last_h)
+            a = int(action.get("scoreAway") or last_a)
+        except (TypeError, ValueError):
+            h, a = last_h, last_a
+
+        scored = (h, a) != (last_h, last_a)
+        if scored:
+            scored_plays += 1
+            if tid:
+                possession = 1.0 if tid == home_team_id else 0.0
+            leader = 1 if h > a else (-1 if h < a else 0)
+            if leader != 0 and leader != prev_leader and prev_leader != 0:
+                lead_changes += 1
+            prev_leader = leader
+            last_h, last_a = h, a
+
+        if scored or emit_every_event:
+            clock_sec = _parse_clock(clock)
+            yield {
+                "period":          per,
+                "clock":           clock,
+                "clock_sec":       clock_sec,
+                "elapsed_sec":     _elapsed(per, clock_sec),
+                "home_score":      h,
+                "away_score":      a,
+                "possession":      possession,
+                "home_in_bonus":   int(away_fouls >= 5),
+                "away_in_bonus":   int(home_fouls >= 5),
+                "lead_changes_norm": lead_changes / max(scored_plays, 1),
+                "description":     action.get("description", ""),
+            }
+
+
+def build_snapshot_series(
+    game_id: str,
+    home_team_id,
+    home_elo: float = 1500.0,
+    away_elo: float = 1500.0,
+    is_playoffs: int = 0,
+    game: dict | None = None,
+) -> list[dict]:
+    """
+    One feature snapshot per scoring play, for rebuilding the full win
+    probability curve on the match page. Each item:
+        {"elapsed_sec", "period", "clock", "home_score", "away_score",
+         "description", "snapshot": {...16-feature dict...}}
+    """
+    pbp = get_live_pbp(game_id, game)
+    out = []
+    for st in _walk_pbp(pbp, home_team_id):
+        per        = st["period"]
+        period_len = 300.0 if per >= 5 else 720.0
+        out.append({
+            "elapsed_sec": st["elapsed_sec"],
+            "period":      per,
+            "clock":       st["clock"],
+            "home_score":  st["home_score"],
+            "away_score":  st["away_score"],
+            "description": st["description"],
+            "snapshot": {
+                "score_diff":               st["home_score"] - st["away_score"],
+                "time_remaining_sec":       _time_remaining(per, st["clock_sec"]),
+                "quarter":                  per,
+                "quarter_time_elapsed_pct": 1.0 - min(st["clock_sec"] / period_len, 1.0),
+                "home_elo":                 home_elo,
+                "away_elo":                 away_elo,
+                "is_playoffs":              is_playoffs,
+                "is_overtime":              int(per >= 5),
+                "lead_changes_norm":        st["lead_changes_norm"],
+                "possession":               st["possession"],
+                "home_in_bonus":            st["home_in_bonus"],
+                "away_in_bonus":            st["away_in_bonus"],
+                "home_avail_delta":         0.0,
+                "away_avail_delta":         0.0,
+            },
+        })
+    return out
+
+
+def _elapsed(period: int, clock_sec: float) -> float:
+    """Seconds since tip-off. Regulation 4×720s, each OT 300s."""
+    if period <= 4:
+        return (period - 1) * 720.0 + (720.0 - clock_sec)
+    return 2880.0 + (period - 5) * 300.0 + (300.0 - clock_sec)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SECTION 6 — Clock and time helpers
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _parse_clock(clock: str) -> float:
+    """
+    Parse NBA clock strings to seconds remaining in the current period.
+    Handles ISO 8601 format 'PT04M22.00S' and fallback 'MM:SS'.
+    Returns 0.0 on any parse failure.
+    """
+    if not clock:
+        return 0.0
+    import re
+    # ISO 8601: PT04M22.00S
+    m = re.match(r"PT(\d+)M([\d.]+)S", clock, re.IGNORECASE)
+    if m:
+        return float(m.group(1)) * 60 + float(m.group(2))
+    # MM:SS fallback
+    m = re.match(r"^(\d{1,2}):(\d{2})$", clock)
+    if m:
+        return float(m.group(1)) * 60 + float(m.group(2))
+    try:
+        return float(clock)
+    except ValueError:
+        return 0.0
+
+
+def _time_remaining(period: int, clock_sec: float) -> float:
+    """
+    Total seconds left until end of regulation.
+    Regulation = 4 × 720s = 2880s. OT returns 0.
+    """
+    if period <= 4:
+        return clock_sec + max(0, 4 - period) * 720.0
+    return 0.0
+
+
+def _format_clock(clock: str) -> str:
+    """Convert PT04M22.00S → 4:22 for display."""
+    secs = _parse_clock(clock)
+    mins = int(secs // 60)
+    sec  = int(secs % 60)
+    return f"{mins}:{sec:02d}"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SECTION 7 — EAT conversion helper
+# ─────────────────────────────────────────────────────────────────────────────
+
+def to_eat(utc_str: str) -> str:
+    """
+    Convert a UTC ISO 8601 game time string to EAT (UTC+3) display format.
+    e.g. "2025-10-22T00:30:00Z" → "03:30 EAT"
+    Returns empty string on parse failure.
+    """
+    if not utc_str:
+        return ""
+    try:
+        # Handle both "Z" suffix and "+00:00"
+        utc_str = utc_str.replace("Z", "+00:00")
+        dt_utc  = datetime.fromisoformat(utc_str)
+        dt_eat  = dt_utc.astimezone(EAT_TZ)
+        return f"{dt_eat.hour}:{dt_eat.minute:02d} EAT"
+    except Exception:
+        return utc_str
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SECTION 8 — Cache management
+# ─────────────────────────────────────────────────────────────────────────────
+
+def clear_cache(game_id: str | None = None) -> None:
+    """
+    Clear cache entries. If game_id given, clears only that game's entries.
+    Call from the live poll endpoint after a game goes final.
+    """
+    global _cache
+    if game_id:
+        keys = [k for k in _cache if game_id in k]
+        for k in keys:
+            del _cache[k]
+    else:
+        _cache.clear()
+
+
+def cache_stats() -> dict:
+    """Return cache health info for /nba/debug endpoint."""
+    now = time.monotonic()
+    live  = sum(1 for _, exp in _cache.values() if exp > now)
+    stale = len(_cache) - live
+    return {"total": len(_cache), "live": live, "stale": stale}
+
+
+def get_nba_fixtures_strip() -> list[dict]:
+    """
+    Fetches games for yesterday, today, and tomorrow to populate the fixtures strip.
+    Since we can't reliably use ScoreboardV3 in all environments without issues,
+    we can use the scoreboard endpoint but adjust the day offset.
+    """
+    key = "nba_fixtures_strip"
+    cached = _get(key)
+    if cached is not None:
+        return cached
+
+    fixtures = []
+    try:
+        from nba_api.stats.endpoints import scoreboardv2
+        from datetime import datetime, timedelta
+        
+        # In current nba_api version, ScoreboardV2 might have issues, but ScoreboardV3 requires headers.
+        # Alternatively, we can use the regular get_today_scoreboard and perhaps fetch adjacent dates.
+        # But wait! We can just fetch via standard requests directly if nba_api is problematic,
+        # OR use nba_api endpoints properly.
+        
+        # Let's try scoreboardv2 for yesterday, today, tomorrow
+        for offset in [-1, 0, 1]:
+            try:
+                sb = scoreboardv2.ScoreboardV2(day_offset=offset, timeout=5)
+                data = sb.get_dict()
+                headers = []
+                for rs in data.get('resultSets', []):
+                    if rs['name'] == 'GameHeader':
+                        headers = [dict(zip(rs['headers'], row)) for row in rs['rowSet']]
+                
+                for h in headers:
+                    gid = h['GAME_ID']
+                    status = h.get('GAME_STATUS_TEXT', '')
+                    time_utc = h.get('GAME_DATE_EST', '') # Not UTC but close enough for sorting
+                    
+                    away = h.get('VISITOR_TEAM_ID')
+                    home = h.get('HOME_TEAM_ID')
+                    
+                    # We need tricodes. We can use our nba_team helper.
+                    from constants import nba_team
+                    away_t = nba_team(away).get('tricode', 'AWY')
+                    home_t = nba_team(home).get('tricode', 'HOM')
+                    
+                    kickoff = status
+                    if "Final" not in status and "Live" not in status:
+                        # Assuming EAT conversion or just keep status
+                        pass
+                    
+                    fixtures.append({
+                        "game_id": gid,
+                        "home": home_t,
+                        "away": away_t,
+                        "kickoff_eat": kickoff,
+                        "game_time_utc": time_utc
+                    })
+            except Exception as e:
+                log.warning(f"Failed to fetch offset {offset} for fixtures strip: {e}")
+
+        # If it fails, fallback to get_today_scoreboard
+        if not fixtures:
+            games = get_today_scoreboard()
+            for g in games:
+                fixtures.append({
+                    "game_id": g['game_id'],
+                    "home": g['home_tricode'],
+                    "away": g['away_tricode'],
+                    "kickoff_eat": g['status_text'] if g['status'] != 'live' else f"🔴 {g['away_score']}-{g['home_score']}",
+                    "game_time_utc": g['game_time_utc']
+                })
+        
+        _set(key, fixtures, TTL_STATIC)
+        return fixtures
+    except Exception as exc:
+        log.warning("Fixtures strip fetch failed: %s", exc)
+        stale = _get_stale(key)
+        return stale if stale is not None else []

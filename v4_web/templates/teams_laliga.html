@@ -1,0 +1,559 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+.map-wrap {
+    background: #FFF5E6;
+    border-radius: 16px;
+    overflow: hidden;
+    border: 2px solid var(--league-light);
+    position: relative;
+    user-select: none;
+}
+#spain-canvas {
+    display: block;
+    width: 100%;
+    cursor: grab;
+}
+#spain-canvas:active { cursor: grabbing; }
+
+.map-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+}
+.ctrl-btn {
+    padding: 6px 14px;
+    border-radius: 20px;
+    border: 1.5px solid var(--league-light);
+    background: var(--surface);
+    color: var(--league-primary);
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: 0.3px;
+}
+.ctrl-btn:hover, .ctrl-btn.active {
+    background: var(--league-primary);
+    color: var(--league-gold);
+    border-color: var(--league-primary);
+}
+.zoom-hint {
+    font-size: 10px;
+    color: var(--text-muted);
+    font-weight: 500;
+    margin-left: auto;
+}
+.club-tooltip {
+    position: absolute;
+    background: var(--league-primary);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 5px 10px;
+    border-radius: 8px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s;
+    white-space: nowrap;
+    z-index: 10;
+}
+.section-head {
+    font-size: 10px;
+    font-weight: 800;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-bottom: 12px;
+}
+</style>
+
+<div class="section-head">La Liga 2025/26 · Spain</div>
+
+<div class="map-controls">
+    <button class="ctrl-btn active" id="btn-country" onclick="setZoom(1)">
+        Country view
+    </button>
+    <button class="ctrl-btn" id="btn-region"  onclick="setZoom(2)">
+        Region view
+    </button>
+    <button class="ctrl-btn" id="btn-city"    onclick="setZoom(3)">
+        City view
+    </button>
+    <div style="display:flex;gap:6px;margin-left:8px">
+        <button class="ctrl-btn" onclick="zoom(1.3)" style="padding:6px 10px">+</button>
+        <button class="ctrl-btn" onclick="zoom(0.77)" style="padding:6px 10px">−</button>
+        <button class="ctrl-btn" onclick="setZoom(1)" style="padding:6px 10px">↺</button>
+    </div>
+    <div class="zoom-hint">Scroll to zoom · drag to pan · click cluster to expand</div>
+</div>
+
+<div class="map-wrap">
+    <canvas id="spain-canvas" height="520"></canvas>
+    <div class="club-tooltip" id="tooltip"></div>
+</div>
+
+<script>
+const CV = document.getElementById('spain-canvas');
+const CTX = CV.getContext('2d');
+const TIP = document.getElementById('tooltip');
+
+CV.width = CV.offsetWidth;
+window.addEventListener('resize', ()=>{
+    CV.width = CV.offsetWidth;
+    draw();
+});
+
+const TAU = Math.PI * 2;
+const lerp = (a,b,t)=>a+(b-a)*t;
+const ease = t=>t<.5?2*t*t:1-(-2*t+2)**2/2;
+const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+
+// ── All 20 La Liga 2025/26 clubs ─────────────────────────────────
+// lat/lon of stadiums (accurate coordinates)
+const CLUBS = [
+    // Madrid cluster
+    {name:'Real Madrid',     city:'Madrid',     lat:40.4531,lon:-3.6883,color:'#FEBE10',abbr:'RMA',cluster:'madrid'},
+    {name:'Atletico Madrid', city:'Madrid',     lat:40.4361,lon:-3.5996,color:'#CB3524',abbr:'ATM',cluster:'madrid'},
+    {name:'Rayo Vallecano',  city:'Madrid',     lat:40.3919,lon:-3.6610,color:'#E40000',abbr:'RAY',cluster:'madrid'},
+    {name:'Getafe',          city:'Getafe',     lat:40.3258,lon:-3.7144,color:'#1B4F9C',abbr:'GET',cluster:'madrid'},
+    // Barcelona cluster
+    {name:'Barcelona',       city:'Barcelona',  lat:41.3809,lon:2.1228, color:'#A50044',abbr:'BAR',cluster:'barcelona'},
+    {name:'Espanyol',        city:'Barcelona',  lat:41.3475,lon:2.0754, color:'#005499',abbr:'ESP',cluster:'barcelona'},
+    // Seville cluster
+    {name:'Sevilla',         city:'Seville',    lat:37.3841,lon:-5.9705,color:'#E40000',abbr:'SEV',cluster:'seville'},
+    {name:'Real Betis',      city:'Seville',    lat:37.3564,lon:-5.9813,color:'#007A2F',abbr:'BET',cluster:'seville'},
+    // Valencia cluster
+    {name:'Valencia',        city:'Valencia',   lat:39.4750,lon:-0.3585,color:'#FF6900',abbr:'VAL',cluster:'valencia'},
+    {name:'Levante',         city:'Valencia',   lat:39.4929,lon:-0.3406,color:'#003B8B',abbr:'LEV',cluster:'valencia'},
+    // Scattered clubs
+    {name:'Villarreal',      city:'Villarreal', lat:39.9451,lon:-0.1040,color:'#FFD700',abbr:'VIL',cluster:'none'},
+    {name:'Elche',           city:'Elche',      lat:38.2670,lon:-0.6979,color:'#2E7D32',abbr:'ELC',cluster:'none'},
+    {name:'Athletic Bilbao', city:'Bilbao',     lat:43.2642,lon:-2.9493,color:'#E40000',abbr:'ATH',cluster:'none'},
+    {name:'Real Sociedad',   city:'San Seb.',   lat:43.3014,lon:-1.9731,color:'#0064A8',abbr:'RSO',cluster:'none'},
+    {name:'Alaves',          city:'Vitoria',    lat:42.8459,lon:-2.6742,color:'#1B4F9C',abbr:'ALA',cluster:'none'},
+    {name:'Celta Vigo',      city:'Vigo',       lat:42.2118,lon:-8.7392,color:'#6ECAD4',abbr:'CEL',cluster:'none'},
+    {name:'Oviedo',          city:'Oviedo',     lat:43.3620,lon:-5.8490,color:'#003B8B',abbr:'OVI',cluster:'none'},
+    {name:'Girona',          city:'Girona',     lat:41.9654,lon:2.8203, color:'#B22222',abbr:'GIR',cluster:'none'},
+    {name:'Mallorca',        city:'Mallorca',   lat:39.5908,lon:2.6966, color:'#E40000',abbr:'MLL',cluster:'none'},
+    {name:'Osasuna',         city:'Pamplona',   lat:42.7974,lon:-1.6368,color:'#B22222',abbr:'OSA',cluster:'none'},
+];
+
+// Spain geographic bounding box
+const LAT_MAX=44.2, LAT_MIN=35.9, LON_MIN=-9.4, LON_MAX=4.4;
+const PAD = 28;
+
+// Cluster definitions for zoom
+const CLUSTERS = {
+    madrid:    {cx:-3.66, cy:40.39, label:'Madrid'},
+    barcelona: {cx:2.095, cy:41.36, label:'Barcelona'},
+    seville:   {cx:-5.98, cy:37.37, label:'Seville'},
+    valencia:  {cx:-0.35, cy:39.48, label:'Valencia'},
+};
+
+// Manual offsets for region view (so overlapping clubs separate visibly)
+const OFFSETS = {
+    'Real Madrid':    {dlat: 0.045, dlon:-0.075},
+    'Atletico Madrid':{dlat:-0.015, dlon: 0.095},
+    'Rayo Vallecano': {dlat:-0.075, dlon:-0.032},
+    'Getafe':         {dlat:-0.125, dlon:-0.045},
+    'Barcelona':      {dlat: 0.038, dlon: 0.038},
+    'Espanyol':       {dlat:-0.038, dlon:-0.038},
+    'Sevilla':        {dlat: 0.028, dlon: 0.012},
+    'Real Betis':     {dlat:-0.028, dlon:-0.012},
+    'Valencia':       {dlat: 0.022, dlon:-0.028},
+    'Levante':        {dlat:-0.022, dlon: 0.028},
+};
+
+// ── View state ────────────────────────────────────────────────────
+let viewScale = 1, viewOX = 0, viewOY = 0;
+let targetScale = 1, targetOX = 0, targetOY = 0;
+let animT = 0, currentZoom = 1;
+let animRaf = null;
+
+function latlon2xy(lat, lon, sc, ox, oy){
+    const W = CV.width, H = CV.height;
+    const x = ((lon-LON_MIN)/(LON_MAX-LON_MIN))*(W-PAD*2)*sc + PAD + ox;
+    const y = (1-(lat-LAT_MIN)/(LAT_MAX-LAT_MIN))*(H-PAD*2)*sc + PAD + oy;
+    return {x, y};
+}
+
+// ── Spain outline (simplified polygon) ───────────────────────────
+const SPAIN = [
+    [-9.2,43.8],[-8.5,43.7],[-7.5,43.9],[-6.0,43.6],[-4.5,43.5],
+    [-2.5,43.4],[-1.8,43.5],[-1.6,43.4],[-0.3,42.8],[0.5,42.7],
+    [1.8,42.4],[3.3,41.9],[3.3,41.4],[2.4,40.7],[0.8,40.0],[0.2,38.8],
+    [-0.5,37.9],[-1.5,36.8],[-2.2,36.5],[-5.4,36.0],[-6.3,36.5],
+    [-7.4,37.2],[-7.5,38.2],[-7.0,38.0],[-6.8,39.0],[-7.1,40.0],
+    [-6.9,41.9],[-8.2,43.0],[-9.2,43.8]
+];
+const MALLORCA_ISLE = [
+    [2.3,39.9],[3.5,40.0],[4.0,39.6],[3.5,39.2],[2.5,39.3],[2.3,39.9]
+];
+
+function drawSpain(sc, ox, oy){
+    [SPAIN, MALLORCA_ISLE].forEach((pts,i)=>{
+        CTX.beginPath();
+        pts.forEach(([lon,lat],j)=>{
+            const {x,y} = latlon2xy(lat,lon,sc,ox,oy);
+            j===0 ? CTX.moveTo(x,y) : CTX.lineTo(x,y);
+        });
+        CTX.closePath();
+        CTX.fillStyle   = '#FFF0E8';
+        CTX.fill();
+        CTX.strokeStyle = '#FFD0B0';
+        CTX.lineWidth   = 1.5;
+        CTX.stroke();
+    });
+    // Sea background
+    CTX.fillStyle = '#E8F4F8';
+    // Already cleared to sea colour in draw()
+}
+
+function roundRect(ctx,x,y,w,h,r){
+    ctx.beginPath();
+    ctx.moveTo(x+r,y);
+    ctx.lineTo(x+w-r,y); ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+    ctx.lineTo(x+w,y+h-r); ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+    ctx.lineTo(x+r,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+    ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y);
+    ctx.closePath();
+}
+
+// ── Draw functions per zoom tier ─────────────────────────────────
+
+function drawCountryView(sc,ox,oy){
+    // Cluster badges (split-circle for multi-club cities)
+    Object.entries(CLUSTERS).forEach(([key,g])=>{
+        const clubs = CLUBS.filter(c=>c.cluster===key);
+        const {x,y} = latlon2xy(g.cy, g.cx, sc, ox, oy);
+        // Split circle — each club gets a wedge
+        const step = TAU / clubs.length;
+        clubs.forEach((club,i)=>{
+            CTX.beginPath();
+            CTX.moveTo(x,y);
+            CTX.arc(x,y,20,i*step,(i+1)*step);
+            CTX.closePath();
+            CTX.fillStyle = club.color;
+            CTX.fill();
+        });
+        // White inner
+        CTX.beginPath(); CTX.arc(x,y,11,0,TAU);
+        CTX.fillStyle='#fff'; CTX.fill();
+        // Count
+        CTX.fillStyle='#8B0000';
+        CTX.font='bold 10px Inter,sans-serif';
+        CTX.textAlign='center'; CTX.textBaseline='middle';
+        CTX.fillText(clubs.length, x, y);
+        // City label
+        CTX.fillStyle='#5D1A1A';
+        CTX.font='bold 9px Inter,sans-serif';
+        CTX.textBaseline='top';
+        CTX.fillText(g.label, x, y+24);
+        // Pulse ring (tap hint)
+        CTX.beginPath(); CTX.arc(x,y,24,0,TAU);
+        CTX.strokeStyle='rgba(139,0,0,0.2)'; CTX.lineWidth=1.5;
+        CTX.stroke();
+    });
+
+    // Standalone clubs — single badge
+    CLUBS.filter(c=>c.cluster==='none').forEach(club=>{
+        const {x,y} = latlon2xy(club.lat,club.lon,sc,ox,oy);
+        // Shadow
+        CTX.beginPath(); CTX.arc(x,y+2,9,0,TAU);
+        CTX.fillStyle='rgba(0,0,0,0.12)'; CTX.fill();
+        // Badge
+        CTX.beginPath(); CTX.arc(x,y,9,0,TAU);
+        CTX.fillStyle=club.color; CTX.fill();
+        CTX.strokeStyle='#fff'; CTX.lineWidth=1.5; CTX.stroke();
+        // Abbr
+        CTX.fillStyle='#fff';
+        CTX.font='bold 6px Inter,sans-serif';
+        CTX.textAlign='center'; CTX.textBaseline='middle';
+        CTX.fillText(club.abbr,x,y);
+        // City label
+        CTX.fillStyle='#3D0A0A';
+        CTX.font='bold 7.5px Inter,sans-serif';
+        CTX.textBaseline='top';
+        CTX.fillText(club.city,x,y+12);
+    });
+}
+
+function drawRegionView(sc,ox,oy){
+    CLUBS.forEach(club=>{
+        const off = OFFSETS[club.name] || {dlat:0,dlon:0};
+        const {x,y} = latlon2xy(club.lat+off.dlat, club.lon+off.dlon, sc, ox, oy);
+        // Shadow
+        CTX.beginPath(); CTX.arc(x,y+2,11,0,TAU);
+        CTX.fillStyle='rgba(0,0,0,0.13)'; CTX.fill();
+        // Badge
+        CTX.beginPath(); CTX.arc(x,y,11,0,TAU);
+        CTX.fillStyle=club.color; CTX.fill();
+        CTX.strokeStyle='#fff'; CTX.lineWidth=2; CTX.stroke();
+        // Abbr
+        CTX.fillStyle='#fff';
+        CTX.font='bold 7px Inter,sans-serif';
+        CTX.textAlign='center'; CTX.textBaseline='middle';
+        CTX.fillText(club.abbr,x,y);
+        // Name label
+        CTX.fillStyle='#3D0A0A';
+        CTX.font='bold 8px Inter,sans-serif';
+        CTX.textBaseline='top';
+        CTX.fillText(club.abbr,x,y+14);
+        CTX.fillStyle='#888';
+        CTX.font='7px Inter,sans-serif';
+        CTX.fillText(club.city,x,y+23);
+    });
+}
+
+function drawCityView(sc,ox,oy){
+    const W = CV.width, H = CV.height;
+    CLUBS.forEach(club=>{
+        const {x,y} = latlon2xy(club.lat,club.lon,sc,ox,oy);
+        if(x<-30||x>W+30||y<-30||y>H+30) return;
+        // Shadow
+        CTX.beginPath(); CTX.arc(x,y+3,16,0,TAU);
+        CTX.fillStyle='rgba(0,0,0,0.15)'; CTX.fill();
+        // Large badge
+        CTX.beginPath(); CTX.arc(x,y,16,0,TAU);
+        CTX.fillStyle=club.color; CTX.fill();
+        CTX.strokeStyle='#fff'; CTX.lineWidth=2.5; CTX.stroke();
+        // Abbr
+        CTX.fillStyle='#fff';
+        CTX.font='bold 9px Inter,sans-serif';
+        CTX.textAlign='center'; CTX.textBaseline='middle';
+        CTX.fillText(club.abbr,x,y);
+        // Name pill
+        const lw = CTX.measureText(club.name).width + 14;
+        const lx = x - lw/2, ly = y+20;
+        roundRect(CTX,lx,ly,lw,16,4);
+        CTX.fillStyle='rgba(255,255,255,0.92)'; CTX.fill();
+        CTX.strokeStyle='rgba(139,0,0,0.18)'; CTX.lineWidth=0.5; CTX.stroke();
+        CTX.fillStyle='#8B0000';
+        CTX.font='bold 8.5px Inter,sans-serif';
+        CTX.textBaseline='middle';
+        CTX.fillText(club.name,x,ly+8);
+    });
+}
+
+// ── Main draw ────────────────────────────────────────────────────
+function draw(){
+    const W = CV.width, H = CV.height;
+    CTX.clearRect(0,0,W,H);
+    CTX.fillStyle='#E8F4F8';
+    CTX.fillRect(0,0,W,H);
+    drawSpain(viewScale,viewOX,viewOY);
+    if(currentZoom===1)      drawCountryView(viewScale,viewOX,viewOY);
+    else if(currentZoom===2) drawRegionView(viewScale,viewOX,viewOY);
+    else                     drawCityView(viewScale,viewOX,viewOY);
+}
+
+// ── Zoom animation ───────────────────────────────────────────────
+function animLoop(){
+    animT = Math.min(animT+0.05, 1);
+    const et = ease(animT);
+    viewScale = lerp(viewScale, targetScale, et);
+    viewOX    = lerp(viewOX, targetOX, et);
+    viewOY    = lerp(viewOY, targetOY, et);
+    draw();
+    if(animT<1) animRaf = requestAnimationFrame(animLoop);
+}
+
+function startAnim(){
+    if(animRaf) cancelAnimationFrame(animRaf);
+    animT = 0;
+    animRaf = requestAnimationFrame(animLoop);
+}
+
+function setZoom(level, clusterKey){
+    currentZoom = level;
+    ['country','region','city'].forEach((n,i)=>{
+        const el = document.getElementById(`btn-${n}`);
+        if(el) el.classList.toggle('active', level===i+1);
+    });
+
+    const W = CV.width, H = CV.height;
+
+    if(level===1){
+        targetScale=1; targetOX=0; targetOY=0;
+    } else if(level===2){
+        targetScale=1.55;
+        targetOX=W*(1-1.55)*0.5 - 10;
+        targetOY=H*(1-1.55)*0.5 + 25;
+    } else if(level===3 && clusterKey && CLUSTERS[clusterKey]){
+        const g=CLUSTERS[clusterKey];
+        targetScale=3.8;
+        const {x:cx,y:cy}=latlon2xy(g.cy,g.cx,1,0,0);
+        targetOX=W/2-cx*3.8;
+        targetOY=H/2-cy*3.8+30;
+    }
+    startAnim();
+}
+
+function zoom(factor){
+    const W=CV.width, H=CV.height;
+    const cx=W/2, cy=H/2;
+    targetScale = clamp(targetScale*factor, 0.8, 8);
+    targetOX = cx - (cx-targetOX)*factor;
+    targetOY = cy - (cy-targetOY)*factor;
+    startAnim();
+}
+
+// ── Click — expand cluster ───────────────────────────────────────
+CV.addEventListener('click', e=>{
+    if(dragged) return;
+    const rect=CV.getBoundingClientRect();
+    const mx=(e.clientX-rect.left)*(CV.width/rect.width);
+    const my=(e.clientY-rect.top)*(CV.height/rect.height);
+
+    if(currentZoom===1){
+        // Check cluster hit
+        for(const [key,g] of Object.entries(CLUSTERS)){
+            const {x,y}=latlon2xy(g.cy,g.cx,viewScale,viewOX,viewOY);
+            if(Math.hypot(mx-x,my-y)<28){
+                setZoom(3,key);
+                return;
+            }
+        }
+        // Check standalone club hit
+        for(const club of CLUBS.filter(c=>c.cluster==='none')){
+            const {x,y}=latlon2xy(club.lat,club.lon,viewScale,viewOX,viewOY);
+            if(Math.hypot(mx-x,my-y)<12){
+                window.location.href=`/team/${clubToId(club.name)}`;
+                return;
+            }
+        }
+    } else if(currentZoom>=2){
+        // Check individual club hit
+        for(const club of CLUBS){
+            const off=OFFSETS[club.name]||{dlat:0,dlon:0};
+            const {x,y}=latlon2xy(club.lat+off.dlat,club.lon+off.dlon,viewScale,viewOX,viewOY);
+            const r=currentZoom===3?18:12;
+            if(Math.hypot(mx-x,my-y)<r){
+                window.location.href=`/team/${clubToId(club.name)}?league=laliga`;
+                return;
+            }
+        }
+        // Click open space → zoom out one level
+        if(currentZoom===3) setZoom(2);
+        else setZoom(1);
+    }
+});
+
+// Placeholder team ID mapper (extend as La Liga team pages are built)
+function clubToId(name){
+    const map={
+        'Real Madrid':631,'Barcelona':81,'Atletico Madrid':78,
+        'Sevilla':559,'Real Betis':558,'Valencia':95,'Villarreal':94,
+        'Athletic Bilbao':63,'Real Sociedad':92,'Osasuna':96,
+        'Celta Vigo':558,'Alaves':263,'Girona':298,'Mallorca':97,
+        'Espanyol':80,'Getafe':250,'Rayo Vallecano':399,
+        'Levante':95,'Elche':542,'Oviedo':543,
+    };
+    return map[name]||'';
+}
+
+// ── Hover tooltip ────────────────────────────────────────────────
+CV.addEventListener('mousemove', e=>{
+    if(isPanning) return;
+    const rect=CV.getBoundingClientRect();
+    const mx=(e.clientX-rect.left)*(CV.width/rect.width);
+    const my=(e.clientY-rect.top)*(CV.height/rect.height);
+    let found=null;
+
+    if(currentZoom===1){
+        for(const club of CLUBS.filter(c=>c.cluster==='none')){
+            const {x,y}=latlon2xy(club.lat,club.lon,viewScale,viewOX,viewOY);
+            if(Math.hypot(mx-x,my-y)<12){ found=club.name; break; }
+        }
+        for(const [key,g] of Object.entries(CLUSTERS)){
+            const {x,y}=latlon2xy(g.cy,g.cx,viewScale,viewOX,viewOY);
+            if(Math.hypot(mx-x,my-y)<24){ found=`${g.label} (${CLUBS.filter(c=>c.cluster===key).length} clubs)`; break; }
+        }
+    } else {
+        for(const club of CLUBS){
+            const off=OFFSETS[club.name]||{dlat:0,dlon:0};
+            const {x,y}=latlon2xy(club.lat+off.dlat,club.lon+off.dlon,viewScale,viewOX,viewOY);
+            const r=currentZoom===3?18:12;
+            if(Math.hypot(mx-x,my-y)<r){ found=club.name; break; }
+        }
+    }
+
+    if(found){
+        TIP.textContent=found;
+        TIP.style.left=(e.clientX-CV.getBoundingClientRect().left+12)+'px';
+        TIP.style.top=(e.clientY-CV.getBoundingClientRect().top-8)+'px';
+        TIP.style.opacity='1';
+    } else {
+        TIP.style.opacity='0';
+    }
+});
+CV.addEventListener('mouseleave',()=>{ TIP.style.opacity='0'; });
+
+// ── Pan (drag) ────────────────────────────────────────────────────
+let isPanning=false, panX=0, panY=0, dragged=false;
+CV.addEventListener('mousedown',e=>{ isPanning=true;dragged=false;panX=e.clientX;panY=e.clientY; });
+window.addEventListener('mousemove',e=>{
+    if(!isPanning)return;
+    const dx=e.clientX-panX, dy=e.clientY-panY;
+    if(Math.hypot(dx,dy)>3) dragged=true;
+    targetOX+=dx; targetOY+=dy; viewOX+=dx; viewOY+=dy;
+    panX=e.clientX; panY=e.clientY;
+    draw();
+});
+window.addEventListener('mouseup',()=>{ isPanning=false; });
+
+// ── Scroll to zoom ─────────────────────────────────────────────
+CV.addEventListener('wheel',e=>{
+    e.preventDefault();
+    const factor=e.deltaY<0?1.12:0.89;
+    const rect=CV.getBoundingClientRect();
+    const mx=(e.clientX-rect.left)*(CV.width/rect.width);
+    const my=(e.clientY-rect.top)*(CV.height/rect.height);
+    targetScale=clamp(targetScale*factor,0.8,8);
+    targetOX=mx-(mx-targetOX)*factor;
+    targetOY=my-(my-targetOY)*factor;
+    viewScale=targetScale; viewOX=targetOX; viewOY=targetOY;
+    draw();
+},{passive:false});
+
+// ── Touch support ─────────────────────────────────────────────
+let lastPinchDist=null, touchPanX=0, touchPanY=0;
+CV.addEventListener('touchstart',e=>{
+    if(e.touches.length===2){
+        const dx=e.touches[0].clientX-e.touches[1].clientX;
+        const dy=e.touches[0].clientY-e.touches[1].clientY;
+        lastPinchDist=Math.hypot(dx,dy);
+    } else {
+        touchPanX=e.touches[0].clientX;
+        touchPanY=e.touches[0].clientY;
+    }
+},{passive:true});
+CV.addEventListener('touchmove',e=>{
+    e.preventDefault();
+    if(e.touches.length===2){
+        const dx=e.touches[0].clientX-e.touches[1].clientX;
+        const dy=e.touches[0].clientY-e.touches[1].clientY;
+        const dist=Math.hypot(dx,dy);
+        if(lastPinchDist){
+            const factor=dist/lastPinchDist;
+            targetScale=clamp(targetScale*factor,0.8,8);
+            viewScale=targetScale; draw();
+        }
+        lastPinchDist=dist;
+    } else {
+        const dx=e.touches[0].clientX-touchPanX;
+        const dy=e.touches[0].clientY-touchPanY;
+        targetOX+=dx; targetOY+=dy; viewOX+=dx; viewOY+=dy;
+        touchPanX=e.touches[0].clientX; touchPanY=e.touches[0].clientY;
+        draw();
+    }
+},{passive:false});
+CV.addEventListener('touchend',()=>{ lastPinchDist=null; },{passive:true});
+
+// ── Init ──────────────────────────────────────────────────────
+draw();
+</script>
+{% endblock %}
