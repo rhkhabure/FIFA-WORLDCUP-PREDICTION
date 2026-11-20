@@ -31,6 +31,7 @@ PD_CODE   = "PD"   # La Liga
 COMP_TO_PRIORS = {
     "PL": "ENG-Premier League",
     "PD": "ESP-La Liga",
+    "FL1": "FRA-Ligue 1",
 }
 
 

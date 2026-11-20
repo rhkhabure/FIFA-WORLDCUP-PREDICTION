@@ -563,7 +563,7 @@ async def match(request: Request):
                 except Exception as e:
                     print(f"[match] FotMob redirect error: {e}")
 
-        if active_ctx_key in ("laliga", "bundesliga", "seriea"):
+        if active_ctx_key in ("laliga", "bundesliga", "seriea", "ligue1"):
             try:
                 today = datetime.now(EAT).date()
                 today_fixtures = get_fixtures_by_date_fd(

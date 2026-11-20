@@ -25,6 +25,7 @@ LEAGUE_FILTERS = {
     "laliga": ("la liga", "laliga"),
     "bundesliga": ("bundesliga",),
     "seriea": ("serie a",),
+    "ligue1": ("ligue 1", "ligue1"),
     "cl": ("champions league",),
     "wc": ("world cup",),
 }
@@ -34,6 +35,7 @@ LEAGUE_MAP = {
     "PD": "La Liga",
     "CL": "Champions League",
     "WC": "World Cup 2026",
+    "FL1": "Ligue 1",
 }
 
 MATCH_LEAGUES = {

@@ -1578,9 +1578,9 @@ async def tournament_page(request: Request):
 async def history_page(request: Request):
     """Prediction history — model accuracy tracker, filterable by league."""
 
-    # League filter from query param: ?league=pl|laliga|seriea|bundesliga / (all)
+    # League filter from query param: ?league=pl|laliga|seriea|bundesliga|ligue1 / (all)
     league_filter = request.query_params.get("league", "all").lower()
-    if league_filter not in ("all", "pl", "laliga", "seriea", "bundesliga"):
+    if league_filter not in ("all", "pl", "laliga", "seriea", "bundesliga", "ligue1"):
         league_filter = "all"
 
     try:
@@ -1619,6 +1619,8 @@ async def history_page(request: Request):
             all_pred = [p for p in all_pred if p.get("league","pl") == "seriea"]
         elif league_filter == "bundesliga":
             all_pred = [p for p in all_pred if p.get("league","pl") == "bundesliga"]
+        elif league_filter == "ligue1":
+            all_pred = [p for p in all_pred if p.get("league","pl") == "ligue1"]
 
         finished = [p for p in all_pred if p["actual_result"]]
         upcoming = [p for p in all_pred if not p["actual_result"]]
@@ -1629,6 +1631,7 @@ async def history_page(request: Request):
         ll_count  = sum(1 for p in all_preds_all if p.get("league","pl") == "laliga")
         sa_count  = sum(1 for p in all_preds_all if p.get("league","pl") == "seriea")
         bl_count  = sum(1 for p in all_preds_all if p.get("league","pl") == "bundesliga")
+        l1_count = sum(1 for p in all_preds_all if p.get("league","pl") == "ligue1")
 
         # Accuracy stats
         def _stats(preds):
@@ -1659,10 +1662,12 @@ async def history_page(request: Request):
         ll_preds  = [p for p in all_preds_all if p.get("league","pl") == "laliga"]
         sa_preds  = [p for p in all_preds_all if p.get("league","pl") == "seriea"]
         bl_preds  = [p for p in all_preds_all if p.get("league","pl") == "bundesliga"]
+        l1_preds  = [p for p in all_preds_all if p.get("league","pl") == "ligue1"]
         pl_stats  = _stats(pl_preds)
         ll_stats  = _stats(ll_preds)
         sa_stats  = _stats(sa_preds)
         bl_stats  = _stats(bl_preds)
+        l1_stats  = _stats(l1_preds)
 
         # Confidence band breakdown
         bands = {
@@ -1700,11 +1705,11 @@ async def history_page(request: Request):
 
     except Exception as e:
         print(f"[history] error: {e}")
-        stats = pl_stats = ll_stats = sa_stats = bl_stats = None
+        stats = pl_stats = ll_stats = sa_stats = bl_stats = l1_stats = None
         finished = upcoming = []
         band_stats = {}
         draws_actual = draws_predicted = 0
-        pl_count = ll_count = sa_count = bl_count = 0
+        pl_count = ll_count = sa_count = bl_count = l1_count = 0
         league_filter = "all"
 
     return templates.TemplateResponse(
@@ -1716,10 +1721,12 @@ async def history_page(request: Request):
             "ll_stats"        : ll_stats,
             "sa_stats"        : sa_stats,
             "bl_stats"        : bl_stats,
+            "l1_stats"        : l1_stats,
             "pl_count"        : pl_count,
             "ll_count"        : ll_count,
             "sa_count"        : sa_count,
             "bl_count"        : bl_count,
+            "l1_count"        : l1_count,
             "league_filter"   : league_filter,
             "finished"        : finished,
             "upcoming"        : upcoming[:10],
@@ -1938,35 +1945,12 @@ async def league_page(request: Request, league_key: str):
     if league_key not in LEAGUE_CONTEXTS:
         return RedirectResponse(url="/")
 
-    if league_key in ("pl", "laliga", "bundesliga", "seriea"):
+    if league_key in MATCH_LEAGUES:
         return RedirectResponse(
             url=f"/match?league={league_key}",
             status_code=302,
         )
-
-    # All other leagues — under construction
-    LEAGUE_FEATURES = {
-        "ligue1": [
-            ("DC prior odds (18 teams)",          90),
-            ("Live match scores via FotMob",      60),
-            ("France team map",                   10),
-            ("Lineup-adjusted predictions",       10),
-            ("Prediction history logging",        10),
-            ("Neural net live model",             10),
-        ],
-    }
-    ctx = LEAGUE_CONTEXTS[league_key]
-    return templates.TemplateResponse(
-        request=request, name="under_construction.html",
-        context={
-            "request"    : request,
-            "league"     : league_key,
-            "league_key" : league_key,
-            "league_code": ctx["league_code"],
-            "league_name": ctx["league_name"],
-            "features"   : LEAGUE_FEATURES.get(league_key, []),
-        }
-    )
+    return RedirectResponse(url="/", status_code=302)
 
 
 async def football_league_dashboard(request: Request, league_key: str):
@@ -2058,7 +2042,11 @@ async def football_league_dashboard(request: Request, league_key: str):
             **league_ctx(league_key),
             "league_key": league_key,
             "title": league_cfg["name"],
-            "country": "Germany" if league_key == "bundesliga" else "Italy",
+            "country": {
+                "bundesliga": "Germany",
+                "seriea": "Italy",
+                "ligue1": "France",
+            }.get(league_key, "England" if league_key == "pl" else "Spain"),
             "history_href": f"/history?league={league_key}",
             "today": today_date.isoformat(),
             "yesterday": yesterday_date.isoformat(),

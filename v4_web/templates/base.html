@@ -160,7 +160,7 @@
             ("ligue1","Ligue 1","#00A3E0"),
         ] %}
         {% for code, name, dot in leagues_nav %}
-        <a href="{% if code in ('pl', 'laliga', 'bundesliga', 'seriea') %}/match?league={{ code }}{% else %}/league/{{ code }}{% endif %}" class="nav-item" data-page="league-{{ code }}"
+        <a href="/match?league={{ code }}" class="nav-item" data-page="league-{{ code }}"
            {% if (league|default('pl'))==code %}style="background:rgba(255,255,255,0.12);color:#fff;border-left-color:var(--league-active-bar)"{% endif %}>
             <span class="nav-icon"><span class="league-nav-dot" style="background:{{ dot }}"></span></span>
             <span class="nav-label">{{ name }}</span>

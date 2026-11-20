@@ -61,14 +61,15 @@
             {% elif league_filter == "pl" %}Premier League only
             {% elif league_filter == "laliga" %}La Liga only
             {% elif league_filter == "seriea" %}Serie A only
-            {% else %}Bundesliga only{% endif %}
+            {% elif league_filter == "bundesliga" %}Bundesliga only
+            {% else %}Ligue 1 only{% endif %}
         </p>
     </div>
     <!-- League tabs -->
     <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap" aria-label="Filter prediction history">
         <a href="/history" class="tab-btn {% if league_filter == 'all' %}active{% endif %}"
            {% if league_filter == 'all' %}aria-current="page"{% endif %}>
-            All ({{ (pl_count or 0) + (ll_count or 0) + (sa_count or 0) + (bl_count or 0) }})
+            All ({{ (pl_count or 0) + (ll_count or 0) + (sa_count or 0) + (bl_count or 0) + (l1_count or 0) }})
         </a>
         <a href="/history?league=pl" class="tab-btn {% if league_filter == 'pl' %}active{% endif %}"
            {% if league_filter == 'pl' %}aria-current="page"{% endif %}>
@@ -86,11 +87,15 @@
            {% if league_filter == 'bundesliga' %}aria-current="page"{% endif %}>
             <i class="ti ti-ball-football" aria-hidden="true"></i> Bundesliga ({{ bl_count or 0 }})
         </a>
+        <a href="/history?league=ligue1" class="tab-btn {% if league_filter == 'ligue1' %}active{% endif %}"
+           {% if league_filter == 'ligue1' %}aria-current="page"{% endif %}>
+            <i class="ti ti-ball-football" aria-hidden="true"></i> Ligue 1 ({{ l1_count or 0 }})
+        </a>
     </div>
 </header>
 
 <!-- Per-league mini summary (only when showing All) -->
-{% if league_filter == "all" and pl_stats and ll_stats and sa_stats and bl_stats %}
+{% if league_filter == "all" and pl_stats and ll_stats and sa_stats and bl_stats and l1_stats %}
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:20px">
     <div class="league-mini-card">
         <div style="width:10px;height:10px;border-radius:50%;background:#3D185A;flex-shrink:0"></div>
@@ -149,6 +154,21 @@
             </div>
         </div>
         <a href="/history?league=bundesliga" style="font-size:10px;color:var(--text-muted);text-decoration:none">View →</a>
+    </div>
+    <div class="league-mini-card">
+        <div style="width:10px;height:10px;border-radius:50%;background:#00A3E0;flex-shrink:0"></div>
+        <div style="flex:1">
+            <div style="font-size:11px;font-weight:800;color:#0077A8;margin-bottom:2px">Ligue 1</div>
+            <div style="font-size:10px;color:var(--text-muted)">
+                {{ l1_stats.total_finished }} results ·
+                {% if l1_stats.total_finished > 0 %}
+                <strong style="color:{% if l1_stats.pre_accuracy >= 55 %}#10b981{% elif l1_stats.pre_accuracy >= 40 %}#f59e0b{% else %}#ef4444{% endif %}">
+                    {{ l1_stats.pre_accuracy }}%
+                </strong> accuracy
+                {% else %}<span>No results yet</span>{% endif %}
+            </div>
+        </div>
+        <a href="/history?league=ligue1" style="font-size:10px;color:var(--text-muted);text-decoration:none">View →</a>
     </div>
 </div>
 {% endif %}
@@ -261,9 +281,9 @@
                     </td>
                     <td>
                         <span style="font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;
-                            background:{% if p_league == 'laliga' %}#FFF0EE{% elif p_league == 'seriea' %}#F0F5FF{% elif p_league == 'bundesliga' %}#FFF0EE{% else %}#F0EBF8{% endif %};
-                            color:{% if p_league == 'laliga' %}#8B0000{% elif p_league == 'seriea' %}#1A3A6B{% elif p_league == 'bundesliga' %}#C0392B{% else %}#3D185A{% endif %}">
-                            {{ "La Liga" if p_league == "laliga" else "Serie A" if p_league == "seriea" else "Bundesliga" if p_league == "bundesliga" else "PL" }}
+                            background:{% if p_league == 'laliga' %}#FFF0EE{% elif p_league == 'seriea' %}#F0F5FF{% elif p_league == 'bundesliga' %}#FFF0EE{% elif p_league == 'ligue1' %}#E8F8FC{% else %}#F0EBF8{% endif %};
+                            color:{% if p_league == 'laliga' %}#8B0000{% elif p_league == 'seriea' %}#1A3A6B{% elif p_league == 'bundesliga' %}#C0392B{% elif p_league == 'ligue1' %}#0077A8{% else %}#3D185A{% endif %}">
+                            {{ "La Liga" if p_league == "laliga" else "Serie A" if p_league == "seriea" else "Bundesliga" if p_league == "bundesliga" else "Ligue 1" if p_league == "ligue1" else "PL" }}
                         </span>
                     </td>
                     <td style="color:var(--text-muted)">{{ p.kickoff_utc[:10] if p.kickoff_utc else "—" }}</td>
@@ -334,9 +354,9 @@
                     </td>
                     <td>
                         <span style="font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;
-                            background:{% if p_league == 'laliga' %}#FFF0EE{% elif p_league == 'seriea' %}#F0F5FF{% elif p_league == 'bundesliga' %}#FFF0EE{% else %}#F0EBF8{% endif %};
-                            color:{% if p_league == 'laliga' %}#8B0000{% elif p_league == 'seriea' %}#1A3A6B{% elif p_league == 'bundesliga' %}#C0392B{% else %}#3D185A{% endif %}">
-                            {{ "La Liga" if p_league == "laliga" else "Serie A" if p_league == "seriea" else "Bundesliga" if p_league == "bundesliga" else "PL" }}
+                            background:{% if p_league == 'laliga' %}#FFF0EE{% elif p_league == 'seriea' %}#F0F5FF{% elif p_league == 'bundesliga' %}#FFF0EE{% elif p_league == 'ligue1' %}#E8F8FC{% else %}#F0EBF8{% endif %};
+                            color:{% if p_league == 'laliga' %}#8B0000{% elif p_league == 'seriea' %}#1A3A6B{% elif p_league == 'bundesliga' %}#C0392B{% elif p_league == 'ligue1' %}#0077A8{% else %}#3D185A{% endif %}">
+                            {{ "La Liga" if p_league == "laliga" else "Serie A" if p_league == "seriea" else "Bundesliga" if p_league == "bundesliga" else "Ligue 1" if p_league == "ligue1" else "PL" }}
                         </span>
                     </td>
                     <td style="color:var(--text-muted)">{{ p.kickoff_utc[:10] if p.kickoff_utc else "—" }}</td>
