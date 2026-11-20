@@ -72,7 +72,7 @@
                 <clipPath id="ball-left"><path d="M20 2 A18 18 0 0 0 20 38 Z"/></clipPath>
                 <clipPath id="ball-right"><path d="M20 2 A18 18 0 0 1 20 38 Z"/></clipPath>
             </defs>
-            <a href="/">
+            <a href="/" aria-label="Football">
                 <title>Football</title>
                 <g class="half {{ 'inactive' if is_nba else '' }}" clip-path="url(#ball-left)">
                     <rect x="0" y="0" width="20" height="40" fill="#2E7D32"/>
@@ -81,7 +81,7 @@
                     <circle cx="20" cy="20" r="1" fill="#fff"/>
                 </g>
             </a>
-            <a href="/nba">
+            <a href="/nba" aria-label="Basketball">
                 <title>Basketball</title>
                 <g class="half {{ '' if is_nba else 'inactive' }}" clip-path="url(#ball-right)">
                     <rect x="20" y="0" width="20" height="40" fill="#C8763A"/>
