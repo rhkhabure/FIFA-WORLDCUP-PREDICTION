@@ -242,10 +242,21 @@
             value.textContent = 'Now';
             return;
         }
-        const days = Math.floor(remaining / 86400000);
-        const hours = Math.floor((remaining % 86400000) / 3600000);
-        const minutes = Math.floor((remaining % 3600000) / 60000);
-        value.textContent = `${days}d ${String(hours).padStart(2, '0')}h ${String(minutes).padStart(2, '0')}m`;
+        const now = new Date();
+        const targetDate = new Date(target);
+        let months = (targetDate.getFullYear() - now.getFullYear()) * 12
+            + targetDate.getMonth() - now.getMonth();
+        let monthAnchor = new Date(now);
+        monthAnchor.setMonth(monthAnchor.getMonth() + months);
+        if (monthAnchor.getTime() > target) {
+            months -= 1;
+            monthAnchor = new Date(now);
+            monthAnchor.setMonth(monthAnchor.getMonth() + months);
+        }
+        const afterMonths = target - monthAnchor.getTime();
+        const days = Math.floor(afterMonths / 86400000);
+        const hours = Math.floor((afterMonths % 86400000) / 3600000);
+        value.textContent = `${months}mo ${days}d ${String(hours).padStart(2, '0')}h`;
     }
     const countdowns = Array.from(document.querySelectorAll('[data-countdown-target]'));
     countdowns.forEach(updateCountdown);
