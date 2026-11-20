@@ -37,7 +37,7 @@ import torch
 import torch.nn as nn
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from scipy.stats import poisson
@@ -379,6 +379,9 @@ app.include_router(match_router)
 app.include_router(nba_router, prefix="/nba")
 app.mount("/static", StaticFiles(directory=ROOT / "static"), name="static")
 templates = Jinja2Templates(directory=ROOT / "templates")
+templates.env.globals["public_base_url"] = get_env(
+    "PUBLIC_BASE_URL", "https://melios-dira-odds.onrender.com"
+).rstrip("/")
 
 
 @app.middleware("http")
@@ -467,6 +470,49 @@ async def privacy_page(request: Request):
             "title": "Privacy notice",
             "topbar_title": "Privacy",
         },
+    )
+
+
+@app.get("/robots.txt", response_class=PlainTextResponse)
+async def robots_txt():
+    base_url = get_env(
+        "PUBLIC_BASE_URL", "https://melios-dira-odds.onrender.com"
+    ).rstrip("/")
+    return (
+        "User-agent: *\n"
+        "Allow: /\n"
+        "Disallow: /admin/\n"
+        "Disallow: /api/\n"
+        "Disallow: /nba/debug\n"
+        f"Sitemap: {base_url}/sitemap.xml\n"
+    )
+
+
+@app.get("/sitemap.xml", response_class=PlainTextResponse)
+async def sitemap_xml():
+    base_url = get_env(
+        "PUBLIC_BASE_URL", "https://melios-dira-odds.onrender.com"
+    ).rstrip("/")
+    paths = (
+        "/",
+        "/match",
+        "/teams",
+        "/teams/laliga",
+        "/teams/seriea",
+        "/history",
+        "/nba/",
+        "/nba/teams",
+        "/nba/history",
+        "/privacy",
+    )
+    urls = "\n".join(
+        f"  <url><loc>{base_url}{path}</loc></url>" for path in paths
+    )
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        f"{urls}\n"
+        "</urlset>\n"
     )
 
 

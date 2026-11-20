@@ -1,10 +1,32 @@
 {% set is_nba = (sport == 'nba') %}
+{% set site_url = public_base_url|default(request.base_url|string, true)|trim('/') %}
+{% set canonical_url = site_url ~ request.url.path %}
+{% set page_title = (title ~ ' · ' if title else '') ~ 'Melios Dira Odds' %}
+{% set page_description = description|default('Football and NBA predictions, live scores, team insights, and community fan voting.', true) %}
 <!DOCTYPE html>
 <html lang="en" data-league="{{ 'nba' if is_nba else (league | default('pl')) }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% if title %}{{ title }} · {% endif %}Melios Dira Odds</title>
+    <title>{{ page_title }}</title>
+    <meta name="description" content="{{ page_description }}">
+    <link rel="canonical" href="{{ canonical_url }}">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Melios Dira Odds">
+    <meta property="og:title" content="{{ page_title }}">
+    <meta property="og:description" content="{{ page_description }}">
+    <meta property="og:url" content="{{ canonical_url }}">
+    <meta property="og:image" content="{{ site_url }}{{ url_for('static', path='favicon.svg') }}">
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="{{ page_title }}">
+    <meta name="twitter:description" content="{{ page_description }}">
+    <script type="application/ld+json">{{ {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": "Melios Dira Odds",
+        "url": site_url,
+        "description": page_description
+    } | tojson }}</script>
     <link rel="icon" href="{{ url_for('static', path='favicon.svg') }}" type="image/svg+xml">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="{{ url_for('static', path='theme.css') }}?v=20261120-1">

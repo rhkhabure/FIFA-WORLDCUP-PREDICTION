@@ -20,3 +20,5 @@ services:
         value: melios-dira-odds.onrender.com
       - key: FAN_VOTE_RETENTION_DAYS
         value: "90"
+      - key: PUBLIC_BASE_URL
+        value: https://melios-dira-odds.onrender.com

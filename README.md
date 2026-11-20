@@ -123,6 +123,14 @@ responsibilities, configure hosting-log retention, and document the process
 for data-subject requests. This repository provides an engineering baseline,
 not legal advice.
 
+## SEO and sharing metadata
+
+HTML pages include descriptions, canonical URLs, Open Graph/Twitter metadata,
+and `WebSite` structured data. `robots.txt` and `sitemap.xml` expose only
+public navigational pages; API, admin, and debug paths are excluded. Set
+`PUBLIC_BASE_URL` to the final HTTPS hostname before deployment so generated
+canonical and sitemap URLs are correct.
+
 ---
 
 ## Project structure

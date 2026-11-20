@@ -179,6 +179,21 @@ route for requests or ODPC complaints.
 
 ---
 
+### 1.9 SEO and sharing metadata
+
+The shared `base.html` template emits a page title, meta description,
+canonical URL, Open Graph tags, Twitter summary metadata, and `WebSite`
+JSON-LD. The canonical origin comes from `PUBLIC_BASE_URL`, with the Render
+hostname as the local default; deployment must set it to the final HTTPS
+hostname if the public domain changes.
+
+`/robots.txt` permits public crawling while excluding `/admin/`, `/api/`, and
+`/nba/debug`. `/sitemap.xml` lists stable public pages only. Match identifiers,
+provider-backed endpoints, administrative data, and fan-vote APIs are not
+included in the sitemap.
+
+---
+
 ## 2. Mathematical models
 
 The football prediction system is documented in detail in
