@@ -210,7 +210,12 @@ print(
 import asyncio
 from contextlib import asynccontextmanager
 from prediction_job import schedule_prediction_job
-from fan_votes import cast_vote, get_vote_summary, init_fan_votes
+from fan_votes import (
+    cast_vote,
+    configured_retention_days,
+    get_vote_summary,
+    init_fan_votes,
+)
 from predictions import (DB_PATH as FOOTBALL_PREDICTIONS_DB, init_db,
                          log_pre_lineup, log_post_lineup,
                          log_result, get_all_predictions,
@@ -225,7 +230,7 @@ async def lifespan(app):
     startup_started = time.perf_counter()
     phase_started = startup_started
     init_db()
-    init_fan_votes(FOOTBALL_PREDICTIONS_DB)
+    init_fan_votes(FOOTBALL_PREDICTIONS_DB, configured_retention_days())
     print(
         "[startup] football database initialized in "
         f"{time.perf_counter() - phase_started:.2f}s"
@@ -450,6 +455,19 @@ async def health_live():
 @app.get("/health/ready")
 async def health_ready():
     return _readiness()
+
+
+@app.get("/privacy", response_class=HTMLResponse)
+async def privacy_page(request: Request):
+    return templates.TemplateResponse(
+        request=request,
+        name="privacy.html",
+        context={
+            "request": request,
+            "title": "Privacy notice",
+            "topbar_title": "Privacy",
+        },
+    )
 
 
 @app.get("/api/fan-vote/{match_id}")

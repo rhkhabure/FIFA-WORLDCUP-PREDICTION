@@ -4,8 +4,17 @@ import hashlib
 import sqlite3
 import uuid
 from contextlib import closing
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from config import get_env
+
+
+def configured_retention_days(default: int = 90) -> int:
+    try:
+        value = int(get_env("FAN_VOTE_RETENTION_DAYS", str(default)))
+    except ValueError:
+        return default
+    return value if value > 0 else default
 
 
 def _voter_hash(voter_id: str) -> str | None:
@@ -16,7 +25,34 @@ def _voter_hash(voter_id: str) -> str | None:
     return hashlib.sha256(normalized.encode("ascii")).hexdigest()
 
 
-def init_fan_votes(db_path: str | Path) -> None:
+def purge_expired_votes(
+    db_path: str | Path,
+    retention_days: int = 90,
+    *,
+    now: datetime | None = None,
+) -> int:
+    if retention_days < 1:
+        raise ValueError("retention_days must be positive")
+    cutoff = (now or datetime.now(timezone.utc)) - timedelta(days=retention_days)
+    with closing(sqlite3.connect(db_path)) as db:
+        deleted = 0
+        for table in ("football_fan_votes", "nba_fan_votes"):
+            exists = db.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+                (table,),
+            ).fetchone()
+            if not exists:
+                continue
+            cursor = db.execute(
+                f"DELETE FROM {table} WHERE created_at < ?",
+                (cutoff.astimezone(timezone.utc).isoformat(),),
+            )
+            deleted += cursor.rowcount
+        db.commit()
+        return deleted
+
+
+def init_fan_votes(db_path: str | Path, retention_days: int = 90) -> None:
     with closing(sqlite3.connect(db_path)) as db:
         db.execute("""
             CREATE TABLE IF NOT EXISTS football_fan_votes (
@@ -32,9 +68,10 @@ def init_fan_votes(db_path: str | Path) -> None:
             ON football_fan_votes(match_id)
         """)
         db.commit()
+    purge_expired_votes(db_path, retention_days)
 
 
-def init_nba_fan_votes(db_path: str | Path) -> None:
+def init_nba_fan_votes(db_path: str | Path, retention_days: int = 90) -> None:
     with closing(sqlite3.connect(db_path)) as db:
         db.execute("""
             CREATE TABLE IF NOT EXISTS nba_fan_votes (
@@ -46,6 +83,7 @@ def init_nba_fan_votes(db_path: str | Path) -> None:
             )
         """)
         db.commit()
+    purge_expired_votes(db_path, retention_days)
 
 
 def _summary(db: sqlite3.Connection, match_id: str, voter_hash: str | None) -> dict:

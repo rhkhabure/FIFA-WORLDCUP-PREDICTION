@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block content %}
+<article class="m-card" style="max-width:900px;margin:24px auto;line-height:1.7">
+    <div class="m-label">Privacy and data use</div>
+    <h1 style="font-size:clamp(24px,4vw,40px);margin:8px 0 18px">
+        Privacy notice
+    </h1>
+    <p class="m-muted">
+        This notice describes the limited data used by the Melios Dira Odds
+        fan-voting feature. It should be completed with the operator's legal
+        name and contact details before public deployment.
+    </p>
+
+    <h2>What is collected</h2>
+    <p>
+        If you enable fan voting, this browser stores a random identifier in
+        local storage. The server receives only a one-way hash of that
+        identifier, your selected outcome, the match or game identifier, and
+        the vote timestamp. No name, email address, account, precise location,
+        or advertising profile is requested by fan voting.
+    </p>
+
+    <h2>Why it is used</h2>
+    <p>
+        The identifier prevents duplicate votes for the same event, while the
+        choice and timestamp produce aggregate community results separate from
+        the prediction model. Fan voting is optional and is not required to
+        browse the site.
+    </p>
+
+    <h2>Choice, retention, and deletion</h2>
+    <p>
+        The browser identifier is created only after you select “Enable fan
+        voting”. You can withdraw that choice by clearing this site's local
+        storage. Vote records are automatically deleted after the configured
+        retention period, which is 90 days by default. The operator should
+        document any different deployment setting.
+    </p>
+
+    <h2>Your rights</h2>
+    <p>
+        Subject to applicable law, you may request access, correction,
+        deletion, restriction, or information about processing. Contact the
+        site operator using the deployment's published privacy contact. For
+        Kenyan users, complaints may also be directed to the Office of the
+        Data Protection Commissioner (ODPC). This notice is an implementation
+        baseline for the EU GDPR and Kenya Data Protection Act, not legal
+        advice; the operator must confirm its controller details, lawful
+        bases, cross-border arrangements, and response process before launch.
+    </p>
+
+    <h2>Other technical data</h2>
+    <p>
+        Hosting and security infrastructure may process request metadata in
+        provider logs. Configure provider retention, access controls, and
+        deletion procedures separately; this application does not intentionally
+        store IP addresses in the fan-vote database.
+    </p>
+</article>
+{% endblock %}

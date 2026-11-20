@@ -18,3 +18,5 @@ services:
         sync: false
       - key: ALLOWED_HOSTS
         value: melios-dira-odds.onrender.com
+      - key: FAN_VOTE_RETENTION_DAYS
+        value: "90"

@@ -200,6 +200,11 @@
         <div class="fan-vote-message" data-vote-message role="status" aria-live="polite">
             One vote per browser. Voting closes at tip-off.
         </div>
+        <div class="fan-vote-consent" data-vote-consent>
+            Fan voting is optional and uses a random browser identifier to prevent
+            duplicate votes. <a href="/privacy">Read the privacy notice</a>.
+            <button type="button" data-vote-enable>Enable fan voting</button>
+        </div>
     </section>
     {% endif %}
 
@@ -843,6 +848,35 @@
     const matchId = poll.dataset.gameId;
     const gameDate = poll.dataset.gameDate;
     const key = "football-fan-voter-id";
+    const consentKey = "fan-voting-consent";
+    const totalEl = poll.querySelector("[data-vote-total]");
+    const resultsEl = poll.querySelector("[data-vote-results]");
+    const messageEl = poll.querySelector("[data-vote-message]");
+    const consentEl = poll.querySelector("[data-vote-consent]");
+    const enableButton = poll.querySelector("[data-vote-enable]");
+    const buttons = Array.from(poll.querySelectorAll("[data-vote-choice]"));
+    let consented = false;
+    try {
+        consented = localStorage.getItem(consentKey) === "granted";
+    } catch (error) {
+        consented = false;
+    }
+    if (!consented) {
+        buttons.forEach(function (button) { button.disabled = true; });
+        if (messageEl) messageEl.textContent = "Enable optional fan voting to participate.";
+        if (enableButton) {
+            enableButton.addEventListener("click", function () {
+                try {
+                    localStorage.setItem(consentKey, "granted");
+                    window.location.reload();
+                } catch (error) {
+                    if (messageEl) messageEl.textContent = "Browser storage is unavailable; voting cannot be enabled.";
+                }
+            });
+        }
+        return;
+    }
+    if (consentEl) consentEl.hidden = true;
     function createVoterId() {
         if (crypto.randomUUID) return crypto.randomUUID();
         const bytes = new Uint8Array(16);
@@ -865,10 +899,6 @@
         voterId = createVoterId();
     }
 
-    const totalEl = poll.querySelector("[data-vote-total]");
-    const resultsEl = poll.querySelector("[data-vote-results]");
-    const messageEl = poll.querySelector("[data-vote-message]");
-    const buttons = Array.from(poll.querySelectorAll("[data-vote-choice]"));
     const endpoint = `/nba/api/fan-vote/${encodeURIComponent(matchId)}`;
     const params = new URLSearchParams({game_date: gameDate, voter_id: voterId});
 

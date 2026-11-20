@@ -72,6 +72,7 @@ from historical_nba import (
 )
 from fan_votes import (
     cast_nba_vote,
+    configured_retention_days,
     get_nba_vote_summary,
     init_nba_fan_votes,
 )
@@ -103,7 +104,7 @@ def nba_setup(model: NBAModel, db=None) -> None:
         db_row = db.execute("PRAGMA database_list").fetchone()
         if db_row and db_row[2]:
             _db_path = str(db_row[2])
-            init_nba_fan_votes(_db_path)
+            init_nba_fan_votes(_db_path, configured_retention_days())
     try:
         _refresh_nba_elo()
     except Exception:

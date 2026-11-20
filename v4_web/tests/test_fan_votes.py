@@ -1,3 +1,4 @@
+import os
 import sqlite3
 import sys
 import tempfile
@@ -6,16 +7,19 @@ import uuid
 from contextlib import closing
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from fan_votes import (
     cast_nba_vote,
     cast_vote,
+    configured_retention_days,
     get_nba_vote_summary,
     get_vote_summary,
     init_fan_votes,
     init_nba_fan_votes,
+    purge_expired_votes,
 )
 
 
@@ -58,6 +62,22 @@ class FanVoteTests(unittest.TestCase):
         self.assertEqual(result["counts"], {"H": 1, "D": 0, "A": 0})
         self.assertEqual(result["total"], 1)
         self.assertTrue(get_vote_summary(self.db_path, "future", voter)["has_voted"])
+
+    def test_purge_expired_votes_removes_old_records(self):
+        voter = str(uuid.uuid4())
+        old = self.now - timedelta(days=91)
+        cast_vote(self.db_path, "future", "H", voter, now=old)
+        self.assertEqual(
+            purge_expired_votes(self.db_path, 90, now=self.now),
+            1,
+        )
+        self.assertEqual(get_vote_summary(self.db_path, "future")["total"], 0)
+
+    def test_retention_configuration_rejects_invalid_values(self):
+        with patch.dict(os.environ, {"FAN_VOTE_RETENTION_DAYS": "invalid"}):
+            self.assertEqual(configured_retention_days(), 90)
+        with patch.dict(os.environ, {"FAN_VOTE_RETENTION_DAYS": "0"}):
+            self.assertEqual(configured_retention_days(), 90)
 
     def test_rejects_duplicate_vote_for_same_browser_and_match(self):
         voter = str(uuid.uuid4())

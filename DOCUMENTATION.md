@@ -155,6 +155,28 @@ routes in a controlled staging environment. Do not treat this small utility as
 a capacity guarantee or run it against production without an approved test
 window.
 
+### 1.8 Privacy and fan voting
+
+Fan voting is an optional feature and is not required to browse the site. The
+front end requests explicit opt-in before it creates or reads the random
+browser identifier used to prevent duplicate votes. The server stores a
+SHA-256 hash of that UUID, the event identifier, the selected outcome, and a
+UTC timestamp; it does not intentionally store names, email addresses, or IP
+addresses in the fan-vote tables.
+
+`FAN_VOTE_RETENTION_DAYS` controls automatic deletion of old vote rows and
+defaults to 90. The public `/privacy` page describes the processing,
+withdrawal by clearing site storage, retention, and data-subject rights. It
+must be completed with the operator's legal identity and contact details
+before deployment. Hosting/provider access logs require separate retention,
+access-control, and deletion policies.
+
+This is an implementation baseline for GDPR and Kenya's Data Protection Act,
+not a legal determination. Before launch, the operator must confirm the
+controller/processor roles, lawful basis and consent records, children's-data
+approach, cross-border transfers, security incident process, and response
+route for requests or ODPC complaints.
+
 ---
 
 ## 2. Mathematical models

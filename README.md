@@ -109,6 +109,20 @@ Use the output p95 latency and failure count as a baseline before changing
 deployment resources or provider timeouts. This utility is not a substitute
 for a production load test with representative traffic.
 
+## Privacy and fan voting
+
+Fan voting is optional. The browser does not create its random voting
+identifier until the visitor enables the feature and reviews the linked
+[`/privacy`](http://localhost:8000/privacy) notice. The server stores only a
+one-way hash, the selected outcome, the event identifier, and a timestamp.
+Vote rows are deleted after `FAN_VOTE_RETENTION_DAYS` (90 by default).
+
+Before deployment, complete the privacy notice with the operator's legal
+identity and contact channel, confirm GDPR and Kenya Data Protection Act
+responsibilities, configure hosting-log retention, and document the process
+for data-subject requests. This repository provides an engineering baseline,
+not legal advice.
+
 ---
 
 ## Project structure
