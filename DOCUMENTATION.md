@@ -192,6 +192,40 @@ hostname if the public domain changes.
 provider-backed endpoints, administrative data, and fan-vote APIs are not
 included in the sitemap.
 
+### 1.10 Deployment and rollback
+
+The Render service definition uses `/health/ready` as its health check. This
+requires the process, both model artifacts, and both SQLite stores to be ready
+before the deployment is considered healthy. It does not test external
+providers.
+
+Release procedure:
+
+1. Run compilation, template validation, and the complete test suite.
+2. Run `backup_databases.py` to private off-host storage and verify the backup
+   files.
+3. Confirm deployment secrets, `ALLOWED_HOSTS`, `PUBLIC_BASE_URL`, and
+   `FAN_VOTE_RETENTION_DAYS`.
+4. Deploy the reviewed commit through Render.
+5. Run `release_check.py` against the public HTTPS origin and inspect logs,
+   readiness, error counters, and provider freshness.
+
+Rollback procedure:
+
+1. Stop promotion and record the failing release commit and observed symptoms.
+2. Back up the current databases before changing code or data.
+3. Redeploy the last known-good application commit.
+4. Do not point older code at a newer schema unless compatibility was verified.
+   If data restoration is required, preserve the current database first,
+   restore a known-good compatible backup, and rerun readiness and release
+   checks.
+5. Rotate compromised credentials, record the incident, and only then resume
+   traffic.
+
+SQLite migrations are forward-numbered and startup refuses a database version
+newer than the application supports. This deliberate failure is safer than
+silently running old code against an unknown schema.
+
 ---
 
 ## 2. Mathematical models

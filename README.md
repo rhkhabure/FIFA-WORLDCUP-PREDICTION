@@ -131,6 +131,24 @@ public navigational pages; API, admin, and debug paths are excluded. Set
 `PUBLIC_BASE_URL` to the final HTTPS hostname before deployment so generated
 canonical and sitemap URLs are correct.
 
+## Deployment and rollback
+
+Before deploying, run the full checks above, create an off-host database
+backup, verify all provider/admin secrets, and confirm `ALLOWED_HOSTS` and
+`PUBLIC_BASE_URL`. Render uses `/health/ready` as its deployment health check.
+After release, verify the public endpoints with:
+
+```bash
+python v4_web/scripts/release_check.py --base-url https://your-public-host
+```
+
+For rollback, first preserve a backup of the current databases and record the
+failing release commit. Redeploy the last known-good commit through the hosting
+provider, then rerun the release check. Do not roll back application code
+across a database migration unless the old code supports the newer schema;
+restore a compatible database backup only after preserving the current copy.
+Rotate any credentials exposed during the incident and document the event.
+
 ---
 
 ## Project structure
