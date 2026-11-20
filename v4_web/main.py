@@ -965,8 +965,24 @@ async def team_profile(request: Request, team_id: int, season: int = 2025):
     """Team profile page — squad, ratings, form, season results."""
 
     profile  = get_team_profile(team_id)
+    profile_data_available = bool(profile)
     if not profile:
-        return HTMLResponse("<h1>Team not found</h1>", status_code=404)
+        team_name = next(
+            (name for name, known_id in _CREST_IDS.items() if known_id == team_id),
+            None,
+        )
+        if not team_name:
+            return HTMLResponse("<h1>Team not found</h1>", status_code=404)
+        profile = {
+            "id": team_id,
+            "name": team_name,
+            "short_name": team_name,
+            "tla": "".join(part[0] for part in team_name.split())[:3].upper(),
+            "crest": "",
+            "venue": "",
+            "founded": None,
+            "coach": None,
+        }
 
     team_name = profile["name"]
 
@@ -1105,6 +1121,7 @@ async def team_profile(request: Request, team_id: int, season: int = 2025):
         "team_id"        : team_id,
         "current_season" : season,
         "team_fixtures"  : team_fixtures,
+        "profile_data_available": profile_data_available,
     }
     return templates.TemplateResponse(
         request=request, name="team.html", context=ctx

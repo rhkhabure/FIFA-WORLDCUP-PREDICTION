@@ -74,6 +74,32 @@ class TeamProfileTests(unittest.TestCase):
         self.assertTrue(context["squad_is_fallback"])
         self.assertTrue(context["pitch_svg"])
 
+    def test_known_team_renders_when_profile_provider_is_unavailable(self):
+        with (
+            patch.object(main, "get_team_profile", return_value={}),
+            patch.object(main, "get_formation_for_team", return_value={}),
+            patch.object(main, "get_squad_for_team", return_value=[]),
+            patch.object(main, "generate_pitch_svg_vertical", return_value="<svg/>"),
+            patch.object(main, "get_crest_proxy_url", return_value=""),
+            patch.object(main, "get_upcoming_fixtures", return_value=[]),
+            patch.object(main, "get_team_season_results", return_value=[]),
+            patch.object(main, "get_standings", return_value=[]),
+            patch.object(main, "get_last_n_results", return_value=[]),
+            patch.object(main, "get_next_fixture", return_value=None),
+            patch.object(main, "priors_db", None),
+            patch.object(
+                main.templates,
+                "TemplateResponse",
+                side_effect=lambda **kwargs: kwargs["context"],
+            ),
+        ):
+            context = asyncio.run(
+                main.team_profile(None, 57, season=2025)
+            )
+
+        self.assertFalse(context["profile_data_available"])
+        self.assertEqual(context["profile"]["name"], "Arsenal")
+
 
 if __name__ == "__main__":
     unittest.main()

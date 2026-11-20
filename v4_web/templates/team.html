@@ -64,6 +64,18 @@
         </div>
     </div>
 
+    {% if not profile_data_available %}
+    <div class="ui-state ui-state-warning" role="status">
+        <i class="ti ti-cloud-off ui-state-icon" aria-hidden="true"></i>
+        <div>
+            <div class="ui-state-title">Live team details unavailable</div>
+            <div class="ui-state-description">
+                The team profile provider is temporarily unavailable. Static team identity and available model ratings are still shown.
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     {% if team_page_league is defined and not match_data_available %}
     <div class="bg-amber-950/30 border border-amber-900/60 rounded-xl px-4 py-3
                 text-xs font-mono text-amber-200/80">
