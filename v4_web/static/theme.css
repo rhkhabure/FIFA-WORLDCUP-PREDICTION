@@ -73,6 +73,19 @@
     --transition-base: 180ms ease;
 }
 
+@media (min-width: 1200px) {
+    :root {
+        --content-max: 1600px;
+        --text-sm: 13px;
+        --text-md: 15px;
+        --text-xl: 26px;
+    }
+
+    #page-content {
+        padding: 32px;
+    }
+}
+
 /* ── Premier League ─────────────────────────────────────────────── */
 [data-league="pl"], :root {
     --league-primary:    #3D185A;   /* Deep royal purple */
@@ -662,7 +675,7 @@ a {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 14px;
-    padding: 16px;
+    padding: 20px;
 }
 .match-forecast-heading,
 .fan-vote-header {
@@ -680,7 +693,7 @@ a {
 .match-forecast-pick,
 .fan-vote-question {
     color: var(--text-primary);
-    font-size: 14px;
+    font-size: 16px;
     font-weight: 800;
     margin-top: 4px;
 }
@@ -704,7 +717,7 @@ a {
     display: flex;
     gap: 8px;
     min-width: 0;
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 700;
 }
 .match-team-identity > span:last-child {
