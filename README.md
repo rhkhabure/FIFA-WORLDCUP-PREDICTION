@@ -49,6 +49,21 @@ python -m uvicorn main:app --reload
 # http://localhost:8000
 ```
 
+## Continuous integration
+
+Every push and pull request runs the CI workflow in
+`.github/workflows/ci.yml`. The workflow uses Python 3.11, installs the
+declared dependencies, compiles the Python sources, validates all Jinja
+templates, and runs the application test suite.
+
+Run the same core checks locally from the repository root:
+
+```bash
+python -m compileall -q v4_backend v4_web
+python -c "from pathlib import Path; from jinja2 import Environment, FileSystemLoader; env = Environment(loader=FileSystemLoader('v4_web/templates')); [env.get_template(path.name) for path in Path('v4_web/templates').glob('*.html')]; print('All templates compiled successfully')"
+python -m unittest discover -s v4_web/tests -p "test_*.py"
+```
+
 ---
 
 ## Project structure

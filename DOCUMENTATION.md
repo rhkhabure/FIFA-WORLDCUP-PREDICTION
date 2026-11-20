@@ -47,6 +47,21 @@ The NBA model has its own lifecycle and feature contract; see
 training artifacts and temporal test folds, result-driven Elo adjustment, and
 documented provenance gaps.
 
+### 1.1 Continuous integration
+
+The repository's CI workflow is `.github/workflows/ci.yml`. It runs on every
+push and pull request using Python 3.11 and performs four checks:
+
+1. Install the versions declared in `requirements.txt`.
+2. Compile the `v4_backend` and `v4_web` Python sources.
+3. Compile every Jinja template under `v4_web/templates`.
+4. Run the application tests under `v4_web/tests`.
+
+The workflow does not call live sports providers. Tests mock provider responses
+where necessary so CI remains deterministic and does not require API keys.
+Browser interaction and responsive smoke tests remain release-validation
+checks until they are added to the repository's automated test harness.
+
 ---
 
 ## 2. Mathematical models
