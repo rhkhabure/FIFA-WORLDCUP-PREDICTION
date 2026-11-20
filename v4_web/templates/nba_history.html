@@ -24,7 +24,11 @@
   .prob-track{display:flex;height:5px;border-radius:99px;overflow:hidden;background:var(--border,#e2e8f0);width:80px}
 </style>
 
-<div style="display:flex;flex-direction:column;gap:16px;max-width:1100px;margin:0 auto">
+<div class="ui-stack">
+  <header class="page-header">
+    <h1 class="page-title">NBA prediction history</h1>
+    <p class="page-subtitle">Verified pregame predictions and resolved game outcomes.</p>
+  </header>
 
   <!-- stat tiles -->
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px">
@@ -53,10 +57,10 @@
   {% endif %}
 
   <!-- conference filter tabs -->
-  <div style="display:flex;gap:8px;align-items:center">
-    <a href="/nba/history?conference=all"  class="conf-tab {{ 'active' if conference=='all'  else '' }}">All</a>
-    <a href="/nba/history?conference=East" class="conf-tab {{ 'active' if conference=='East' else '' }}">Eastern</a>
-    <a href="/nba/history?conference=West" class="conf-tab {{ 'active' if conference=='West' else '' }}">Western</a>
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap" aria-label="Filter NBA history">
+    <a href="/nba/history?conference=all"  class="conf-tab {{ 'active' if conference=='all'  else '' }}" {% if conference == 'all' %}aria-current="page"{% endif %}>All</a>
+    <a href="/nba/history?conference=East" class="conf-tab {{ 'active' if conference=='East' else '' }}" {% if conference == 'East' %}aria-current="page"{% endif %}>Eastern</a>
+    <a href="/nba/history?conference=West" class="conf-tab {{ 'active' if conference=='West' else '' }}" {% if conference == 'West' %}aria-current="page"{% endif %}>Western</a>
     <span style="flex:1"></span>
     <span style="font-size:11px;color:var(--text-muted,#64748b)">
       Showing {{ rows|length }} prediction{{ 's' if rows|length != 1 else '' }}
@@ -65,24 +69,24 @@
 
   <!-- predictions table -->
   {% if not rows %}
-  <div class="h-card" style="text-align:center;padding:36px">
+  <div class="ui-card ui-empty" role="status">
     <i class="ti ti-clock" style="font-size:30px;color:var(--league-primary)" aria-hidden="true"></i>
-    <div style="font-size:14px;font-weight:800;margin-top:10px">No predictions logged yet</div>
-    <div style="font-size:12px;color:var(--text-muted,#64748b);margin-top:6px">
+    <div class="ui-empty-title">No predictions logged yet</div>
+    <div class="ui-empty-description">
       Predictions are logged automatically once the regular season starts.
     </div>
   </div>
   {% else %}
-  <div class="h-card" style="padding:0;overflow:hidden">
-    <table>
+  <div class="ui-card ui-table-wrap" style="padding:0">
+    <table class="ui-table">
       <thead>
         <tr>
-          <th>Date</th>
-          <th>Matchup</th>
-          <th>Pregame prob</th>
-          <th>Our pick</th>
-          <th>Score</th>
-          <th>Result</th>
+          <th scope="col">Date</th>
+          <th scope="col">Matchup</th>
+          <th scope="col">Pregame prob</th>
+          <th scope="col">Our pick</th>
+          <th scope="col">Score</th>
+          <th scope="col">Result</th>
         </tr>
       </thead>
       <tbody>

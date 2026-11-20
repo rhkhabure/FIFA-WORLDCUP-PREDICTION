@@ -20,6 +20,10 @@ class FakeDataFrame:
                 "LOSSES": 3,
                 "WinPCT": 0.7,
                 "PlayoffRank": 2,
+                "ConferenceRecord": "5-2",
+                "DivisionRecord": "2-1",
+                "CurrentStreak": 3,
+                "CurrentStreakType": "W",
             },
             {
                 "TeamID": 1610612760,
@@ -28,6 +32,11 @@ class FakeDataFrame:
                 "LOSSES": 2,
                 "WinPCT": 0.8,
                 "PlayoffRank": 1,
+                "ConferenceWins": 6,
+                "ConferenceLosses": 1,
+                "DivisionWins": 3,
+                "DivisionLosses": 0,
+                "CurrentStreakWins": 2,
             },
         ]
 
@@ -53,6 +62,12 @@ class NBAStandingsTests(unittest.TestCase):
         self.assertEqual(standings["East"][0]["rank"], 2)
         self.assertEqual(standings["West"][0]["tricode"], "OKC")
         self.assertEqual(standings["West"][0]["wins"], 8)
+        self.assertEqual(standings["East"][0]["conference_record"], "5-2")
+        self.assertEqual(standings["East"][0]["division_record"], "2-1")
+        self.assertEqual(standings["East"][0]["streak"], "W3")
+        self.assertEqual(standings["West"][0]["conference_record"], "6-1")
+        self.assertEqual(standings["West"][0]["division_record"], "3-0")
+        self.assertEqual(standings["West"][0]["streak"], "W2")
 
     def test_team_rank_uses_its_conference_table_and_ordinal_suffix(self):
         standings = {

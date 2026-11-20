@@ -1,0 +1,287 @@
+# 📘 User Manual: Melios Dira Odds — V4.2
+
+This manual covers how to set up, run, and use the V4.2 football and NBA prediction dashboard, including temporarily sharing it over the internet from your own computer.
+
+---
+
+## Prerequisites
+
+- Python 3.11 or later
+- An NVIDIA GPU with CUDA (recommended for neural net inference — CPU works but is slower)
+- API keys for football-data.org and Big Balls Sports (see Step 2)
+
+---
+
+## Step 1: Install dependencies
+
+From the repository root, install the complete dependency set for the FastAPI
+dashboard, NBA pages, legacy Streamlit app, and football data/model scripts:
+
+```bash
+pip install -r requirements.txt
+```
+
+The application requirements select a CPU-compatible PyTorch build, so an
+NVIDIA GPU or separate CUDA install is not required. The runtime dependencies
+for the hosted FastAPI app are maintained in `v4_web/requirements.txt`; the
+repository-level file includes those plus packages for the older Streamlit
+dashboard and model/data preparation tools.
+
+---
+
+## Step 2: Configure API keys
+
+Copy `.env.example` to `.env` in the project root and fill in your keys:
+
+```
+FOOTBALLDATA_ORG_KEY=your_key_from_football-data.org
+BBS_API_KEY=your_key_from_bigballssports.com
+PARSE_BOT_KEY=your_key_from_parse.bot    # optional — used for lineups
+```
+
+**Getting the keys:**
+- **football-data.org** — free tier, sign up at https://www.football-data.org/client/register. Gives you PL finished scores and fixtures.
+- **Big Balls Sports** — used for La Liga live data. Contact bigballssports.com for a key.
+- **parse.bot** — used for FotMob lineups. This is a paid service with a credit system; the dashboard works without it but the pitch will show dots instead of confirmed player names.
+
+---
+
+## Step 3: Build the historical database (first time only)
+
+The Dixon-Coles model needs 4 seasons of xG data to train on. This step scrapes it from Understat via the `soccerdata` library.
+
+```bash
+# From the project root
+python v4_backend/historical_scraper.py
+```
+
+This creates `v4_historical_data.sqlite` in the project root. It takes 5–15 minutes depending on your connection. **You only need to do this once**, or at the start of a new season when you want to retrain.
+
+---
+
+## Step 4: Train the DC priors (first time only, or new season)
+
+With the SQLite database ready, run the Jupyter notebook to compute the attack (α) and defence (β) ratings for all 125 teams across the Big 5 leagues:
+
+```bash
+cd v4_backend/notebooks
+jupyter notebook train_v4_priors.ipynb
+```
+
+Click **Run All**. The notebook runs the SLSQP MLE optimiser with exponential
+time-decay weighting and saves the results to `v4_backend/v4_priors.json`.
+Takes around 2–5 minutes.
+
+> **Note:** The trained priors and live-model artifacts are included in the
+> repository under `v4_backend/`. You only need to retrain to deliberately
+> update the offline model using additional historical data.
+
+---
+
+## Step 5: Run the dashboard
+
+```bash
+cd v4_web
+python -m uvicorn main:app --host 127.0.0.1 --port 8000
+```
+
+Open `http://localhost:8000` in your browser. Keep this terminal open while you use the dashboard. To develop and automatically reload after editing files, use `--reload` instead; do not use that development option when sharing the site.
+
+**What happens at startup:**
+1. `football_v4.pth` loads into memory (neural net, ~1 second)
+2. FPL bootstrap is fetched and cached (PL team names + fixtures)
+3. The prediction logging job is scheduled to run every 30 minutes
+4. The first prediction job cycle runs immediately
+5. Settled football results are replayed at startup to evaluate bounded
+   per-league DC rating factors. This does not retrain the neural network.
+6. The NBA artifacts (live neural model, scaler, calibration temperature and
+   Elo ratings) load for the basketball routes. Logged NBA results are replayed
+   to evaluate Elo updates; this does not fine-tune the neural network.
+
+---
+
+## Temporarily share the site on your phone or with friends
+
+For a free, temporary public link, you can create a Cloudflare Quick Tunnel to the app running on your computer. This is suitable for demos and testing, not permanent production hosting. No Azure subscription or domain is needed.
+
+### 1. Install `cloudflared` (once)
+
+On Windows, open PowerShell and run:
+
+```powershell
+winget install --exact --id Cloudflare.cloudflared
+```
+
+After installation, open a **new** PowerShell window so it can find `cloudflared`.
+
+### 2. Start the dashboard
+
+In one PowerShell window:
+
+```powershell
+cd C:\path\to\FIFA-WORLDCUP-PREDICTION\v4_web
+python -m uvicorn main:app --host 127.0.0.1 --port 8000
+```
+
+Leave this window running. Confirm the site opens at `http://127.0.0.1:8000` on your computer.
+
+### 3. Start the tunnel
+
+In a **second** PowerShell window:
+
+```powershell
+cloudflared tunnel --url http://127.0.0.1:8000
+```
+
+Wait for the message `Your quick Tunnel has been created!` and copy the `https://…trycloudflare.com` address. Open that HTTPS link on your phone or share it with friends.
+
+### Important limitations and safety
+
+- The link is public to anyone who has it unless you add an access restriction. The app does not require users to sign in, so do not share it widely or include private/personal data while it is exposed.
+- You can limit access to specific email addresses by adding one `--allowed-mail` option for each visitor:
+
+  ```powershell
+  cloudflared tunnel --url http://127.0.0.1:8000 `
+    --allowed-mail friend1@example.com `
+    --allowed-mail friend2@example.com
+  ```
+
+- Your computer must stay on, online, and running both the app and tunnel. The link stops working if either process exits, the computer sleeps, or the network disconnects.
+- The temporary URL can change each time you restart the tunnel. Cloudflare Quick Tunnels have no uptime guarantee and are intended for testing/development.
+- The application and its SQLite prediction history remain on your computer. This avoids free-host filesystem loss, but it is not a remote backup; protect your computer and back up important database files.
+- To stop sharing, press **Ctrl+C** in the tunnel window. Stop the app separately with **Ctrl+C** in its terminal.
+- Do not use this as permanent hosting. For a stable link and always-on availability, deploy to a hosting service with persistent storage and appropriate authentication.
+
+---
+
+## Navigating the dashboard
+
+### Sidebar
+
+The collapsible sidebar (☰) gives access to all pages. Click the league name to go directly to that league's match page.
+
+| Icon | Page | What it shows |
+|------|------|---------------|
+| 🔲 | Hub | Today's fixtures across both leagues with DC odds |
+| ⚽ | Match | Full match prediction for selected game |
+| 🗺 | Team map | DC strength visualisation for all teams |
+| 📈 | Prediction history | Model accuracy tracker |
+| 🏆 | Tournament | CL simulator + PL season Monte Carlo |
+
+---
+
+### Match page
+
+The match page is the core of the dashboard. It shows:
+
+**Fixture strip** — upcoming matches for the active league. Click any fixture to load it.
+
+**Pre-game DC odds** — home/draw/away percentages from the Dixon-Coles bivariate Poisson model. Updated from `v4_priors.json`.
+
+**Adjusted odds** — same calculation but with the announced lineup factored in. If key players are absent, the odds shift accordingly. Only shows when lineup data is available.
+
+**SVG pitch** — the starting XI rendered as jersey shapes on a football pitch. Each jersey shows the team's kit colours and a 3-letter club abbreviation. Click any player to go to their profile page.
+
+**Scoreline matrix** — heatmap of the most likely scorelines. Darker cells = higher probability.
+
+**Match timeline** — appears after kickoff, showing goals and key events as a horizontal timeline.
+
+**Live odds** — the neural network takes over once the match is reported as
+started, updating probabilities every 30 seconds from the current score,
+minute and team-strength features. It does not use live xG.
+
+---
+
+### History page
+
+Shows all logged predictions with their outcomes. Three tabs: All / Premier League / La Liga.
+
+The accuracy stats shown are:
+- **DC Accuracy** — how often the DC model's top-probability outcome was correct
+- **Adj Accuracy** — same but only for matches where lineup data was available
+- **Draw Recall** — how many actual draws the model predicted as draws (historically the hardest to get right)
+- **Accuracy by Confidence Band** — broken down into High (>60%), Mid (40–60%), Low (<40%) confidence predictions
+
+The model logs predictions automatically every 30 minutes. Results are filled in once fd.org confirms the final score (usually within a few hours of the match ending on the free tier).
+
+---
+
+### Tournament page
+
+Two modes, toggled via the tabs:
+
+**Champions League simulator** — pick 16 teams from any of the 5 leagues. Click "Run 10,000 simulations" to run the Monte Carlo. The results show win probability per team and the most likely bracket path.
+
+**PL season simulator** — fetches the current league standings from fd.org and simulates the remaining fixtures 10,000 times. Shows predicted final table with title/top 4/relegation probabilities and P10–P90 confidence ranges.
+
+---
+
+### Player page
+
+Reached by clicking a player name on the pitch SVG. Shows:
+- Player cutout photo and bio from TheSportsDB (nationality, age, position)
+- Team DC ratings (α attack, β defence bars)
+- Next match DC odds with a link to the match page
+- Career timeline with club badges, years, appearances and goals
+
+---
+
+## Troubleshooting
+
+**App won't start — `ModuleNotFoundError: No module named 'routes'`**
+Make sure `v4_web/routes/__init__.py` exists. If not, create it as an empty file.
+
+**Match page crashes — `NameError: name 'X' is not defined`**
+A module-level import is missing. Check the error name against `routes/match.py` imports.
+
+**`[fpl] fetch failed for bootstrap — serving stale cache`**
+FPL is temporarily blocking the IP. The dashboard serves stale cache and recovers automatically within a few hours. All functionality continues working.
+
+**`FotMob HTTP 402 on get_matches_by_date: Payment Required`**
+parse.bot credits exhausted. Lineups will show placeholder dots instead of confirmed player names. Scores and odds are unaffected — they come from fd.org and BBS respectively.
+
+**Prediction history not updating**
+Results come from fd.org's free tier which has a delay of several hours. Results are checked every 30 minutes automatically. If a result is still missing after 24 hours, check whether fd.org has the match under `season=2026` for PL.
+
+**La Liga fixtures not showing**
+BBS API may be rate-limiting or temporarily down. The dashboard falls back to FotMob date cache if available, then fd.org. Restart the server to clear the in-memory cache and trigger a fresh fetch.
+
+---
+
+## Running without a GPU
+
+The neural net runs on CPU if no CUDA device is detected. It is slower (inference goes from ~5ms to ~200ms per call) but fully functional. The dashboard detects this automatically — no configuration change needed.
+
+---
+
+## Updating or retraining the football models
+
+The site does not retrain models automatically. Its recent-results rating
+adjustment is a separate, bounded startup evaluation; it does not modify the
+neural-network weights or static prior file. For a deliberate offline refresh:
+
+1. Update `v4_historical_data.sqlite` with `v4_backend/historical_scraper.py`.
+2. Refit static team priors with `v4_backend/notebooks/train_v4_priors.ipynb`.
+3. Rebuild `data/processed/features_v4.parquet` with
+   `v4_backend/build_v4_dataset.py`.
+4. Train and validate the live classifier with
+   `v4_backend/notebooks/train_v4_neural.ipynb` and
+   `v4_backend/validate_v4_neural.py`.
+5. Keep the model checkpoint and scaler together:
+   `v4_backend/notebooks/v4_backend/models/football_v4.pth` and `scaler_v4.pkl`.
+   The priors are loaded from `v4_backend/v4_priors.json`.
+6. Compare against a chronologically separate holdout before deploying, then
+   restart the dashboard to load the artifacts.
+
+The dataset builder currently excludes season `2526`; check its season split
+and input parquet before training. Full mathematical definitions, the
+recorded 2026 model metrics and the adaptive-factor acceptance gate are in
+[`FOOTBALL_MODEL.md`](FOOTBALL_MODEL.md).
+
+The NBA prediction system uses a separate pregame Elo model and a live
+16-feature neural classifier. Its deployed training artifacts are loaded at
+startup; this checkout does not include the NBA neural-network training script
+or a fully versioned training-data manifest, so NBA retraining is not a
+documented one-command workflow. The exact feature meanings, probability
+calculation, season-held-out evaluation, result-driven Elo adjustment, and
+known training-provenance gaps are recorded in [`NBA_MODEL.md`](NBA_MODEL.md).

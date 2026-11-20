@@ -1,220 +1,239 @@
-# ⚽ World Cup 2026 Live Win Probability
+# ⚽🏀 Melios Dira Odds — V4.2 Football & NBA Prediction Terminal
 
-A real-time win probability system for the 2026 FIFA World Cup — built using transfer
-learning from an NBA win probability neural network. Tracks live match state every 30
-seconds and outputs three probabilities: home win, draw, and away win.
-
-> **Live dashboard →** *([Click to see model](https://fifa-worldcup-prediction-kc3azpj8tc2ynw4ylnjqv8.streamlit.app/))*  
-> **Related project →** [NBA Live Win Probability](https://github.com/rhkhabure/NBA-Live-Win-Probability)
+> A multi-sport prediction dashboard combining Dixon-Coles football modelling with an NBA win-probability model. It serves football leagues and NBA live scores, predictions, team pages, player profiles, and historical statistics through a FastAPI dashboard.
 
 ---
 
-## How it works
+## What it does
 
-The model was originally trained on 962,000 NBA play-by-play snapshots to predict
-binary (win/lose) outcomes. For football, we:
+The football system predicts match outcomes using two different models:
 
-1. Replace the output layer: `1 node sigmoid → 3 node softmax` (home win / draw / away win)
-2. Add a `is_knockout` flag that suppresses the draw output in elimination rounds
-3. Retrain using transfer learning on ~550,000 international football snapshots
-4. Feed live World Cup 2026 match data through the same inference pipeline
+- **Pre-game:** Dixon–Coles scoreline probabilities from fitted xG-based team priors. A separate bounded attack/concession factor can adapt to settled results, but only when per-league walk-forward checks improve both Brier score and log-loss.
+- **Live (in-game):** An 11→40→20→3 PyTorch classifier using score, minute, and normalized team-strength features. It does **not** consume xG; its role is live state prediction, not pre-match forecasting.
 
-The in-game probability updates every 30 seconds using the free
-[worldcup26.ir](https://worldcup26.ir) API — no authentication required.
+See [`FOOTBALL_MODEL.md`](FOOTBALL_MODEL.md) for the equations, exact inputs,
+training and validation procedure, current adaptive-rating status and known
+limitations. The application-level reference is
+[`DOCUMENTATION.md`](DOCUMENTATION.md).
+
+The NBA dashboard uses Elo for pregame probabilities and a 16-feature neural
+network for live probabilities. See [`NBA_MODEL.md`](NBA_MODEL.md) for the
+features, probability calculations, training artifacts and temporal test
+folds, result-driven Elo adjustment, current evaluation, and provenance
+limitations. Historical NBA statistics are queried from local SQLite files;
+current schedules, rosters, player information, and live game state come from
+the NBA data feeds.
+
+The application is a FastAPI server with Jinja2 templates, a dark-mode UI, football pitches, and an SVG basketball court.
 
 ---
 
-## Model architecture
+## Quick start
 
+```bash
+# 1. Install all repository dependencies (Python 3.11 recommended)
+pip install -r requirements.txt
+
+# 2. Set up environment variables
+cp .env.example .env
+# Edit .env and fill in:
+#   FOOTBALLDATA_ORG_KEY=<your key from football-data.org>
+#   BBS_API_KEY=<your Big Balls Sports key>
+#   PARSE_BOT_KEY=<your parse.bot key — optional, used for FotMob lineups>
+
+# 3. Run the dashboard
+cd v4_web
+python -m uvicorn main:app --reload
+
+# 4. Open in browser
+# http://localhost:8000
 ```
-Input (14 features)
-  ↓
-128 neurons  [BatchNorm → ReLU → Dropout 0.30]   ← transferred from NBA model
-  ↓
- 64 neurons  [BatchNorm → ReLU → Dropout 0.30]   ← transferred from NBA model
-  ↓
- 32 neurons  [BatchNorm → ReLU → Dropout 0.30]   ← transferred from NBA model
-  ↓
-  3 outputs  [Softmax]                            ← retrained for football
-    P(home win) · P(draw) · P(away win)
-```
-
-### Features
-
-| Feature | Description |
-|---|---|
-| `goal_diff` | Home score − Away score, clipped to ±5 |
-| `time_remaining_sec` | Seconds until 90 min (0–5400) |
-| `half` | 1 (first half) or 2 (second half) |
-| `match_time_pct` | Minutes elapsed / 90 |
-| `is_extra_time` | 1 if in extra time, else 0 |
-| `is_knockout` | 1 for Round of 16 onwards (draw suppressed) |
-| `lead_changes_norm` | Lead changes / total goal events |
-| `home_rank_norm` | Home team FIFA rank normalised [0, 1] |
-| `away_rank_norm` | Away team FIFA rank normalised [0, 1] |
-| `rank_diff` | home_rank_norm − away_rank_norm |
-| `home_group_pts` | Home team's group-stage points before this match |
-| `away_group_pts` | Away team's group-stage points before this match |
-| `is_neutral_venue` | 1 for World Cup (all neutral ground) |
-| `score_state` | 0=behind, 1=level, 2=ahead |
-
-### Training data sources
-
-| Source | Purpose | Matches |
-|---|---|---|
-| [football-data.org](https://www.football-data.org) | World Cup 1966–2022 | ~400 |
-| [football-data.org](https://www.football-data.org) | Top-5 leagues 2015–2024 | ~19,000 |
-| [Transfermarkt](https://www.transfermarkt.com) | Squad market values (one-time scrape) | lookup table |
 
 ---
 
 ## Project structure
 
 ```
-world_cup_win_prob/
-├── model/
-│   ├── win_prob_net.pth        ← trained PyTorch weights
-│   ├── scaler.pkl              ← StandardScaler fitted on training data
-│   ├── temperature.json        ← calibrated temperature T
-│   └── squad_values.json       ← Transfermarkt squad values by team
-├── processed/
-│   └── features_raw.parquet    ← 14-feature training dataset
-├── raw/                        ← cached API responses (auto-generated)
-├── plots/                      ← post-match analysis charts
-├── game_history/               ← auto-saved completed match timelines
-│   └── <match_id>.json
-├── notebooks/
-│   ├── phase1_data_pipeline.ipynb      ← pull data, build features
-│   ├── phase2_transfer_learning.ipynb  ← retrain from NBA weights
-│   └── phase3_calibration.ipynb        ← temperature scaling, validation
-├── app.py                      ← Streamlit live dashboard
-├── requirements.txt
-├── runtime.txt                 ← python-3.12
-└── .streamlit/config.toml
+FIFA-WORLDCUP-PREDICTION/
+├── v4_backend/
+│   ├── v4_priors.json               # Fitted DC priors by league and team
+│   ├── historical_scraper.py        # Scrapes 4 seasons of xG from Understat → SQLite
+│   ├── build_v4_dataset.py          # Builds live-model snapshots from match history
+│   ├── import_player_stats.py       # Imports historical Understat player-season stats
+│   ├── dixon_coles_xg.py            # DC MLE optimiser (SLSQP, draw correction)
+│   ├── feature_builder.py           # DC strength lookup + TEAM_NAME_ALIASES
+│   ├── likelihood_adjustment.py     # Lineup delta → adjusted λ/μ
+│   └── notebooks/
+│       ├── train_v4_priors.ipynb    # Fits static DC priors
+│       ├── train_v4_neural.ipynb    # Trains the live classifier
+│       └── v4_backend/models/
+│           ├── football_v4.pth      # Live neural-network checkpoint
+│           └── scaler_v4.pkl        # Training-fitted feature scaler
+│
+├── v4_web/                          # The running application
+│   ├── nba/                         # NBA model artifacts and historical datasets
+│   │   ├── model/                   # Trained model, scaler and calibration artifacts
+│   │   ├── sql/                     # Historical SQLite files and setup notes
+│   │   └── csv/                     # Audited source CSV exports
+│   ├── main.py                      # FastAPI app and route registration
+│   ├── constants.py                 # EAT, DRAW_PROPENSITY, LEAGUE_FILTERS, LEAGUE_MAP
+│   ├── routes/
+│   │   ├── match.py                 # Football match dashboard and API routes
+│   │   └── nba.py                   # NBA hub, match, history, team and player routes
+│   ├── bbs.py                       # Big Balls Sports API client (La Liga)
+│   ├── footballdata.py              # football-data.org client (PL scores/fixtures)
+│   ├── fotmob.py                    # FotMob via parse.bot (lineups, live xG)
+│   ├── fpl.py                       # FPL API client (PL fixtures, team map)
+│   ├── thesportsdb.py               # TheSportsDB client (player photos, career)
+│   ├── predictions.py               # SQLite predictions DB (log + retrieve)
+│   ├── model_updates.py             # Walk-forward evaluation and bounded team factors
+│   ├── prediction_job.py            # Background job — logs predictions + results
+│   ├── nba_api_client.py            # NBA schedules, live scores, rosters and player data
+│   ├── nba_model.py                 # NBA win-probability model and Elo ratings
+│   ├── nba_predictions.py            # NBA prediction and result history
+│   ├── historical_nba.py             # Read-only queries for local NBA history
+│   ├── simulate.py                  # Monte Carlo engines (CL knockout + PL season)
+│   ├── lineup_adjustment.py         # Applies roster delta to DC λ/μ
+│   ├── scoreline_matrix.py          # SVG scoreline probability heatmap
+│   ├── timeline.py                  # SVG match event timeline
+│   ├── utils.py                     # Pitch SVG, kit definitions, crest proxy
+│   ├── teamdata.py                  # PL team profiles
+│   ├── laliga_teamdata.py           # La Liga team metadata
+│   ├── templates/                   # Jinja2 HTML templates
+│   │   ├── base.html                # Sidebar, nav, dark theme
+│   │   ├── index.html               # Hub page
+│   │   ├── match.html               # Main match prediction page
+│   │   ├── nba_hub.html             # NBA schedule and predictions
+│   │   ├── nba_match.html           # NBA match dashboard and court
+│   │   ├── nba_team.html            # NBA roster and team history
+│   │   ├── nba_player.html          # NBA player profile and statistics
+│   │   ├── history.html             # Prediction history + accuracy stats
+│   │   ├── tournament.html          # CL simulator + PL season simulator
+│   │   ├── player.html              # Player profile page
+│   │   ├── team.html                # Team profile page
+│   │   ├── teams.html               # PL team map
+│   │   └── teams_laliga.html        # La Liga team map
+│   └── scripts/                     # Utility scripts (not part of app)
+│       ├── weekend_odds.py          # Weekend fixture/odds utility
+│       └── backfill_history.py      # One-time predictions DB backfill
+│
+├── v4_historical_data.sqlite        # 4 seasons xG data — training set
+├── .env                             # API keys (not committed)
+├── README.md                        # This file
+├── USER_MANUAL.md                   # Step-by-step setup and usage guide
+├── DOCUMENTATION.md                 # Application and integration reference
+├── FOOTBALL_MODEL.md                # Football model equations, training and status
+└── NBA_MODEL.md                     # NBA model equations, features, training evidence and status
 ```
 
 ---
 
-## Quick start
+## Pages
 
-### 1. Clone and install
-
-```bash
-git clone https://github.com/YOUR_USERNAME/worldcup-win-probability.git
-cd worldcup-win-probability
-pip install -r requirements.txt
-```
-
-### 2. Get a free API key
-
-Register at [football-data.org](https://www.football-data.org/client/register) — free,
-no credit card. Copy your token into a `.env` file:
-
-```
-FOOTBALL_DATA_API_KEY=your_token_here
-```
-
-### 3. Run the data pipeline
-
-```bash
-jupyter notebook notebooks/phase1_data_pipeline.ipynb
-```
-
-This pulls ~19,000 matches and builds the training dataset. Cached after first run —
-subsequent runs are instant.
-
-### 4. Train the model
-
-```bash
-jupyter notebook notebooks/phase2_transfer_learning.ipynb
-```
-
-Requires CUDA (RTX 4060 or better). Training takes ~5 minutes with transfer learning
-from the NBA model weights.
-
-### 5. Run the dashboard
-
-```bash
-streamlit run app.py
-```
+| URL | Description |
+|-----|-------------|
+| `/` | Hub — today's fixtures with DC odds across both leagues |
+| `/match` | PL match prediction — DC pre-game, pitch, scoreline matrix, fixture strip |
+| `/match?league=laliga` | La Liga match prediction — same layout, BBS data source |
+| `/teams` | PL team map — DC strength heatmap |
+| `/teams/laliga` | La Liga team map |
+| `/team/{id}` | Team profile — form, DC rating, head-to-head |
+| `/player?name=X&team=Y` | Player profile — TheSportsDB photo + career history |
+| `/history` | Prediction history — accuracy by confidence band, per league |
+| `/tournament` | CL knockout simulator + PL season Monte Carlo (10,000 runs) |
+| `/league/laliga` | La Liga recent results, current fixtures and predictions |
+| `/league/seriea` | Serie A fixtures and Dixon-Coles pre-match predictions |
+| `/teams/seriea` | Serie A club map and directory |
+| `/nba` | NBA hub — EAT-day live games, today's schedule, tomorrow's fixtures and predictions |
+| `/nba/match?game_id=X` | NBA match dashboard — live win probability, game state and court lineup |
+| `/nba/history` | NBA prediction history, results, accuracy and Brier score |
+| `/nba/teams` | All 30 NBA teams grouped by conference |
+| `/nba/team/{team_id}` | Current roster, Elo, prediction history and historical team records |
+| `/nba/player/{player_id}` | Player profile, current stats and historical game/shot analysis |
 
 ---
 
-## Live data API
+## Football league expansion and reliability updates
 
-The dashboard uses [worldcup26.ir](https://worldcup26.ir) for live World Cup 2026 data.
-No authentication required.
+The football dashboard has also been extended beyond the original Premier League focus:
 
-| Endpoint | Data |
-|---|---|
-| `GET /get/games` | All matches with scores and status |
-| `GET /get/groups` | Group standings |
-| `GET /get/teams` | All 48 teams |
-| `GET /get/stadiums` | All 16 stadiums |
-
-Live score updates activate from **June 11, 2026** (first World Cup match).
+| Change | Why it was made | Impact |
+|--------|----------------|--------|
+| La Liga fixture views now include recent results with scores and restrict upcoming fixtures to the relevant current-day/weekend window. Match detail uses the selected fixture's current data where available. | Old fixtures were lingering in widgets, and games could be missing or inconsistently marked live when switching views. | Fixture lists stay focused on recent, current and near-term matches, with fewer stale results and more consistent score/status display. |
+| Prediction history uses normalized team/result matching and derives the predicted outcome from the stored probabilities. Verified missing results were added to the history database. | Team-name variants and mismatched result handling made some correct predictions appear wrong or left completed games out of history. | Displayed outcomes are consistent with the saved prediction probabilities and confirmed scores; corrected historical rows remain in the database. |
+| The main hub now gathers fixtures across the supported football competitions, groups them by league and gives live matches priority. Fixture links retain their league context. | The home screen was limited to Premier League fixtures, and multi-league navigation could open the wrong competition context. | One hub presents the available league fixtures and sends each selection to the matching dashboard. |
+| Added a Serie A dashboard and prediction-history integration, league-aware team navigation, and a club map/directory. | Serie A was the first vertical slice in a staged expansion to more leagues; its teams, IDs and data feeds differ from Premier League conventions. | Serie A fixtures and model estimates have their own overview/history context, with club pages reachable from the sidebar and map. Missing priors or unavailable club data are identified instead of being presented as verified facts. |
 
 ---
 
-## Key differences from the NBA model
+## NBA: what changed, why, and impact
 
-| Aspect | NBA model | Football model |
-|---|---|---|
-| Outcomes | Binary (win/loss) | 3-class (home/draw/away) |
-| Output | Sigmoid (1 node) | Softmax (3 nodes) |
-| Loss function | BCEWithLogitsLoss | CrossEntropyLoss |
-| Playoff/knockout | `is_playoffs` flag | `is_knockout` flag (suppresses draw) |
-| Team quality signal | NET rating | FIFA ranking (normalised) |
-| Scoring frequency | ~200 events/game | ~3 events/game |
-| Snapshot method | Every play | Every goal + halftime |
-| Training samples | 962,000 | ~550,000 |
+NBA support was built as a separate basketball experience rather than adapting football pages and assumptions. This keeps basketball scoring, schedules, teams, predictions, and court rendering independent while reusing the site's shared navigation, styling, and prediction database.
 
----
+| Change | Why it was made | Impact |
+|--------|----------------|--------|
+| Added NBA model artifacts, team/conference metadata, and NBA-specific routes and pages. | NBA games need basketball-specific inputs and outputs; football match logic does not apply. | The app now has a dedicated NBA hub, match dashboard, prediction history, team directory, and linked team/player profiles. |
+| Added EAT-aware schedule retrieval for both the NBA schedule date and the preceding date, then filtered games by their actual EAT tip-off date. | NBA schedule dates are published in U.S. time zones, so an evening U.S. game may start on the next calendar day in East Africa. | Games are assigned to the correct local day instead of disappearing from "today" or appearing under the wrong date. |
+| Added a separate tomorrow schedule that remains visible after today's games finish, plus a tomorrow fallback when today is empty. | Previously, a non-empty list of completed games prevented tomorrow's upcoming games from being requested or displayed. | Users can see completed/current-day games and the next day's fixtures together, and can open tomorrow's match pages directly. |
+| Added periodic score/status refresh and cached schedule retrieval. | Live states and scores change during a game, while repeatedly fetching the same schedule can add latency and provider load. | The hub and match views can refresh current game information without requiring a manual page reload. |
+| Added the basketball match court, live probability display/history, and lineup markers. The lineup endpoint uses NBA live box-score data and falls back to confirmed ESPN starters when that feed has no usable lineup. | The original court was decorative without player data, and NBA lineup fields may be absent or delayed in the live feed. | Player markers can be displayed when a provider reports players; the page identifies the lineup source. Unannounced future lineups remain blank rather than being guessed. |
+| Added current team rosters and linked player profiles, then expanded profiles with headline and season statistics. | The team and player pages needed usable current information, not only model ratings. | Team rosters lead to profiles with NBA-sourced bio/stat data, including the provider's PIE (Player Impact Estimate) headline value. |
+| Audited the uploaded historical CSV/SQLite datasets and added read-only historical queries. | Re-fetching old seasons from live endpoints adds rate-limit risk and does not make historical career analysis reliable. | Historical player/team pages query local indexed SQLite data; no importer, API mirror, or write-time database synchronization is required. |
+| Split data by freshness: local regular-season history through 2024–25; NBA API data for 2025–26 and 2026–27. | The local dataset is historical and its latest season is incomplete for some event-level data. | Current/near-current season information remains provider-backed while older stats are available without live historical API calls. |
+| Added historical regular-season totals, recent game logs, team history, single-game highs, and shot profiles. | Box scores and play-by-play answer different questions: box scores provide game stats while event data allows shot-type calculations. | Profiles show historical regular-season production, calculated career highs, most-attempted shot category, and make accuracy where the dataset supports it. |
+| Added historical regular-season records to NBA team profiles. | Season-by-season team context should remain available independently of the live roster API. | Team pages can show local wins, losses, games, points for, and points against through 2024–25. |
+| Added NBA prediction logging and settlement to the shared prediction database. | NBA predictions need the same durable audit/history trail as football predictions. | A game is logged once, then its final score, correctness, and Brier score are filled in when it finishes. |
+| Improved NBA team pages with the team's conference standings and clickable team links, larger recent-form markers, and consistent green win/red loss colors. Updated the NBA match probability history to render as SVG and improved text contrast across NBA and football dashboards. | Team context and game history were difficult to scan, the probability graph could appear blank, and team-colored labels were not always legible. | Standings are easier to navigate, W/L form colors mean the same thing for every team, the chart renders without relying on Chart.js, and key labels remain readable. |
+| Expanded NBA player profiles with side-by-side bio/experience information, objective seasons-played tiers, season-level team history, and NBA Stats awards. Clarified favorite vs. best shot (non-dunk, minimum 25 attempts), and moved detailed season tables lower on the page. | Important context was buried, career honors and team movement were missing, and shot preference was conflated with accuracy. | Player tenure, NBA championships and regular-season MVPs are presented separately from current production; badges and one-franchise indicators are shown only when supporting history is available. |
+| Kept large NBA history datasets out of Git and documented local dataset setup. | Historical box scores, odds and play-by-play data exceed GitHub's file-size limits and should not be bundled into application history. | The repository stays cloneable; NBA historical pages and shot-profile features use separately provisioned local files. See [`v4_web/nba/sql/README.md`](v4_web/nba/sql/README.md). |
 
-## Dashboard features
+### NBA data boundaries and known limitations
 
-- **Live 3-way gauge** — home win / draw / away win probabilities update every 30s
-- **Win probability chart** — full match timeline with goal markers
-- **Group standings panel** — auto-updates from worldcup26.ir
-- **Qualification simulator** — Monte Carlo for group advancement probability
-- **Knockout bracket** — probability of reaching each round
-- **Game selector** — choose which live match to track when multiple games are simultaneous
-- **Game history** — replay any completed match's win probability curve
-
----
-
-## Phases
-
-| Phase | Status | Description |
-|---|---|---|
-| Phase 1 | 🔄 In progress | Data pipeline — historical match collection |
-| Phase 2 | ⏳ Planned | Transfer learning — retrain NBA model for football |
-| Phase 3 | ⏳ Planned | Calibration — 3-class temperature scaling |
-| Phase 4 | ⏳ Planned | Live dashboard — worldcup26.ir integration |
-| Phase 5 | ⏳ Planned | Squad enrichment — Transfermarkt market values |
+- The historical stats database contains regular-season player and team box scores, game results, schedule data, and odds. Historical NBA queries use read-only SQLite connections and bounded in-process caches.
+- The play-by-play file contains shot events used for broad shot-category summaries. Historical shot labels are grouped into broad categories; the calculated "favorite shot" means the most attempted category, not the most accurate one.
+- Historical career highs are the largest single-game regular-season values available in this dataset. They are not independently verified NBA all-time records.
+- Play-by-play coverage is incomplete for 2025–26 and does not cover every game in the companion game index. The app therefore excludes 2025–26 from local shot profiles and uses API-backed data for that season.
+- The uploaded 2025–26 schedule contains uncompleted Finals placeholders; it should not be used to determine that season's champion. Completed Finals results should be derived from the game-results dataset when complete.
+- NBA starters may not be available before a game. The ESPN fallback supplies confirmed starters only after a provider publishes them; it does not create projected lineups.
+- Player honors and full season-by-season NBA career records use NBA Stats `PlayerAwards` and `PlayerCareerStats` through `nba_api`. Championship and regular-season MVP counts are deduplicated by season; Finals MVP is not included in the MVP count. The experience tier counts distinct regular seasons with games played. The team timeline is season-level, and a one-franchise badge is withheld unless career-season data is available, covers at least three played seasons, and lists one team.
+- Player shot profiles call the most-attempted shot type the favorite. “Best shot” is the highest-accuracy non-dunk type with at least 25 attempts; if none qualifies, the page reports that there is not enough data.
+- Local historical database paths can be overridden with `NBA_HISTORY_DB_PATH` and `NBA_PBP_DB_PATH`. The defaults are `v4_web/nba/sql/nba_stats.sqlite` and `v4_web/nba/sql/nba_stats_pbp.sqlite`.
 
 ---
 
-## Requirements
+## Data sources
+
+| Source | Used for | Key |
+|--------|----------|-----|
+| football-data.org | PL finished scores, standings | `FOOTBALLDATA_ORG_KEY` in `.env` |
+| FPL API | PL upcoming fixtures, team names | None (free) |
+| Big Balls Sports | La Liga live scores, fixtures | `BBS_API_KEY` in `.env` |
+| FotMob via parse.bot | Lineups, live xG | `PARSE_BOT_KEY` in `.env` |
+| TheSportsDB | Player photos, career history | None (key `3`, free) |
+| Understat via SoccerData | Historical player-season aggregates for the football profile | Local import; see [`v4_web/football/sql/README.md`](v4_web/football/sql/README.md) |
+| NBA stats/live feeds (`nba_api`) | Current NBA scoreboard, live game state, rosters and player profiles | No application key; provider availability/rate limits apply |
+| ESPN public NBA endpoints | Confirmed starter fallback when NBA live lineup data is unavailable | No application key; only returns lineups after publication |
+| Local NBA SQLite datasets | Historical regular-season box scores, game history and play-by-play shot analysis | Local files; see [`v4_web/nba/sql/README.md`](v4_web/nba/sql/README.md) |
+
+---
+
+## Football model performance and status
+
+Recorded validation shows why the system uses Dixon–Coles before kickoff and
+the neural network for live score/time updates. The current per-league
+result-driven rating layer is selectively promoted only after a minimum-sample
+and proper-scoring-rule gate. Detailed validation numbers and the dated local
+status are maintained in [`FOOTBALL_MODEL.md`](FOOTBALL_MODEL.md); those
+short-window figures are not a guarantee of future performance.
+
+---
+
+## Environment variables (`.env`)
 
 ```
-torch
-numpy
-pandas
-scikit-learn
-scipy
-streamlit
-plotly
-requests
-python-dotenv
-pyarrow
+FOOTBALLDATA_ORG_KEY=your_key_here
+BBS_API_KEY=your_bbs_key_here
+PARSE_BOT_KEY=your_parsebot_key_here   # optional
+NBA_HISTORY_DB_PATH=v4_web/nba/sql/nba_stats.sqlite       # optional override
+NBA_PBP_DB_PATH=v4_web/nba/sql/nba_stats_pbp.sqlite      # optional override
 ```
-
----
-
-## Acknowledgements
-
-- [football-data.org](https://www.football-data.org) — free historical match data
-- [worldcup26.ir](https://worldcup26.ir) — free live World Cup 2026 API  
-- [rezarahiminia/worldcup2026](https://github.com/rezarahiminia/worldcup2026) — open-source WC2026 API
-- [Transfermarkt](https://www.transfermarkt.com) — squad market values

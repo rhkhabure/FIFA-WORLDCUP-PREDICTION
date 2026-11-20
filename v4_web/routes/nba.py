@@ -321,8 +321,6 @@ async def nba_hub(request: Request):
 
     standings = await run_in_threadpool(get_conference_standings)
 
-    standings = await run_in_threadpool(get_conference_standings)
-
     return templates.TemplateResponse(
         request=request,
         name="nba_hub.html",
@@ -339,6 +337,9 @@ async def nba_hub(request: Request):
             "live_count":     len(live),
             "title":          "NBA Hub",
             "standings":      standings,
+            "standings_available": bool(
+                standings and any(standings.get(conf) for conf in ("East", "West"))
+            ),
         },
     )
 

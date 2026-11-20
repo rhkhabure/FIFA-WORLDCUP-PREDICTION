@@ -6,93 +6,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% if title %}{{ title }} · {% endif %}Melios Dira Odds</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="{{ url_for('static', path='theme.css') }}?v=20261103-4">
+    <link rel="stylesheet" href="{{ url_for('static', path='theme.css') }}?v=20261120-1">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=JetBrains+Mono:wght@400;700&display=swap');
-
-        /* ── Layout ───────────────────────────────────────────── */
-        #sidebar {
-            width: 224px;
-            flex-shrink: 0;
-            transition: width 0.22s cubic-bezier(.4,0,.2,1);
-            background: var(--league-sidebar-bg);
-            height: 100vh;
-            position: sticky;
-            top: 0;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            border-right: 1px solid rgba(255,255,255,0.08);
-        }
-        #sidebar.collapsed { width: 56px; }
-        #sidebar.collapsed .nav-label,
-        #sidebar.collapsed .nav-section-label,
-        #sidebar.collapsed .sidebar-wordmark,
-        #sidebar.collapsed .sidebar-footer-text { display: none; }
-        #sidebar.collapsed .nav-item { justify-content: center; padding: 10px 0; }
-
-        .nav-section-label {
-            font-family: var(--font-mono);
-            font-size: 9px;
-            font-weight: 700;
-            color: rgba(255,255,255,0.78);
-            text-transform: uppercase;
-            letter-spacing: 0.15em;
-            padding: 16px 14px 5px;
-        }
-        .nav-item {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 8px 12px;
-            font-family: var(--font-sans);
-            font-size: 12px;
-            font-weight: 600;
-            color: rgba(255,255,255,0.78);
-            text-decoration: none;
-            transition: background 0.12s, color 0.12s;
-            white-space: nowrap;
-            border-left: 3px solid transparent;
-            cursor: pointer;
-        }
-        .nav-item:hover { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.9); }
-        .nav-item.active { background: rgba(255,255,255,0.12); color: #fff; border-left-color: var(--league-active-bar); }
-        .nav-icon { font-size: 18px; flex-shrink: 0; width: 20px; text-align: center; line-height: 1; }
-        .league-nav-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
-
-        #main-content { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-
-        #topbar {
-            background: var(--surface);
-            border-bottom: 1.5px solid var(--border);
-            height: 54px;
-            display: flex;
-            align-items: center;
-            padding: 0 24px;
-            gap: 14px;
-            position: sticky;
-            top: 0;
-            z-index: 50;
-        }
-        .topbar-league-pill {
-            background: var(--league-primary);
-            color: var(--league-gold);
-            font-size: 10px;
-            font-weight: 800;
-            padding: 4px 11px;
-            border-radius: 20px;
-            letter-spacing: 0.5px;
-            font-family: var(--font-mono);
-        }
-        .topbar-title { font-size: 14px; font-weight: 800; color: var(--league-primary); letter-spacing: -0.3px; }
-        .topbar-date  { font-size: 12px; color: var(--text-muted); font-family: var(--font-mono); margin-left: auto; }
-
-        #page-content { flex: 1; padding: 20px 24px; overflow-x: hidden; }
-
-        ::-webkit-scrollbar { width: 5px; height: 5px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: var(--league-light); border-radius: 3px; }
 
         /* ── NBA theme (official red / blue / white) ──────────── */
         html[data-league="nba"] {
@@ -127,6 +44,8 @@
 </head>
 <body class="flex min-h-screen" style="background:var(--league-tint)">
 
+<a class="skip-link" href="#main-content">Skip to main content</a>
+
 <!-- ── SIDEBAR ──────────────────────────────────────────────────── -->
 <div id="sidebar">
     <div style="padding:18px 14px 14px;border-bottom:1px solid rgba(255,255,255,0.1);
@@ -138,7 +57,7 @@
                 Melios Dira
             </span>
         </div>
-        <button id="sidebar-toggle"
+        <button id="sidebar-toggle" aria-controls="sidebar" aria-expanded="true" aria-label="Collapse navigation"
                 style="background:none;border:none;cursor:pointer;color:rgba(255,255,255,0.35);
                        font-size:11px;padding:4px;line-height:1" title="Toggle sidebar">
             <span id="toggle-icon">◀</span>
@@ -253,7 +172,7 @@
 </div>
 
 <!-- ── MAIN CONTENT ──────────────────────────────────────────────── -->
-<div id="main-content">
+<main id="main-content">
     <div id="topbar">
         <div class="topbar-league-pill">{{ 'NBA' if is_nba else (league_code | default('PL')) }}</div>
         {% if topbar_title %}<div class="topbar-title">{{ topbar_title }}</div>
@@ -261,8 +180,10 @@
         {% if live_count and live_count > 0 %}<div class="live-badge">{{ live_count }} LIVE</div>{% endif %}
         <div class="topbar-date" id="topbar-clock"></div>
     </div>
-    <div id="page-content">{% block content %}{% endblock %}</div>
-</div>
+    <div id="page-content">
+        <div class="page-container">{% block content %}{% endblock %}</div>
+    </div>
+</main>
 
 <script>
 // ── EAT clock ─────────────────────────────────────────────────────
@@ -287,6 +208,8 @@ const SK = 'md-sidebar-collapsed';
 function setCollapsed(v){
     sidebar.classList.toggle('collapsed', v);
     toggleIcon.textContent = v ? '▶' : '◀';
+    toggleBtn.setAttribute('aria-expanded', String(!v));
+    toggleBtn.setAttribute('aria-label', v ? 'Expand navigation' : 'Collapse navigation');
     try{ sessionStorage.setItem(SK, v?'1':'0'); }catch(e){}
 }
 try{ if(sessionStorage.getItem(SK)==='1') setCollapsed(true); }catch(e){}
@@ -301,8 +224,10 @@ toggleBtn.addEventListener('click', ()=>setCollapsed(!sidebar.classList.contains
         // Hub links ('/' and '/nba') must match exactly; others match by prefix
         const exact = (href==='/'||href==='/nba');
         if(href.includes('#')) return;
-        if((exact && path===href) || (!exact && path.startsWith(href)))
+        if((exact && path===href) || (!exact && path.startsWith(href))) {
             link.classList.add('active');
+            link.setAttribute('aria-current', 'page');
+        }
     });
 })();
 </script>

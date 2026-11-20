@@ -34,3 +34,19 @@ Working hypotheses for why (kept for the record, not re-tested):
 **Decision: football_v2.pth (plain softmax, 11 features) remains the production
 model.** football_v2c.pth and scaler_v2c.pkl are kept on disk for the audit trail
 but are NOT used going forward. The dashboard build starts from football_v2.pth.
+
+## V4.2 Phase 3 Step 1 — dataset built (2026-09-06 13:14 UTC)
+- Matches: 5,404  (seasons 2122-2324, holdout 2425 excluded)
+- Snapshots: 106,183
+- Outcome split: home 44.2% / draw 25.0% / away 30.8%
+- Strength features: DCStrengthLookup (Dixon-Coles alpha/beta, global norm)
+- Fallback usage: 612 matches (11.3%)
+- Saved: data\processed\features_v4.parquet
+
+## V4.2 Phase 3 Step 1 — dataset built (2026-09-08 05:40 UTC)
+- Matches: 7,156  (seasons 2122-2324, holdout 2425 excluded)
+- Snapshots: 140,620
+- Outcome split: home 43.7% / draw 24.9% / away 31.4%
+- Strength features: DCStrengthLookup (Dixon-Coles alpha/beta, global norm)
+- Fallback usage: 0 matches (0.0%)
+- Saved: data\processed\features_v4.parquet

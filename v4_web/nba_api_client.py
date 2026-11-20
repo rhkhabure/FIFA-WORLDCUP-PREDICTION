@@ -427,6 +427,46 @@ def get_scheduled_game(
     return None
 
 
+def _standings_value(row: dict, *keys: str, default=None):
+    return next(
+        (row[key] for key in keys if row.get(key) is not None),
+        default,
+    )
+
+
+def _format_standings_record(row: dict, *record_keys: str, wins_keys: tuple[str, ...],
+                             losses_keys: tuple[str, ...]) -> str:
+    record = _standings_value(row, *record_keys)
+    if record not in (None, ""):
+        return str(record)
+    wins = _standings_value(row, *wins_keys)
+    losses = _standings_value(row, *losses_keys)
+    if wins is None or losses is None:
+        return "—"
+    return f"{int(wins)}-{int(losses)}"
+
+
+def _format_streak(row: dict) -> str:
+    streak = _standings_value(row, "CurrentStreak", "CURRENT_STREAK")
+    streak_type = _standings_value(
+        row, "CurrentStreakType", "CURRENT_STREAK_TYPE", default=""
+    )
+    if isinstance(streak, str) and streak.upper().startswith(("W", "L")):
+        return streak.upper()
+    if str(streak_type).upper().startswith(("W", "L")) and streak is not None:
+        return f"{str(streak_type).upper()[0]}{abs(int(streak))}"
+    wins = _standings_value(row, "CurrentStreakWins", "CURRENT_STREAK_WINS")
+    losses = _standings_value(row, "CurrentStreakLosses", "CURRENT_STREAK_LOSSES")
+    if wins not in (None, 0, "0"):
+        return f"W{abs(int(wins))}"
+    if losses not in (None, 0, "0"):
+        return f"L{abs(int(losses))}"
+    if streak not in (None, ""):
+        value = int(streak)
+        return f"{'W' if value >= 0 else 'L'}{abs(value)}"
+    return "—"
+
+
 def get_conference_standings() -> dict[str, list[dict]]:
     """Return cached current NBA standings grouped and ranked by conference."""
     key = f"conference_standings_{current_nba_season()}"
@@ -456,21 +496,33 @@ def get_conference_standings() -> dict[str, list[dict]]:
             if not team:
                 continue
 
-            def value(*keys, default=None):
-                return next(
-                    (row[name] for name in keys if row.get(name) is not None),
-                    default,
-                )
-
             grouped[conference].append({
                 "team_id": int(team_id),
                 "team": team.get("name", ""),
                 "city": team.get("city", ""),
                 "tricode": team.get("tricode", ""),
-                "wins": int(value("WINS", "W", default=0)),
-                "losses": int(value("LOSSES", "L", default=0)),
-                "win_pct": float(value("WinPCT", "WIN_PCT", default=0)),
-                "rank": int(value("PlayoffRank", "PLAYOFF_RANK", default=99)),
+                "wins": int(_standings_value(row, "WINS", "W", default=0)),
+                "losses": int(_standings_value(row, "LOSSES", "L", default=0)),
+                "win_pct": float(_standings_value(row, "WinPCT", "WIN_PCT", default=0)),
+                "games_behind": _standings_value(
+                    row, "GamesBehind", "GAMES_BEHIND", default=0
+                ),
+                "conference_record": _format_standings_record(
+                    row,
+                    "ConferenceRecord",
+                    "CONFERENCE_RECORD",
+                    wins_keys=("ConferenceWins", "CONFERENCE_WINS"),
+                    losses_keys=("ConferenceLosses", "CONFERENCE_LOSSES"),
+                ),
+                "division_record": _format_standings_record(
+                    row,
+                    "DivisionRecord",
+                    "DIVISION_RECORD",
+                    wins_keys=("DivisionWins", "DIVISION_WINS"),
+                    losses_keys=("DivisionLosses", "DIVISION_LOSSES"),
+                ),
+                "streak": _format_streak(row),
+                "rank": int(_standings_value(row, "PlayoffRank", "PLAYOFF_RANK", default=99)),
             })
         for rows in grouped.values():
             rows.sort(key=lambda row: row["rank"])

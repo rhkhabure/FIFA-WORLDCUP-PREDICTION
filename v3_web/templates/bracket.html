@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="mb-4 flex items-center justify-between">
+    <div class="font-mono text-[10px] text-[var(--text-muted)] uppercase tracking-widest">{{ current_league }} / TOURNAMENT SIMULATOR</div>
+</div>
+
+<div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+    <!-- PROBABILITY TREE -->
+    <div class="xl:col-span-2 panel p-6 overflow-x-auto relative min-h-[450px]">
+        <div class="absolute inset-0 top-10 pointer-events-none opacity-20">
+            <svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none">
+                <path d="M 30 25 L 45 25 L 45 50 L 60 50" stroke="white" fill="none" stroke-width="0.2"></path>
+                <path d="M 30 75 L 45 75 L 45 50 L 60 50" stroke="white" fill="none" stroke-width="0.2"></path>
+            </svg>
+        </div>
+        
+        <div class="flex justify-between w-[600px] mx-auto relative z-10 font-mono text-[9px] h-full">
+            
+            <!-- QUARTERS -->
+            <div class="flex flex-col justify-around h-full w-40 gap-4 py-4">
+                <div class="bg-[#070a10] border border-[var(--border-color)] rounded overflow-hidden">
+                    <div class="flex justify-between p-2 border-b border-[var(--border-color)]">
+                        <span class="text-white truncate pr-2">{{ bracket_teams[0] }}</span><span class="text-[var(--home-color)]">65%</span>
+                    </div>
+                    <div class="h-0.5 w-[65%] bg-[var(--home-color)]"></div>
+                    <div class="flex justify-between p-2">
+                        <span class="text-white truncate pr-2">{{ bracket_teams[1] }}</span><span class="text-[var(--away-color)]">35%</span>
+                    </div>
+                    <div class="h-0.5 w-[35%] bg-[var(--away-color)]"></div>
+                </div>
+                
+                <div class="bg-[#070a10] border border-[var(--border-color)] rounded overflow-hidden">
+                    <div class="flex justify-between p-2 border-b border-[var(--border-color)]">
+                        <span class="text-white truncate pr-2">{{ bracket_teams[2] }}</span><span class="text-[var(--home-color)]">78%</span>
+                    </div>
+                    <div class="h-0.5 w-[78%] bg-[var(--home-color)]"></div>
+                    <div class="flex justify-between p-2">
+                        <span class="text-white truncate pr-2">{{ bracket_teams[3] }}</span><span class="text-[var(--away-color)]">22%</span>
+                    </div>
+                    <div class="h-0.5 w-[22%] bg-[var(--away-color)]"></div>
+                </div>
+            </div>
+            
+            <!-- SEMIS -->
+            <div class="flex flex-col justify-around h-full w-40 gap-8 py-16">
+                <div class="bg-[#070a10] border border-[var(--border-color)] rounded overflow-hidden opacity-50 hover:opacity-100 transition cursor-pointer">
+                    <div class="p-2 border-b border-[var(--border-color)] text-gray-500">TBD</div>
+                    <div class="p-2 text-gray-500">TBD</div>
+                </div>
+                <div class="bg-[#070a10] border border-[var(--border-color)] rounded overflow-hidden opacity-50 hover:opacity-100 transition cursor-pointer">
+                    <div class="p-2 border-b border-[var(--border-color)] text-gray-500">TBD</div>
+                    <div class="p-2 text-gray-500">TBD</div>
+                </div>
+            </div>
+            
+            <!-- FINAL -->
+            <div class="flex flex-col justify-center h-full w-40">
+                <div class="bg-[#070a10] border border-[var(--border-color)] rounded overflow-hidden opacity-50 shadow-[0_0_15px_rgba(20,184,166,0.1)]">
+                    <div class="text-[8px] bg-[var(--border-color)] text-center py-0.5 text-gray-400">THE FINAL</div>
+                    <div class="p-3 border-b border-[var(--border-color)] text-gray-500 text-center">TBD</div>
+                    <div class="p-3 text-gray-500 text-center">TBD</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- DISTRIBUTION -->
+    <div class="panel p-4 flex flex-col">
+        <div class="flex justify-between items-center mb-6 border-b border-[var(--border-color)] pb-2">
+            <span class="font-mono text-[10px] text-gray-500 uppercase tracking-widest">Monte Carlo (10k Runs)</span>
+            <button class="bg-[var(--home-color)] text-[#0b0f19] px-2 py-1 rounded text-[9px] font-bold font-mono hover:bg-[#0d9488] transition">RUN SIM</button>
+        </div>
+        
+        <div class="flex-1 w-full h-[300px]">
+            <canvas id="distChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const ctx = document.getElementById('distChart').getContext('2d');
+        const primaryColor = '#14b8a6';
+        
+        // Mock data matching the layout request
+        const labels = ['{{ bracket_teams[2][:5] }}', '{{ bracket_teams[0][:5] }}', '{{ bracket_teams[1][:5] }}', '{{ bracket_teams[3][:5] }}'];
+        const data = [53.3, 24.1, 15.2, 7.4];
+        
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: data,
+                    backgroundColor: [primaryColor, '#334155', '#334155', '#334155'],
+                    borderWidth: 0,
+                    borderRadius: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function(c) { return c.raw + '%'; }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        grid: { color: '#1e293b' },
+                        ticks: { color: '#64748b', font: { family: 'JetBrains Mono', size: 9 }, callback: function(val) { return val + '%'; } }
+                    },
+                    x: {
+                        grid: { display: false },
+                        ticks: { color: '#64748b', font: { family: 'JetBrains Mono', size: 9 } }
+                    }
+                }
+            }
+        });
+    });
+</script>
+{% endblock %}

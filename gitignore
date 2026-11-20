@@ -1,0 +1,25 @@
+# Secrets — never commit these
+.env
+*.env
+
+# Model files (large, deploy separately or use Git LFS)
+*.pth
+*.pkl
+
+# Local data cache (regenerated on deploy)
+data/fdco/
+data/predictions.db
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.Python
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/

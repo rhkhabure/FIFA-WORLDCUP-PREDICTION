@@ -1,0 +1,22 @@
+.copilot-azure/
+
+.env
+.env.*
+!.env.example
+
+# Local NBA history datasets are large and must be provisioned separately.
+v4_web/nba/csv/game_odds.csv
+v4_web/nba/csv/play_by_play.csv
+v4_web/nba/csv/player_boxscores.csv
+v4_web/nba/csv/team_boxscores.csv
+v4_web/nba/sql/nba_stats.sqlite
+v4_web/nba/sql/nba_stats_pbp.sqlite
+v4_web/football/sql/football_player_stats.sqlite
+
+# Python build/runtime artifacts
+__pycache__/
+*.pyc
+*.pyo
+
+# Local runtime database
+v4_web/predictions.db

@@ -322,6 +322,10 @@
 
 
 <!-- ── LEAGUE CARDS ──────────────────────────────────────────── -->
+<header class="page-header">
+  <h1 class="page-title">Football hub</h1>
+  <p class="page-subtitle">League coverage, today’s fixtures, standings, and prediction performance.</p>
+</header>
 <div class="section-head">Choose your league</div>
 <div class="hub-grid">
 
@@ -565,10 +569,12 @@
         {% endfor %}
       {% else %}
         {% if not live_match_groups %}
-        <div class="match-row" style="justify-content:center;padding:20px">
-          <span style="font-size:12px;color:var(--text-muted);font-weight:500">
+        <div class="ui-card ui-empty" role="status">
+        <i class="ti ti-calendar-off" style="font-size:28px;color:var(--league-primary)" aria-hidden="true"></i>
+        <div class="ui-empty-title">No fixtures available</div>
+        <div class="ui-empty-description">
             No fixtures today or completed matches from this weekend
-          </span>
+        </div>
         </div>
         {% endif %}
       {% endif %}
@@ -581,24 +587,25 @@
     <div class="section-head" style="display: flex; justify-content: space-between; align-items: center;">
         <span>League Table</span>
         <div style="display: flex; gap: 8px;">
-            <button onclick="switchLeague('pl', this)" class="toggle-btn table-btn active">PL</button>
-            <button onclick="switchLeague('laliga', this)" class="toggle-btn table-btn">La Liga</button>
-            <button onclick="switchLeague('bundesliga', this)" class="toggle-btn table-btn">Bundesliga</button>
-            <button onclick="switchLeague('seriea', this)" class="toggle-btn table-btn">Serie A</button>
-            <button onclick="switchLeague('ligue1', this)" class="toggle-btn table-btn">Ligue 1</button>
+            <button onclick="switchLeague('pl', this)" class="toggle-btn table-btn active" aria-pressed="true">PL</button>
+            <button onclick="switchLeague('laliga', this)" class="toggle-btn table-btn" aria-pressed="false">La Liga</button>
+            <button onclick="switchLeague('bundesliga', this)" class="toggle-btn table-btn" aria-pressed="false">Bundesliga</button>
+            <button onclick="switchLeague('seriea', this)" class="toggle-btn table-btn" aria-pressed="false">Serie A</button>
+            <button onclick="switchLeague('ligue1', this)" class="toggle-btn table-btn" aria-pressed="false">Ligue 1</button>
         </div>
     </div>
-    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 16px;">
+    <div class="ui-card ui-table-wrap" style="padding: 16px;">
         {% for lg in ["pl", "laliga", "bundesliga", "seriea", "ligue1"] %}
         <div id="table-{{ lg }}" class="league-table" style="display: {% if lg == 'pl' %}block{% else %}none{% endif %}; max-height: 500px; overflow-y: auto;">
-            <table style="width: 100%; text-align: left; border-collapse: collapse; font-family: var(--font-mono); font-size: 11px;">
+            <table class="ui-table" aria-label="{{ lg|upper }} league standings">
+                <caption class="sr-only">{{ lg|upper }} league standings</caption>
                 <thead style="border-bottom: 1px solid var(--border); color: var(--text-muted);">
                     <tr>
-                        <th style="padding: 6px; width: 24px;">#</th>
-                        <th style="padding: 6px;">Team</th>
-                        <th style="padding: 6px; text-align: center;">P</th>
-                        <th style="padding: 6px; text-align: center;">GD</th>
-                        <th style="padding: 6px; text-align: center;">Pts</th>
+                        <th scope="col" style="width: 24px;">#</th>
+                        <th scope="col">Team</th>
+                        <th scope="col" style="text-align: center;">P</th>
+                        <th scope="col" style="text-align: center;">GD</th>
+                        <th scope="col" style="text-align: center;">Pts</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -707,8 +714,14 @@ function switchLeague(lg, btn) {
     if (liveGroup) liveGroup.style.display='block';
     
     // Update button states
-    document.querySelectorAll('.table-btn').forEach(b => b.classList.remove('active'));
-    if (btn) btn.classList.add('active');
+    document.querySelectorAll('.table-btn').forEach(b => {
+        b.classList.remove('active');
+        b.setAttribute('aria-pressed', 'false');
+    });
+    if (btn) {
+        btn.classList.add('active');
+        btn.setAttribute('aria-pressed', 'true');
+    }
 }
 </script>
 
