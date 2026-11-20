@@ -139,6 +139,22 @@ both databases and fails if either source is missing or corrupt. Backups must
 be scheduled and copied to durable off-host storage; local files and a Render
 filesystem are not sufficient disaster-recovery storage.
 
+### 1.7 Performance and load checks
+
+`GZipMiddleware` compresses responses larger than 1 KiB when the client sends
+`Accept-Encoding: gzip`. Request metrics track total duration, maximum duration,
+and requests taking at least one second; these values are exposed only through
+the authenticated `/admin/metrics` endpoint and reset when the process
+restarts.
+
+`v4_web/scripts/load_test.py` provides a dependency-free concurrency smoke test
+for a running instance. It reports success/failure counts and p50, p95, and
+maximum latency. Run it against `/health/live` first to measure application
+overhead without external provider calls, then use representative read-only
+routes in a controlled staging environment. Do not treat this small utility as
+a capacity guarantee or run it against production without an approved test
+window.
+
 ---
 
 ## 2. Mathematical models

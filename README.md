@@ -93,6 +93,22 @@ python v4_web/scripts/backup_databases.py --output-dir /path/to/private/backups
 Schedule this command on the host and copy the resulting files to durable
 off-host storage. The application does not expose database backups over HTTP.
 
+## Performance checks
+
+Responses larger than 1 KiB are gzip-compressed when the client supports it.
+The protected `/admin/metrics` endpoint reports aggregate request duration and
+slow-request counts for operational monitoring.
+
+With the server running, execute a deterministic local smoke load test:
+
+```bash
+python v4_web/scripts/load_test.py --url http://127.0.0.1:8000/health/live
+```
+
+Use the output p95 latency and failure count as a baseline before changing
+deployment resources or provider timeouts. This utility is not a substitute
+for a production load test with representative traffic.
+
 ---
 
 ## Project structure

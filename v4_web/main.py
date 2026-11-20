@@ -42,6 +42,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from scipy.stats import poisson
 from starlette.middleware.trustedhost import TrustedHostMiddleware
+from starlette.middleware.gzip import GZipMiddleware
 from starlette.responses import Response as _Response
 
 _THIRD_PARTY_IMPORTS_READY = time.perf_counter()
@@ -132,6 +133,7 @@ from football_player_stats import get_player_season_stats
 from security import allowed_hosts, require_admin
 from monitoring import readiness_report, sqlite_probe
 from database_migrations import NBA_MIGRATIONS, apply_migrations
+from performance import record_request_timing
 
 _PROJECT_IMPORTS_READY = time.perf_counter()
 
@@ -361,9 +363,13 @@ app.state.metrics = {
     "started_at": datetime.now(timezone.utc).isoformat(),
     "requests": 0,
     "errors": 0,
+    "duration_ms_total": 0.0,
+    "duration_ms_max": 0.0,
+    "slow_requests": 0,
     "status_counts": {},
 }
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts())
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.include_router(match_router)
 app.include_router(nba_router, prefix="/nba")
 app.mount("/static", StaticFiles(directory=ROOT / "static"), name="static")
@@ -405,6 +411,7 @@ async def security_headers(request: Request, call_next):
 @app.middleware("http")
 async def collect_request_metrics(request: Request, call_next):
     metrics = request.app.state.metrics
+    started = time.perf_counter()
     try:
         response = await call_next(request)
     except Exception:
@@ -412,6 +419,7 @@ async def collect_request_metrics(request: Request, call_next):
         raise
     finally:
         metrics["requests"] += 1
+        record_request_timing(metrics, time.perf_counter() - started)
     status = str(response.status_code)
     metrics["status_counts"][status] = (
         metrics["status_counts"].get(status, 0) + 1
@@ -1272,6 +1280,9 @@ async def admin_metrics(request: Request):
         "started_at": metrics["started_at"],
         "requests": metrics["requests"],
         "errors": metrics["errors"],
+        "duration_ms_total": round(metrics["duration_ms_total"], 2),
+        "duration_ms_max": round(metrics["duration_ms_max"], 2),
+        "slow_requests": metrics["slow_requests"],
         "status_counts": dict(metrics["status_counts"]),
     })
 
