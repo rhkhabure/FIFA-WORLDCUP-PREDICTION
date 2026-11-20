@@ -37,6 +37,10 @@ Copy `.env.example` to `.env` in the project root and fill in your keys:
 FOOTBALLDATA_ORG_KEY=your_key_from_football-data.org
 BBS_API_KEY=your_key_from_bigballssports.com
 PARSE_BOT_KEY=your_key_from_parse.bot    # optional — used for lineups
+ADMIN_API_TOKEN=use_a-long-random-secret
+ALLOWED_HOSTS=localhost,127.0.0.1
+FAN_VOTE_RETENTION_DAYS=90
+PUBLIC_BASE_URL=http://localhost:8000
 ```
 
 **Getting the keys:**
@@ -97,6 +101,51 @@ Open `http://localhost:8000` in your browser. Keep this terminal open while you 
 6. The NBA artifacts (live neural model, scaler, calibration temperature and
    Elo ratings) load for the basketball routes. Logged NBA results are replayed
    to evaluate Elo updates; this does not fine-tune the neural network.
+
+### Operational endpoints
+
+- `/health/live` confirms that the process is responding.
+- `/health/ready` confirms that the models and SQLite databases are available.
+- `/privacy` explains the optional fan-voting data use.
+- `/robots.txt` and `/sitemap.xml` support search indexing.
+- `/admin/metrics` is protected by `Authorization: Bearer <ADMIN_API_TOKEN>`.
+
+Do not expose an admin token in a URL, screenshot, browser history, or source
+control. If no admin token is configured, administrative endpoints remain
+disabled.
+
+### Fan voting and privacy
+
+Fan voting is optional. The browser only creates its random voting identifier
+after the visitor selects **Enable fan voting** and reviews the privacy notice.
+The server stores a one-way hash, vote choice, event ID, and timestamp; records
+are deleted after `FAN_VOTE_RETENTION_DAYS` (90 days by default). Visitors can
+withdraw browser storage by clearing site data. Complete the operator identity
+and contact details in the privacy notice before public deployment, and follow
+the documented GDPR/Kenya Data Protection Act request process.
+
+### Backups
+
+Create an integrity-checked backup before upgrades or data maintenance:
+
+```powershell
+python v4_web/scripts/backup_databases.py --output-dir C:\private\melios-backups
+```
+
+Keep backups outside the repository and copy them to durable off-host storage.
+Do not place backup files under a publicly served directory.
+
+### Production release check
+
+After deploying the reviewed commit, verify the public HTTPS origin:
+
+```powershell
+python v4_web/scripts/release_check.py --base-url https://your-public-host
+```
+
+For rollback, preserve a fresh backup first, redeploy the last known-good
+commit, and rerun the release check. Do not run older application code against
+a newer database schema unless compatibility has been verified.
 
 ---
 
