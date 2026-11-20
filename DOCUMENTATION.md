@@ -96,6 +96,21 @@ The operational endpoints `/admin/*` and `/nba/debug` require
 return `503` rather than becoming unauthenticated. Public pages, `/health`,
 and fan-voting endpoints remain public by design.
 
+### 1.4 Health checks and monitoring
+
+`/health/live` is a liveness probe and only confirms that the process can
+serve requests. `/health/ready` and the backwards-compatible `/health` endpoint
+check the locally loaded football and NBA models plus both SQLite databases.
+They return `200` with `"status": "ready"` when all checks pass and `503` with
+`"status": "degraded"` otherwise. They do not call external sports providers,
+so monitoring does not consume API quota or fail because a provider is
+temporarily unavailable.
+
+The application records in-memory request totals, error totals, and status-code
+counts. `/admin/metrics` exposes a snapshot of those counters behind the admin
+bearer token. Counters reset when the process restarts; durable log shipping
+and alerting remain deployment-level responsibilities.
+
 ---
 
 ## 2. Mathematical models

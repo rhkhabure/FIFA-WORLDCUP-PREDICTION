@@ -72,6 +72,10 @@ administrative/debug endpoints with the `ADMIN_API_TOKEN` bearer token.
 Configure `ALLOWED_HOSTS` with the deployed hostname and never use a real
 administrative token in source control.
 
+Health probes are available at `/health/live` for process liveness and
+`/health/ready` for local model/database readiness. Operational request
+counters are available at `/admin/metrics` with administrative authorization.
+
 ---
 
 ## Project structure

@@ -130,6 +130,7 @@ from nba_model import nba_model
 from constants import EAT, DRAW_PROPENSITY, LEAGUE_FILTERS, LEAGUE_MAP, MATCH_LEAGUES
 from football_player_stats import get_player_season_stats
 from security import allowed_hosts, require_admin
+from monitoring import readiness_report, sqlite_probe
 
 _PROJECT_IMPORTS_READY = time.perf_counter()
 
@@ -212,9 +213,12 @@ from predictions import (DB_PATH as FOOTBALL_PREDICTIONS_DB, init_db,
                          log_result, get_all_predictions,
                          save_match_snapshot, get_match_snapshot)
 
+_nba_db = None
+
 @asynccontextmanager
 async def lifespan(app):
     """Initialize critical state, then run cache warming and jobs in background."""
+    global _nba_db
     startup_started = time.perf_counter()
     phase_started = startup_started
     init_db()
@@ -351,6 +355,12 @@ async def lifespan(app):
 from fastapi.staticfiles import StaticFiles
 
 app = FastAPI(title="Melios Dira Odds", lifespan=lifespan)
+app.state.metrics = {
+    "started_at": datetime.now(timezone.utc).isoformat(),
+    "requests": 0,
+    "errors": 0,
+    "status_counts": {},
+}
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts())
 app.include_router(match_router)
 app.include_router(nba_router, prefix="/nba")
@@ -390,13 +400,46 @@ async def security_headers(request: Request, call_next):
     return response
 
 
+@app.middleware("http")
+async def collect_request_metrics(request: Request, call_next):
+    metrics = request.app.state.metrics
+    try:
+        response = await call_next(request)
+    except Exception:
+        metrics["errors"] += 1
+        raise
+    finally:
+        metrics["requests"] += 1
+    status = str(response.status_code)
+    metrics["status_counts"][status] = (
+        metrics["status_counts"].get(status, 0) + 1
+    )
+    return response
+
+
+def _readiness():
+    report = readiness_report(
+        football_model_loaded=nn_model is not None,
+        nba_model_loaded=nba_model.loaded,
+        football_db_ready=sqlite_probe(FOOTBALL_PREDICTIONS_DB),
+        nba_db_ready=_nba_db is not None and sqlite_probe(ROOT / "predictions.db"),
+    )
+    return JSONResponse(report, status_code=200 if report["ready"] else 503)
+
+
 @app.get("/health")
 async def health():
-    return JSONResponse({
-        "status": "ready",
-        "football_model_loaded": nn_model is not None,
-        "nba_model_loaded": nba_model.loaded,
-    })
+    return _readiness()
+
+
+@app.get("/health/live")
+async def health_live():
+    return JSONResponse({"status": "alive"})
+
+
+@app.get("/health/ready")
+async def health_ready():
+    return _readiness()
 
 
 @app.get("/api/fan-vote/{match_id}")
@@ -1217,6 +1260,18 @@ async def admin_cache_status(request: Request):
         if key not in status:
             status[key] = {"cached": False}
     return JSONResponse({"cache": status})
+
+
+@app.get("/admin/metrics")
+async def admin_metrics(request: Request):
+    require_admin(request)
+    metrics = request.app.state.metrics
+    return JSONResponse({
+        "started_at": metrics["started_at"],
+        "requests": metrics["requests"],
+        "errors": metrics["errors"],
+        "status_counts": dict(metrics["status_counts"]),
+    })
 
 
 @app.get("/player", response_class=HTMLResponse)

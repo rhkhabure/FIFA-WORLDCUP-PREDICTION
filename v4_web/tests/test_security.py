@@ -6,6 +6,7 @@ from fastapi import HTTPException
 from starlette.requests import Request
 
 from security import allowed_hosts, require_admin
+from monitoring import readiness_report
 
 
 def _request(headers=None):
@@ -46,6 +47,17 @@ class SecurityTests(unittest.TestCase):
                 require_admin(_request({"Authorization": "Bearer wrong-token"}))
             self.assertEqual(context.exception.status_code, 401)
             require_admin(_request({"Authorization": "Bearer test-token"}))
+
+    def test_readiness_report_is_degraded_when_a_dependency_is_missing(self):
+        report = readiness_report(
+            football_model_loaded=True,
+            nba_model_loaded=True,
+            football_db_ready=False,
+            nba_db_ready=True,
+        )
+        self.assertEqual(report["status"], "degraded")
+        self.assertFalse(report["ready"])
+        self.assertFalse(report["checks"]["football_database"])
 
 
 if __name__ == "__main__":
