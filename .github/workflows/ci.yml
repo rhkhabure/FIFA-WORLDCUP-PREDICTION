@@ -41,4 +41,6 @@ jobs:
           python -c "from pathlib import Path; from jinja2 import Environment, FileSystemLoader; env = Environment(loader=FileSystemLoader('templates')); [env.get_template(path.name) for path in Path('templates').glob('*.html')]; print('All templates compiled successfully')"
 
       - name: Run application tests
+        env:
+          PYTHONPATH: v4_web
         run: python -m unittest discover -s v4_web/tests -p "test_*.py"

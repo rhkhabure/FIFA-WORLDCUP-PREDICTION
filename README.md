@@ -61,7 +61,7 @@ Run the same core checks locally from the repository root:
 ```bash
 python -m compileall -q v4_backend v4_web
 python -c "from pathlib import Path; from jinja2 import Environment, FileSystemLoader; env = Environment(loader=FileSystemLoader('v4_web/templates')); [env.get_template(path.name) for path in Path('v4_web/templates').glob('*.html')]; print('All templates compiled successfully')"
-python -m unittest discover -s v4_web/tests -p "test_*.py"
+PYTHONPATH=v4_web python -m unittest discover -s v4_web/tests -p "test_*.py"
 ```
 
 ---
