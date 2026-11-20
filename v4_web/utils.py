@@ -455,7 +455,7 @@ def generate_pitch_svg_vertical(formation="4-3-3", team_color="#14b8a6",
         '</defs>'
 
         # Background + grass
-        f'<rect width="{W}" height="{H}" fill="#1a6b2e" rx="6 6 0 0"/>'
+        f'<rect width="{W}" height="{H}" fill="#1a6b2e" rx="6" ry="6"/>'
         f'<rect x="8" y="8" width="{W-16}" height="{H}"'
         f' fill="url(#grass-v)" clip-path="url(#pitch-clip-v)"/>'
     )

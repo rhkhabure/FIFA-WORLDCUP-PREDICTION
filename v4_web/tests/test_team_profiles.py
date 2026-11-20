@@ -100,6 +100,18 @@ class TeamProfileTests(unittest.TestCase):
         self.assertFalse(context["profile_data_available"])
         self.assertEqual(context["profile"]["name"], "Arsenal")
 
+    def test_vertical_pitch_svg_uses_valid_rectangle_corner_attributes(self):
+        pitch = main.generate_pitch_svg_vertical(
+            formation="4-3-3",
+            players=[],
+            team_name="Arsenal",
+            league="pl",
+            team_id=57,
+        )
+
+        self.assertNotIn('rx="6 6 0 0"', pitch)
+        self.assertIn('rx="6" ry="6"', pitch)
+
 
 if __name__ == "__main__":
     unittest.main()
