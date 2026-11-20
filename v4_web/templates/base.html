@@ -189,6 +189,11 @@
         <a href="/privacy" style="display:block;color:rgba(255,255,255,0.5);font-size:10px;margin-bottom:8px">
             Privacy notice
         </a>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+            <a href="/about" style="color:rgba(255,255,255,0.5);font-size:10px">About</a>
+            <a href="/contact" style="color:rgba(255,255,255,0.5);font-size:10px">Contact</a>
+            <a href="/disclaimer" style="color:rgba(255,255,255,0.5);font-size:10px">Disclaimer</a>
+        </div>
         <div class="sidebar-footer-text"
              style="font-size:9px;color:rgba(255,255,255,0.25);font-family:var(--font-mono);
                     text-transform:uppercase;letter-spacing:0.1em">
@@ -224,6 +229,27 @@
     }
     tick();
     setInterval(tick, 30000);
+})();
+
+// ── Season countdowns ──────────────────────────────────────────────
+(function(){
+    function updateCountdown(el) {
+        const target = new Date(el.dataset.countdownTarget).getTime();
+        const remaining = target - Date.now();
+        const value = el.querySelector('[data-countdown-value]');
+        if (!value || Number.isNaN(target)) return;
+        if (remaining <= 0) {
+            value.textContent = 'Now';
+            return;
+        }
+        const days = Math.floor(remaining / 86400000);
+        const hours = Math.floor((remaining % 86400000) / 3600000);
+        const minutes = Math.floor((remaining % 3600000) / 60000);
+        value.textContent = `${days}d ${String(hours).padStart(2, '0')}h ${String(minutes).padStart(2, '0')}m`;
+    }
+    const countdowns = Array.from(document.querySelectorAll('[data-countdown-target]'));
+    countdowns.forEach(updateCountdown);
+    if (countdowns.length) setInterval(function(){ countdowns.forEach(updateCountdown); }, 60000);
 })();
 
 // ── Sidebar collapse ───────────────────────────────────────────────

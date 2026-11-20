@@ -445,6 +445,22 @@ def _readiness():
     return JSONResponse(report, status_code=200 if report["ready"] else 503)
 
 
+def _football_final_matchdays(season: int) -> dict[str, str]:
+    """Return local-time final matchday targets for the supported leagues."""
+    year = season + 1
+    dates = {
+        "pl": (5, 30),
+        "laliga": (5, 30),
+        "bundesliga": (5, 22),
+        "seriea": (5, 30),
+        "ligue1": (5, 29),
+    }
+    return {
+        league: datetime(year, month, day, tzinfo=EAT).isoformat()
+        for league, (month, day) in dates.items()
+    }
+
+
 @app.get("/health")
 async def health():
     return _readiness()
@@ -469,6 +485,37 @@ async def privacy_page(request: Request):
             "request": request,
             "title": "Privacy notice",
             "topbar_title": "Privacy",
+        },
+    )
+
+
+@app.get("/about", response_class=HTMLResponse)
+async def about_page(request: Request):
+    return templates.TemplateResponse(
+        request=request,
+        name="about.html",
+        context={"request": request, "title": "About", "topbar_title": "About"},
+    )
+
+
+@app.get("/contact", response_class=HTMLResponse)
+async def contact_page(request: Request):
+    return templates.TemplateResponse(
+        request=request,
+        name="contact.html",
+        context={"request": request, "title": "Contact", "topbar_title": "Contact"},
+    )
+
+
+@app.get("/disclaimer", response_class=HTMLResponse)
+async def disclaimer_page(request: Request):
+    return templates.TemplateResponse(
+        request=request,
+        name="disclaimer.html",
+        context={
+            "request": request,
+            "title": "Disclaimer",
+            "topbar_title": "Disclaimer",
         },
     )
 
@@ -503,6 +550,9 @@ async def sitemap_xml():
         "/nba/",
         "/nba/teams",
         "/nba/history",
+        "/about",
+        "/contact",
+        "/disclaimer",
         "/privacy",
     )
     urls = "\n".join(
@@ -1870,6 +1920,7 @@ async def hub(request: Request):
             "today_match_groups": today_match_groups,
             "today"           : today,
             "today_count_laliga": today_count_laliga,
+            "football_countdowns": _football_final_matchdays(season),
             "live_count"      : 0,
             "live_count_pl"   : 0,
         }

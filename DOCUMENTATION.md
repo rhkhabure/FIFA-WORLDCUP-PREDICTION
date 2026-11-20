@@ -192,7 +192,21 @@ hostname if the public domain changes.
 provider-backed endpoints, administrative data, and fan-vote APIs are not
 included in the sitemap.
 
-### 1.10 Deployment and rollback
+### 1.10 Public information and responsible-use pages
+
+`/about`, `/contact`, and `/disclaimer` provide the operator identity,
+feedback/privacy contact, and a short responsible-use notice. The disclaimer
+states that the site is information only, takes no bets, is intended for
+adults 18+, and points users to support resources. The supplied contact
+details should be reviewed before deployment.
+
+The NBA hub replaces technical ROC-AUC and Brier-score tiles with a projected
+first-round playoff countdown and a plain-language season-status tile.
+Football league cards use separate final-matchday targets for the supported
+2026/27 calendars and display the countdown in high-contrast white text.
+Update those dates when official future-season calendars are published.
+
+### 1.11 Deployment and rollback
 
 The Render service definition uses `/health/ready` as its health check. This
 requires the process, both model artifacts, and both SQLite stores to be ready

@@ -131,6 +131,13 @@ public navigational pages; API, admin, and debug paths are excluded. Set
 `PUBLIC_BASE_URL` to the final HTTPS hostname before deployment so generated
 canonical and sitemap URLs are correct.
 
+## About, contact, and disclaimer
+
+The site includes `/about`, `/contact`, and `/disclaimer` pages. It provides
+information only, takes no bets, is intended for adults 18+, and links users
+to help resources. The NBA hub shows a projected playoff countdown and season
+status; football league cards show countdowns to each league's final matchday.
+
 ## Deployment and rollback
 
 Before deploying, run the full checks above, create an off-host database

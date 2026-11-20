@@ -3,7 +3,8 @@
   nba_hub.html — /nba
   Context (routes/nba.py → nba_hub):
     live_games, upcoming_games, final_games, all_games  — enriched game dicts
-    model_info  — {loaded, roc_auc, brier, accuracy, temperature, ...}
+  model_info  — {loaded, ...}
+  playoff_target, season_status
   Game dict keys used:
     game_id, status, status_text, tip_off_eat,
     home_team_id/away_team_id, home_tricode/away_tricode,
@@ -90,6 +91,11 @@
     .res-bad { color: #C8102E; font-size: 16px; }
     .res-complete { color: var(--text-muted, #94a3b8); font-size: 16px; }
     .prob-placeholder { display: block; min-height: 23px; }
+    .countdown-value {
+        font-family: var(--font-mono);
+        font-size: clamp(18px, 3vw, 26px);
+        letter-spacing: -0.04em;
+    }
 
     .standings-card {
         background: var(--surface, #fff);
@@ -164,12 +170,15 @@
             <div class="ui-stat-label">Live now</div>
         </div>
         <div class="ui-stat-card">
-            <div class="ui-stat-value">{{ "%.3f" | format(model_info.roc_auc) if model_info.roc_auc else "—" }}</div>
-            <div class="ui-stat-label">Model ROC-AUC</div>
+            <div class="ui-stat-value countdown-value" data-countdown-target="{{ playoff_target }}">
+                <span data-countdown-value>—</span>
+            </div>
+            <div class="ui-stat-label">Playoff countdown</div>
+            <div class="ui-data-meta">Projected first-round start</div>
         </div>
         <div class="ui-stat-card">
-            <div class="ui-stat-value">{{ "%.4f" | format(model_info.brier) if model_info.brier else "—" }}</div>
-            <div class="ui-stat-label">Model Brier</div>
+            <div class="ui-stat-value">{{ season_status }}</div>
+            <div class="ui-stat-label">Season status</div>
         </div>
     </div>
     <div class="ui-data-meta" id="nba-data-status" role="status">

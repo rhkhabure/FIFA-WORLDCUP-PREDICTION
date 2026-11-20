@@ -25,6 +25,7 @@ import re
 import sqlite3
 from pathlib import Path
 from datetime import datetime, timezone
+from datetime import timedelta
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -317,9 +318,21 @@ async def nba_hub(request: Request):
         except Exception:
             log.exception("NBA Elo result update failed after hub result logging")
 
-    from datetime import timedelta
     d = datetime.now(EAT).date() + (timedelta(days=1) if showing_tomorrow else timedelta())
     hub_date = d.strftime("%A %b ") + str(d.day)
+    now_eat = datetime.now(EAT)
+    season_start = now_eat.year if now_eat.month >= 10 else now_eat.year - 1
+    playoff_start = datetime(season_start + 1, 4, 17, tzinfo=EAT)
+    regular_season_end = datetime(season_start + 1, 4, 11, tzinfo=EAT)
+    play_in_end = datetime(season_start + 1, 4, 16, tzinfo=EAT)
+    if now_eat < regular_season_end:
+        season_status = "Regular season"
+    elif now_eat < playoff_start:
+        season_status = "Play-in tournament"
+    elif now_eat < datetime(season_start + 1, 6, 30, tzinfo=EAT):
+        season_status = "Playoffs"
+    else:
+        season_status = "Off-season"
 
     standings = await run_in_threadpool(get_conference_standings)
 
@@ -342,6 +355,8 @@ async def nba_hub(request: Request):
             "standings_available": bool(
                 standings and any(standings.get(conf) for conf in ("East", "West"))
             ),
+            "playoff_target": playoff_start.isoformat(),
+            "season_status": season_status,
         },
     )
 
