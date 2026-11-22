@@ -17,6 +17,7 @@ v4_web/football/sql/football_player_stats.sqlite
 __pycache__/
 *.pyc
 *.pyo
+v4_web/tailwindcss.exe
 
 # Local runtime database
 v4_web/predictions.db

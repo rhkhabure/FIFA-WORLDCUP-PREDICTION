@@ -48,7 +48,7 @@
     /* Status */
     --live-red:       #FF3B30;
     --win-green:      #1A7A3C;
-    --draw-amber:     #D4851A;
+    --draw-amber:     #9A5A00;   /* darkened: 5.5:1 on white (was 2.9:1) */
     --loss-red:       #C0392B;
     --status-info:    #2563EB;
     --status-success: #15803D;
@@ -58,7 +58,7 @@
     /* Fonts */
     --font-sans:      'Inter', system-ui, sans-serif;
     --font-mono:      'JetBrains Mono', 'Fira Code', monospace;
-    --text-xs:        10px;
+    --text-xs:        11px;
     --text-sm:        12px;
     --text-md:        14px;
     --text-lg:        18px;
@@ -69,21 +69,10 @@
 
     /* Interaction */
     --focus-ring:     0 0 0 3px rgba(37, 99, 235, 0.28);
+    --focus-color:    #2563EB;   /* solid outline: 5.2:1 on white */
+    --live-red-strong:#D70015;   /* white text on this: 5.4:1 */
     --transition-fast: 120ms ease;
     --transition-base: 180ms ease;
-}
-
-@media (min-width: 1200px) {
-    :root {
-        --content-max: 1600px;
-        --text-sm: 13px;
-        --text-md: 15px;
-        --text-xl: 26px;
-    }
-
-    #page-content {
-        padding: 32px;
-    }
 }
 
 /* ── Premier League ─────────────────────────────────────────────── */
@@ -225,9 +214,9 @@
 
 /* Live badge */
 .live-badge {
-    background:  var(--live-red);
+    background:  var(--live-red-strong);
     color:       #fff;
-    font-size:   9px;
+    font-size:   11px;
     font-weight: 800;
     padding:     3px 8px;
     border-radius: var(--radius-pill);
@@ -600,9 +589,30 @@ a {
 }
 
 :where(button, a, input, select, textarea):focus-visible {
-    outline: none;
+    /* Solid outline (3:1+ and kept in Windows high-contrast mode);
+       the soft halo is only decoration on top. */
+    outline: 2px solid var(--focus-color);
+    outline-offset: 2px;
     box-shadow: var(--focus-ring);
 }
+#sidebar :where(button, a):focus-visible { outline-color: #FFFFFF; }
+
+/* Numbers: equal-width digits so columns of percentages line up */
+.ui-stat-value, .stat-val, .ui-table td,
+.match-outcome-probabilities strong, .fan-vote-results strong {
+    font-variant-numeric: tabular-nums;
+}
+
+/* Site footer: information-only notice shown on every page */
+.site-footer {
+    border-top: 1px solid var(--border);
+    color: var(--text-secondary);
+    font-size: var(--text-sm);
+    line-height: 1.6;
+    margin-top: 32px;
+    padding: 16px 0 8px;
+}
+.site-footer a { color: var(--league-primary); text-decoration: underline; }
 
 /* Scrollbar */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
@@ -675,7 +685,7 @@ a {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 14px;
-    padding: 20px;
+    padding: 16px;
 }
 .match-forecast-heading,
 .fan-vote-header {
@@ -693,7 +703,7 @@ a {
 .match-forecast-pick,
 .fan-vote-question {
     color: var(--text-primary);
-    font-size: 16px;
+    font-size: 14px;
     font-weight: 800;
     margin-top: 4px;
 }
@@ -717,7 +727,7 @@ a {
     display: flex;
     gap: 8px;
     min-width: 0;
-    font-size: 14px;
+    font-size: 12px;
     font-weight: 700;
 }
 .match-team-identity > span:last-child {

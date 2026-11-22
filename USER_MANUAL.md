@@ -107,6 +107,8 @@ Open `http://localhost:8000` in your browser. Keep this terminal open while you 
 - `/health/live` confirms that the process is responding.
 - `/health/ready` confirms that the models and SQLite databases are available.
 - `/privacy` explains the optional fan-voting data use.
+- `/about`, `/contact`, and `/disclaimer` provide public information and
+  responsible-use details.
 - `/robots.txt` and `/sitemap.xml` support search indexing.
 - `/admin/metrics` is protected by `Authorization: Bearer <ADMIN_API_TOKEN>`.
 
@@ -134,6 +136,13 @@ python v4_web/scripts/backup_databases.py --output-dir C:\private\melios-backups
 
 Keep backups outside the repository and copy them to durable off-host storage.
 Do not place backup files under a publicly served directory.
+
+### Sharing and accessibility
+
+Shared page previews use a PNG image so messaging and social platforms can
+display them reliably. The dashboard also supports keyboard focus indicators,
+stronger text contrast, decorative-image handling, and pauses live polling
+while its browser tab is hidden.
 
 ### Production release check
 

@@ -206,7 +206,24 @@ Football league cards use separate final-matchday targets for the supported
 2026/27 calendars and display the countdown in high-contrast white text.
 Update those dates when official future-season calendars are published.
 
-### 1.11 Deployment and rollback
+### 1.11 Accessibility and frontend asset delivery
+
+The shared layout uses explicit keyboard focus outlines, stronger light-mode
+contrast for labels and values, tabular numeric figures, empty alternative text
+for decorative crest images, and a non-focusable decorative sport-toggle SVG.
+Live polling pauses when the document is hidden and resumes when the visitor
+returns to the tab.
+
+Tailwind is compiled during development/build time with the v3.4.17 standalone
+binary from `v4_web/tailwind.config.js` and `v4_web/tailwind.input.css`. The
+generated `v4_web/static/tailwind.css` is served as a normal stylesheet; the
+Tailwind CDN compiler is not loaded in visitors' browsers. The Tabler icon
+font is pinned to 2.47.0 to avoid unreviewed upstream changes.
+
+Open Graph sharing points to `v4_web/static/social-preview.png`, a 1200×630
+PNG rather than an SVG so common social clients can render the preview.
+
+### 1.12 Deployment and rollback
 
 The Render service definition uses `/health/ready` as its health check. This
 requires the process, both model artifacts, and both SQLite stores to be ready

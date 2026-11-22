@@ -166,13 +166,13 @@
                         <div class="w-14 rounded-sm transition-all duration-500"
                              style="height:{{ [prior[0],4]|max }}%;
                                     background:{{ home_colour }};opacity:0.85"></div>
-                        <span class="text-[10px] text-slate-400 mt-2 uppercase tracking-widest">Home</span>
+                        <span class="text-[10px] text-slate-600 mt-2 uppercase tracking-widest">Home</span>
                     </div>
                     <div class="flex flex-col items-center justify-end h-full">
-                        <span class="text-sm text-slate-400 font-mono font-bold mb-1">{{ prior[1] }}%</span>
-                        <div class="w-14 rounded-sm transition-all duration-500" style="background:var(--league-light)"
+                        <span class="text-sm text-slate-600 font-mono font-bold mb-1">{{ prior[1] }}%</span>
+                        <div class="w-14 rounded-sm transition-all duration-500 bg-slate-500/80"
                              style="height:{{ [prior[1],4]|max }}%"></div>
-                        <span class="text-[10px] text-slate-400 mt-2 uppercase tracking-widest">Draw</span>
+                        <span class="text-[10px] text-slate-600 mt-2 uppercase tracking-widest">Draw</span>
                     </div>
                     <div class="flex flex-col items-center justify-end h-full">
                         <span class="text-sm font-mono font-bold mb-1"
@@ -180,7 +180,7 @@
                         <div class="w-14 rounded-sm transition-all duration-500"
                              style="height:{{ [prior[2],4]|max }}%;
                                     background:{{ away_colour }};opacity:0.85"></div>
-                        <span class="text-[10px] text-slate-400 mt-2 uppercase tracking-widest">Away</span>
+                        <span class="text-[10px] text-slate-600 mt-2 uppercase tracking-widest">Away</span>
                     </div>
                 {% else %}
                     <div class="flex items-center justify-center h-full w-full">
@@ -213,13 +213,13 @@
                     <div class="w-14 rounded-sm transition-all duration-500"
                          style="height:{{ [lineup_prior[0],4]|max }}%;
                                 background:{{ home_colour }};opacity:0.85"></div>
-                    <span class="text-[10px] text-slate-400 mt-2 uppercase tracking-widest">Home</span>
+                    <span class="text-[10px] text-slate-600 mt-2 uppercase tracking-widest">Home</span>
                 </div>
                 <div class="flex flex-col items-center justify-end h-full">
-                    <span class="text-sm text-slate-400 font-mono font-bold mb-1">{{ lineup_prior[1] }}%</span>
-                    <div class="w-14 rounded-sm transition-all duration-500" style="background:var(--league-light)"
+                    <span class="text-sm text-slate-600 font-mono font-bold mb-1">{{ lineup_prior[1] }}%</span>
+                    <div class="w-14 rounded-sm transition-all duration-500 bg-slate-500/80"
                          style="height:{{ [lineup_prior[1],4]|max }}%"></div>
-                    <span class="text-[10px] text-slate-400 mt-2 uppercase tracking-widest">Draw</span>
+                    <span class="text-[10px] text-slate-600 mt-2 uppercase tracking-widest">Draw</span>
                 </div>
                 <div class="flex flex-col items-center justify-end h-full">
                     <span class="text-sm font-mono font-bold mb-1"
@@ -227,7 +227,7 @@
                     <div class="w-14 rounded-sm transition-all duration-500"
                          style="height:{{ [lineup_prior[2],4]|max }}%;
                                 background:{{ away_colour }};opacity:0.85"></div>
-                    <span class="text-[10px] text-slate-400 mt-2 uppercase tracking-widest">Away</span>
+                    <span class="text-[10px] text-slate-600 mt-2 uppercase tracking-widest">Away</span>
                 </div>
             </div>
 
@@ -236,7 +236,7 @@
                 {% if adj_lam is not none %}
                 <div class="flex justify-between text-[10px] font-mono">
                     <span class="text-slate-500">Adj. xG</span>
-                    <span class="text-slate-300">
+                    <span class="text-slate-600">
                         <span style="color:color-mix(in srgb, {{ home_colour }} 55%, var(--text-primary))">{{ "%.2f"|format(adj_lam) }}</span>
                         –
                         <span style="color:color-mix(in srgb, {{ away_colour }} 55%, var(--text-primary))">{{ "%.2f"|format(adj_mu) }}</span>
@@ -271,7 +271,7 @@
                         <div class="text-[10px] text-slate-500 uppercase">Home</div>
                     </div>
                     <div class="text-center">
-                        <div class="text-lg font-bold text-slate-400">{{ featured.odds_draw }}</div>
+                        <div class="text-lg font-bold text-slate-600">{{ featured.odds_draw }}</div>
                         <div class="text-[10px] text-slate-500 uppercase">Draw</div>
                     </div>
                     <div class="text-center">
@@ -285,7 +285,7 @@
             {% if featured.referee %}
             <div class="text-center border-t" style="border-color:var(--border) pt-2 w-full">
                 <span class="text-[10px] text-slate-500 font-mono uppercase">Referee · </span>
-                <span class="text-[10px] text-slate-300 font-mono">{{ featured.referee }}</span>
+                <span class="text-[10px] text-slate-600 font-mono">{{ featured.referee }}</span>
             </div>
             {% endif %}
 
@@ -304,12 +304,12 @@
                 </div>
                 {% if featured.referee %}
                 <div class="border-t" style="border-color:var(--border) pt-2">
-                    <span class="text-[10px] text-slate-300 font-mono">{{ featured.referee }}</span>
+                    <span class="text-[10px] text-slate-600 font-mono">{{ featured.referee }}</span>
                 </div>
                 {% endif %}
                 {% if featured.venue %}
                 <div>
-                    <span class="text-[10px] text-slate-300 font-mono">{{ featured.venue }}</span>
+                    <span class="text-[10px] text-slate-600 font-mono">{{ featured.venue }}</span>
                 </div>
                 {% endif %}
             </div>
@@ -337,13 +337,13 @@
                         <div class="w-14 rounded-sm transition-all duration-700"
                              style="height:{{ [posterior[0],4]|max }}%;
                                     background:{{ home_colour }};opacity:0.75"></div>
-                        <span class="text-[10px] text-slate-400 mt-2 uppercase tracking-widest">Home</span>
+                        <span class="text-[10px] text-slate-600 mt-2 uppercase tracking-widest">Home</span>
                     </div>
                     <div class="flex flex-col items-center justify-end h-full">
-                        <span class="text-sm text-slate-400 font-mono font-bold mb-1">{{ posterior[1] }}%</span>
+                        <span class="text-sm text-slate-600 font-mono font-bold mb-1">{{ posterior[1] }}%</span>
                         <div class="w-14 bg-slate-500/80 rounded-sm transition-all duration-700"
                              style="height:{{ [posterior[1],4]|max }}%"></div>
-                        <span class="text-[10px] text-slate-400 mt-2 uppercase tracking-widest">Draw</span>
+                        <span class="text-[10px] text-slate-600 mt-2 uppercase tracking-widest">Draw</span>
                     </div>
                     <div class="flex flex-col items-center justify-end h-full">
                         <span class="text-sm font-mono font-bold mb-1"
@@ -351,7 +351,7 @@
                         <div class="w-14 rounded-sm transition-all duration-700"
                              style="height:{{ [posterior[2],4]|max }}%;
                                     background:{{ away_colour }};opacity:0.75"></div>
-                        <span class="text-[10px] text-slate-400 mt-2 uppercase tracking-widest">Away</span>
+                        <span class="text-[10px] text-slate-600 mt-2 uppercase tracking-widest">Away</span>
                     </div>
                 {% else %}
                     <div class="flex items-center justify-center h-full w-full">
@@ -375,7 +375,7 @@
         <div class="flex flex-col">
             {% if matrix_svg %}
             <div class="border rounded-xl p-3 shadow-xl flex-1" style="background:var(--surface);border:1px solid var(--border)">
-                <div class="text-[10px] font-mono text-slate-400 uppercase tracking-widest mb-1">
+                <div class="text-[10px] font-mono text-slate-600 uppercase tracking-widest mb-1">
                     Scoreline Probabilities
                 </div>
                 {{ matrix_svg | safe }}
@@ -422,7 +422,7 @@
         <div class="flex flex-col">
             {% if featured.home_name and featured.away_name %}
             <div class="border rounded-xl p-4 shadow-xl flex-1" style="background:var(--surface);border:1px solid var(--border)">
-                <div class="text-[10px] font-mono text-slate-400 uppercase tracking-widest mb-3">
+                <div class="text-[10px] font-mono text-slate-600 uppercase tracking-widest mb-3">
                     Team Ratings & Parameters
                 </div>
 
@@ -583,9 +583,9 @@
                 {% if league_gamma %}
                 <div class="grid grid-cols-2 gap-x-2 text-[10px] font-mono">
                     <div class="text-slate-500">γ Home adv.</div>
-                    <div class="text-slate-300 text-right">{{ "%.3f"|format(league_gamma) }}</div>
+                    <div class="text-slate-600 text-right">{{ "%.3f"|format(league_gamma) }}</div>
                     <div class="text-slate-500">ρ Draw corr.</div>
-                    <div class="text-slate-300 text-right">{{ "%.4f"|format(league_rho) }}</div>
+                    <div class="text-slate-600 text-right">{{ "%.4f"|format(league_rho) }}</div>
                 </div>
                 {% endif %}
 
@@ -610,13 +610,13 @@
                             <span style="color:color-mix(in srgb, {{ home_colour }} 55%, var(--text-primary))" class="font-bold truncate">
                                 {{ featured.home_name if featured.home_name else "Home" }}
                             </span>
-                            <span id="home-xg" class="text-slate-400">—</span>
+                            <span id="home-xg" class="text-slate-600">—</span>
                         </div>
                         <div class="flex justify-between items-center">
                             <span style="color:color-mix(in srgb, {{ away_colour }} 55%, var(--text-primary))" class="font-bold truncate">
                                 {{ featured.away_name if featured.away_name else "Away" }}
                             </span>
-                            <span id="away-xg" class="text-slate-400">—</span>
+                            <span id="away-xg" class="text-slate-600">—</span>
                         </div>
                         <div id="xg-status" class="match-data-status">
                             Live data freshness: awaiting update
@@ -810,6 +810,16 @@
 
     intervalSel.addEventListener("change", function () {
         startPolling(parseInt(this.value, 10));
+    });
+
+    // Don't spend data/battery polling a tab nobody is looking at
+    document.addEventListener("visibilitychange", function () {
+        const secs = parseInt(intervalSel.value, 10);
+        if (document.hidden) {
+            if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+        } else if (secs > 0) {
+            startPolling(secs);   // refreshes immediately, then resumes the interval
+        }
     });
 
     // Start with the default selected value (5 min)

@@ -16,7 +16,7 @@
     <meta property="og:title" content="{{ page_title }}">
     <meta property="og:description" content="{{ page_description }}">
     <meta property="og:url" content="{{ canonical_url }}">
-    <meta property="og:image" content="{{ site_url }}{{ url_for('static', path='favicon.svg') }}">
+    <meta property="og:image" content="{{ site_url }}{{ url_for('static', path='social-preview.png') }}">
     <meta name="twitter:card" content="summary">
     <meta name="twitter:title" content="{{ page_title }}">
     <meta name="twitter:description" content="{{ page_description }}">
@@ -28,12 +28,13 @@
         "description": page_description
     } | tojson }}</script>
     <link rel="icon" href="{{ url_for('static', path='favicon.svg') }}" type="image/svg+xml">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="{{ url_for('static', path='theme.css') }}?v=20261120-1">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=JetBrains+Mono:wght@400;700&display=swap">
+    <link rel="stylesheet" href="{{ url_for('static', path='tailwind.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', path='theme.css') }}?v=20261121-1">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=JetBrains+Mono:wght@400;700&display=swap');
-
         /* ── NBA theme (official red / blue / white) ──────────── */
         html[data-league="nba"] {
             --league-primary:    #1D428A;
@@ -58,8 +59,8 @@
         .sport-ball .half { transition: opacity 0.15s; }
         .sport-ball .half.inactive { opacity: 0.32; }
         .sport-ball a:hover .half.inactive { opacity: 0.7; }
-        .sport-labels { display: flex; flex-direction: column; gap: 2px; font-family: var(--font-mono); font-size: 10px; }
-        .sport-labels a { text-decoration: none; color: rgba(255,255,255,0.35); letter-spacing: 0.08em; text-transform: uppercase; }
+        .sport-labels { display: flex; flex-direction: column; gap: 2px; font-family: var(--font-mono); font-size: 11px; }
+        .sport-labels a { text-decoration: none; color: rgba(255,255,255,0.68); letter-spacing: 0.08em; text-transform: uppercase; }
         .sport-labels a.on { color: #fff; font-weight: 700; }
         .sport-labels a:hover { color: rgba(255,255,255,0.85); }
         #sidebar.collapsed .sport-labels { display: none; }
@@ -81,7 +82,7 @@
             </span>
         </div>
         <button id="sidebar-toggle" aria-controls="sidebar" aria-expanded="true" aria-label="Collapse navigation"
-                style="background:none;border:none;cursor:pointer;color:rgba(255,255,255,0.35);
+                style="background:none;border:none;cursor:pointer;color:rgba(255,255,255,0.75);
                        font-size:11px;padding:4px;line-height:1" title="Toggle sidebar">
             <span id="toggle-icon">◀</span>
         </button>
@@ -90,12 +91,12 @@
     <!-- ── Sport toggle: left half football, right half basketball ── -->
     <!-- Placeholder design — swap the SVG later, links/classes stay   -->
     <div class="sport-toggle-wrap">
-        <svg class="sport-ball" viewBox="0 0 40 40" role="img" aria-label="Switch sport">
+        <svg class="sport-ball" viewBox="0 0 40 40" aria-hidden="true" focusable="false">
             <defs>
                 <clipPath id="ball-left"><path d="M20 2 A18 18 0 0 0 20 38 Z"/></clipPath>
                 <clipPath id="ball-right"><path d="M20 2 A18 18 0 0 1 20 38 Z"/></clipPath>
             </defs>
-            <a href="/" aria-label="Football">
+            <a href="/" tabindex="-1" aria-label="Football">
                 <title>Football</title>
                 <g class="half {{ 'inactive' if is_nba else '' }}" clip-path="url(#ball-left)">
                     <rect x="0" y="0" width="20" height="40" fill="#2E7D32"/>
@@ -104,7 +105,7 @@
                     <circle cx="20" cy="20" r="1" fill="#fff"/>
                 </g>
             </a>
-            <a href="/nba" aria-label="Basketball">
+            <a href="/nba" tabindex="-1" aria-label="Basketball">
                 <title>Basketball</title>
                 <g class="half {{ '' if is_nba else 'inactive' }}" clip-path="url(#ball-right)">
                     <rect x="20" y="0" width="20" height="40" fill="#C8763A"/>
@@ -170,7 +171,7 @@
         <div class="nav-section-label">Quick Teams</div>
         {% for team in team_nav_quick|default([]) %}
         <a href="{{ team.href }}" class="nav-item" data-page="team-{{ team.name|lower|replace(' ','-') }}">
-            <span class="nav-icon"><img src="/crest/{{ team.name }}" style="width:16px;height:16px;object-fit:contain" onerror="this.style.display='none'"/></span>
+            <span class="nav-icon"><img src="/crest/{{ team.name }}" alt="" loading="lazy" style="width:16px;height:16px;object-fit:contain" onerror="this.style.display='none'"/></span>
             <span class="nav-label">{{ team.name }}</span>
         </a>
         {% endfor %}
@@ -178,7 +179,7 @@
         <div class="nav-section-label">All Teams</div>
         {% for team in team_nav_all|default([]) %}
         <a href="{{ team.href }}" class="nav-item" data-page="team-{{ team.name|lower|replace(' ','-') }}">
-            <span class="nav-icon"><img src="/crest/{{ team.name }}" style="width:16px;height:16px;object-fit:contain" onerror="this.style.display='none'"/></span>
+            <span class="nav-icon"><img src="/crest/{{ team.name }}" alt="" loading="lazy" style="width:16px;height:16px;object-fit:contain" onerror="this.style.display='none'"/></span>
             <span class="nav-label">{{ team.name }}</span>
         </a>
         {% endfor %}
@@ -186,16 +187,11 @@
     </nav>
 
     <div style="border-top:1px solid rgba(255,255,255,0.08);padding:10px 14px">
-        <a href="/privacy" style="display:block;color:rgba(255,255,255,0.5);font-size:10px;margin-bottom:8px">
+        <a href="/privacy" style="display:block;color:rgba(255,255,255,0.8);font-size:11px;margin-bottom:8px;text-decoration:underline">
             Privacy notice
         </a>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px">
-            <a href="/about" style="color:rgba(255,255,255,0.5);font-size:10px">About</a>
-            <a href="/contact" style="color:rgba(255,255,255,0.5);font-size:10px">Contact</a>
-            <a href="/disclaimer" style="color:rgba(255,255,255,0.5);font-size:10px">Disclaimer</a>
-        </div>
         <div class="sidebar-footer-text"
-             style="font-size:9px;color:rgba(255,255,255,0.25);font-family:var(--font-mono);
+             style="font-size:10px;color:rgba(255,255,255,0.62);font-family:var(--font-mono);
                     text-transform:uppercase;letter-spacing:0.1em">
             {{ 'Elo · Neural Net V3' if is_nba else 'Dixon-Coles · Neural Net' }}
         </div>
@@ -212,7 +208,14 @@
         <div class="topbar-date" id="topbar-clock"></div>
     </div>
     <div id="page-content">
-        <div class="page-container">{% block content %}{% endblock %}</div>
+        <div class="page-container">{% block content %}{% endblock %}
+            <footer class="site-footer">
+                <p><strong>Information only.</strong> Melios Dira Odds provides statistical estimates for information and entertainment.
+                We do not accept bets, payments or deposits, and this is not betting advice. Predictions can be wrong.
+                This site is for adults aged 18 and over. If gambling is causing you harm, please seek local support.
+                <a href="/privacy">Privacy notice</a></p>
+            </footer>
+        </div>
     </div>
 </main>
 
@@ -229,38 +232,6 @@
     }
     tick();
     setInterval(tick, 30000);
-})();
-
-// ── Season countdowns ──────────────────────────────────────────────
-(function(){
-    function updateCountdown(el) {
-        const target = new Date(el.dataset.countdownTarget).getTime();
-        const remaining = target - Date.now();
-        const value = el.querySelector('[data-countdown-value]');
-        if (!value || Number.isNaN(target)) return;
-        if (remaining <= 0) {
-            value.textContent = 'Now';
-            return;
-        }
-        const now = new Date();
-        const targetDate = new Date(target);
-        let months = (targetDate.getFullYear() - now.getFullYear()) * 12
-            + targetDate.getMonth() - now.getMonth();
-        let monthAnchor = new Date(now);
-        monthAnchor.setMonth(monthAnchor.getMonth() + months);
-        if (monthAnchor.getTime() > target) {
-            months -= 1;
-            monthAnchor = new Date(now);
-            monthAnchor.setMonth(monthAnchor.getMonth() + months);
-        }
-        const afterMonths = target - monthAnchor.getTime();
-        const days = Math.floor(afterMonths / 86400000);
-        const hours = Math.floor((afterMonths % 86400000) / 3600000);
-        value.textContent = `${months}mo ${days}d ${String(hours).padStart(2, '0')}h`;
-    }
-    const countdowns = Array.from(document.querySelectorAll('[data-countdown-target]'));
-    countdowns.forEach(updateCountdown);
-    if (countdowns.length) setInterval(function(){ countdowns.forEach(updateCountdown); }, 60000);
 })();
 
 // ── Sidebar collapse ───────────────────────────────────────────────

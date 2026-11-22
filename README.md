@@ -131,6 +131,23 @@ public navigational pages; API, admin, and debug paths are excluded. Set
 `PUBLIC_BASE_URL` to the final HTTPS hostname before deployment so generated
 canonical and sitemap URLs are correct.
 
+The social preview uses `v4_web/static/social-preview.png`, a 1200×630 PNG
+compatible with common sharing clients. The Tabler icon font is pinned to
+version 2.47.0. Tailwind utilities are compiled ahead of time into
+`v4_web/static/tailwind.css`; the browser no longer runs the Tailwind CDN
+compiler.
+
+The shared layout includes a solid keyboard focus outline, improved light-mode
+text contrast, decorative images with empty alternative text, tabular numeric
+figures, and polling that pauses while a browser tab is hidden. To rebuild the
+Tailwind asset locally, download the v3.4.17 standalone executable as
+`v4_web/tailwindcss.exe` and run:
+
+```bash
+cd v4_web
+./tailwindcss.exe -c tailwind.config.js -i tailwind.input.css -o static/tailwind.css --minify
+```
+
 ## About, contact, and disclaimer
 
 The site includes `/about`, `/contact`, and `/disclaimer` pages. It provides
