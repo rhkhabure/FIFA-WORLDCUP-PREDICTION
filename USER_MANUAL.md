@@ -146,6 +146,8 @@ while its browser tab is hidden.
 
 The navigation is across the top of the page. On smaller screens, swipe or
 scroll the navigation row horizontally to reach additional leagues and teams.
+On the NBA Teams page, hover over or focus **Conferences**, then select
+**Eastern** or **Western** to jump to that section.
 
 ### Production release check
 

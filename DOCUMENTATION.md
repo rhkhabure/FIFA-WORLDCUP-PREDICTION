@@ -227,6 +227,8 @@ The application shell uses a responsive top navigation instead of a fixed
 left sidebar. Primary, league, and team links remain available in a
 horizontal scroll row on narrow screens, while the main content uses the full
 viewport width.
+On NBA pages, the Conferences control uses a hover/focus dropdown whose links
+target the existing `#East` and `#West` team-page anchors.
 
 ### 1.12 Deployment and rollback
 

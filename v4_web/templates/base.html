@@ -32,7 +32,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=JetBrains+Mono:wght@400;700&display=swap">
     <link rel="stylesheet" href="{{ url_for('static', path='tailwind.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', path='theme.css') }}?v=20261126-1">
+    <link rel="stylesheet" href="{{ url_for('static', path='theme.css') }}?v=20261126-3">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
     <style>
         /* ── NBA theme (official red / blue / white) ──────────── */
@@ -126,15 +126,22 @@
         <a href="/nba/history" class="nav-item" data-page="nba-history"><span class="nav-icon"><i class="ti ti-chart-line" aria-hidden="true"></i></span><span class="nav-label">Prediction history</span></a>
         <a href="/nba/teams"   class="nav-item" data-page="nba-teams">  <span class="nav-icon"><i class="ti ti-users-group" aria-hidden="true"></i></span><span class="nav-label">Teams</span></a>
 
-        <div class="nav-section-label">Conferences</div>
-        <a href="/nba/teams#east" class="nav-item" data-page="nba-east">
-            <span class="nav-icon"><span class="league-nav-dot" style="background:#1D428A"></span></span>
-            <span class="nav-label">Eastern</span>
-        </a>
-        <a href="/nba/teams#west" class="nav-item" data-page="nba-west">
-            <span class="nav-icon"><span class="league-nav-dot" style="background:#C8102E"></span></span>
-            <span class="nav-label">Western</span>
-        </a>
+        <div class="nav-dropdown">
+            <button type="button" class="nav-dropdown-trigger" aria-haspopup="true">
+                <span class="nav-icon"><i class="ti ti-sitemap" aria-hidden="true"></i></span>
+                <span class="nav-label">Conferences</span>
+            </button>
+            <div class="nav-dropdown-menu" role="menu">
+                <a href="/nba/teams#East" class="nav-dropdown-item" role="menuitem">
+                    <span class="league-nav-dot" style="background:#1D428A"></span>
+                    Eastern
+                </a>
+                <a href="/nba/teams#West" class="nav-dropdown-item" role="menuitem">
+                    <span class="league-nav-dot" style="background:#C8102E"></span>
+                    Western
+                </a>
+            </div>
+        </div>
 
         <div class="nav-section-label">Coming later</div>
         <span class="nav-item" style="opacity:0.35;cursor:default"><span class="nav-icon"><i class="ti ti-list-numbers" aria-hidden="true"></i></span><span class="nav-label">Standings · Layer 2</span></span>
@@ -244,6 +251,23 @@
         }
     });
 })();
+
+// Keep top-navigation dropdowns below their trigger, including inside the
+// horizontally scrollable navigation row.
+document.querySelectorAll('.nav-dropdown').forEach(dropdown => {
+    const trigger = dropdown.querySelector('.nav-dropdown-trigger');
+    const menu = dropdown.querySelector('.nav-dropdown-menu');
+    if (!trigger || !menu) return;
+    const placeMenu = () => {
+        const rect = trigger.getBoundingClientRect();
+        menu.style.left = `${Math.max(8, rect.left)}px`;
+        menu.style.top = `${rect.bottom + 2}px`;
+    };
+    dropdown.addEventListener('mouseenter', placeMenu);
+    dropdown.addEventListener('focusin', placeMenu);
+    window.addEventListener('resize', placeMenu);
+    window.addEventListener('scroll', placeMenu, {passive: true});
+});
 </script>
 </body>
 </html>
