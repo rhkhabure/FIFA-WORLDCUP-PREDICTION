@@ -150,6 +150,7 @@ On NBA pages, the Conferences control reveals Eastern and Western links on
 hover or keyboard focus; selecting one jumps to that conference's team list.
 On Football pages, the Leagues control reveals all five supported leagues on
 hover or keyboard focus; selecting one opens that league's dashboard.
+The dropdown uses the matching league crest rather than a colour-only marker.
 
 ```bash
 cd v4_web

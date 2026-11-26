@@ -32,7 +32,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=JetBrains+Mono:wght@400;700&display=swap">
     <link rel="stylesheet" href="{{ url_for('static', path='tailwind.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', path='theme.css') }}?v=20261126-3">
+    <link rel="stylesheet" href="{{ url_for('static', path='theme.css') }}?v=20261126-4">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
     <style>
         /* ── NBA theme (official red / blue / white) ──────────── */
@@ -157,9 +157,9 @@
         <a href="/tournament" class="nav-item" data-page="tournament"><span class="nav-icon"><i class="ti ti-tournament" aria-hidden="true"></i></span><span class="nav-label">Tournament</span></a>
 
         {% set leagues_nav = [
-            ("pl","Premier League","#9B59B6"),("laliga","La Liga","#E74C3C"),
-            ("bundesliga","Bundesliga","#C0392B"),("seriea","Serie A","#2563EB"),
-            ("ligue1","Ligue 1","#00A3E0"),
+            ("pl","Premier League","pl"),("laliga","La Liga","laliga"),
+            ("bundesliga","Bundesliga","bundesliga"),("seriea","Serie A","seriea"),
+            ("ligue1","Ligue 1","ligue1"),
         ] %}
         <div class="nav-dropdown">
             <button type="button" class="nav-dropdown-trigger" aria-haspopup="true">
@@ -167,9 +167,10 @@
                 <span class="nav-label">Leagues</span>
             </button>
             <div class="nav-dropdown-menu" role="menu">
-                {% for code, name, dot in leagues_nav %}
+                {% for code, name, logo in leagues_nav %}
                 <a href="/match?league={{ code }}" class="nav-dropdown-item" role="menuitem">
-                    <span class="league-nav-dot" style="background:{{ dot }}"></span>
+                    <img src="{{ url_for('static', path='logos/' ~ logo ~ '.svg') }}"
+                         alt="" aria-hidden="true">
                     {{ name }}
                 </a>
                 {% endfor %}
