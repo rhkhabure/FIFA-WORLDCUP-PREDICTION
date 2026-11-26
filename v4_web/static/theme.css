@@ -601,8 +601,10 @@ a {
 .site-footer a { color: var(--league-primary); text-decoration: underline; }
 
 /* ── Top navigation shell ─────────────────────────────────────── */
-body.flex.min-h-screen {
+body.app-shell {
+    display: flex;
     flex-direction: column;
+    min-height: 100vh;
 }
 #sidebar {
     border-bottom: 1px solid rgba(255,255,255,0.08);
