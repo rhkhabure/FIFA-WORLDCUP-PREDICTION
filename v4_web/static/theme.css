@@ -265,20 +265,6 @@ body {
     overflow: hidden;
     border-right: 1px solid rgba(255,255,255,0.08);
 }
-#sidebar.collapsed { width: 56px; }
-#sidebar-toggle {
-    align-items: center;
-    display: inline-flex;
-    justify-content: center;
-    min-height: 44px;
-    min-width: 44px;
-}
-#sidebar.collapsed .nav-label,
-#sidebar.collapsed .nav-section-label,
-#sidebar.collapsed .sidebar-wordmark,
-#sidebar.collapsed .sidebar-footer-text { display: none; }
-#sidebar.collapsed .nav-item { justify-content: center; padding: 10px 0; }
-
 .nav-section-label {
     font-family: var(--font-mono);
     font-size: var(--text-xs);
@@ -613,6 +599,69 @@ a {
     padding: 16px 0 8px;
 }
 .site-footer a { color: var(--league-primary); text-decoration: underline; }
+
+/* ── Top navigation shell ─────────────────────────────────────── */
+body.flex.min-h-screen {
+    flex-direction: column;
+}
+#sidebar {
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    border-right: 0;
+    height: auto;
+    max-height: none;
+    position: sticky;
+    top: 0;
+    width: 100%;
+    z-index: 60;
+}
+#sidebar > nav {
+    align-items: stretch;
+    display: flex;
+    flex: 0 0 auto !important;
+    gap: 4px;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    padding: 6px 14px !important;
+    scrollbar-width: thin;
+}
+#sidebar:not(.collapsed) .nav-label,
+#sidebar:not(.collapsed) .sidebar-wordmark,
+#sidebar:not(.collapsed) .sidebar-footer-text { display: inline; }
+#sidebar:not(.collapsed) .nav-section-label { display: flex; }
+#sidebar:not(.collapsed) .nav-item {
+    justify-content: flex-start;
+    padding: 9px 12px;
+}
+#sidebar > nav .nav-section-label {
+    align-items: center;
+    display: flex;
+    flex: 0 0 auto;
+    padding: 8px 10px;
+}
+#sidebar > nav .nav-item {
+    border-bottom: 3px solid transparent;
+    border-left: 0;
+    flex: 0 0 auto;
+    justify-content: flex-start;
+    min-height: 42px;
+    padding: 9px 12px;
+}
+#sidebar > nav .nav-item.active {
+    border-bottom-color: var(--league-active-bar);
+}
+#sidebar > div:last-child {
+    align-items: center;
+    display: flex;
+    gap: 16px;
+    justify-content: flex-end;
+    padding: 8px 14px !important;
+}
+#sidebar > div:last-child a {
+    margin-bottom: 0 !important;
+}
+#main-content {
+    width: 100%;
+}
 
 /* Scrollbar */
 ::-webkit-scrollbar { width: 5px; height: 5px; }

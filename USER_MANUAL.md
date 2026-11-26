@@ -144,6 +144,9 @@ display them reliably. The dashboard also supports keyboard focus indicators,
 stronger text contrast, decorative-image handling, and pauses live polling
 while its browser tab is hidden.
 
+The navigation is across the top of the page. On smaller screens, swipe or
+scroll the navigation row horizontally to reach additional leagues and teams.
+
 ### Production release check
 
 After deploying the reviewed commit, verify the public HTTPS origin:

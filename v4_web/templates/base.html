@@ -81,11 +81,6 @@
                 Melios Dira
             </span>
         </div>
-        <button id="sidebar-toggle" aria-controls="sidebar" aria-expanded="true" aria-label="Collapse navigation"
-                style="background:none;border:none;cursor:pointer;color:rgba(255,255,255,0.75);
-                       font-size:11px;padding:4px;line-height:1" title="Toggle sidebar">
-            <span id="toggle-icon">◀</span>
-        </button>
     </div>
 
     <!-- ── Sport toggle: left half football, right half basketball ── -->
@@ -233,21 +228,6 @@
     tick();
     setInterval(tick, 30000);
 })();
-
-// ── Sidebar collapse ───────────────────────────────────────────────
-const sidebar    = document.getElementById('sidebar');
-const toggleBtn  = document.getElementById('sidebar-toggle');
-const toggleIcon = document.getElementById('toggle-icon');
-const SK = 'md-sidebar-collapsed';
-function setCollapsed(v){
-    sidebar.classList.toggle('collapsed', v);
-    toggleIcon.textContent = v ? '▶' : '◀';
-    toggleBtn.setAttribute('aria-expanded', String(!v));
-    toggleBtn.setAttribute('aria-label', v ? 'Expand navigation' : 'Collapse navigation');
-    try{ sessionStorage.setItem(SK, v?'1':'0'); }catch(e){}
-}
-try{ if(sessionStorage.getItem(SK)==='1') setCollapsed(true); }catch(e){}
-toggleBtn.addEventListener('click', ()=>setCollapsed(!sidebar.classList.contains('collapsed')));
 
 // ── Active nav highlight ───────────────────────────────────────────
 (function(){

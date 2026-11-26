@@ -223,6 +223,11 @@ font is pinned to 2.47.0 to avoid unreviewed upstream changes.
 Open Graph sharing points to `v4_web/static/social-preview.png`, a 1200×630
 PNG rather than an SVG so common social clients can render the preview.
 
+The application shell uses a responsive top navigation instead of a fixed
+left sidebar. Primary, league, and team links remain available in a
+horizontal scroll row on narrow screens, while the main content uses the full
+viewport width.
+
 ### 1.12 Deployment and rollback
 
 The Render service definition uses `/health/ready` as its health check. This

@@ -143,6 +143,10 @@ figures, and polling that pauses while a browser tab is hidden. To rebuild the
 Tailwind asset locally, download the v3.4.17 standalone executable as
 `v4_web/tailwindcss.exe` and run:
 
+Navigation is presented as a responsive top bar across the application. On
+narrow screens, the navigation row scrolls horizontally so all league and team
+links remain available without reducing the main content to a narrow sidebar.
+
 ```bash
 cd v4_web
 ./tailwindcss.exe -c tailwind.config.js -i tailwind.input.css -o static/tailwind.css --minify
