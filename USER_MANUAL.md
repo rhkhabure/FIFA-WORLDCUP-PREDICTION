@@ -150,6 +150,8 @@ On the NBA Teams page, hover over or focus **Conferences**, then select
 **Eastern** or **Western** to jump to that section.
 On Football pages, hover over or focus **Leagues**, then select one of the five
 league dashboards.
+Use **Quick Teams** for the featured team links, or **All Teams** to browse the
+complete team list.
 
 ### Production release check
 

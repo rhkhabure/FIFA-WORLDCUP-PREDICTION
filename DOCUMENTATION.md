@@ -232,6 +232,8 @@ target the existing `#East` and `#West` team-page anchors.
 On Football pages, the Leagues control uses the same interaction pattern and
 links to the five supported league dashboards.
 Each league option displays its local crest asset.
+Quick Teams and All Teams are also dropdown controls, with crest-backed team
+links and a scrollable All Teams list.
 
 ### 1.12 Deployment and rollback
 

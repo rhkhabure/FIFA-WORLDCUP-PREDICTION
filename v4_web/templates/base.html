@@ -32,7 +32,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=JetBrains+Mono:wght@400;700&display=swap">
     <link rel="stylesheet" href="{{ url_for('static', path='tailwind.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', path='theme.css') }}?v=20261126-5">
+    <link rel="stylesheet" href="{{ url_for('static', path='theme.css') }}?v=20261126-6">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
     <style>
         /* ── NBA theme (official red / blue / white) ──────────── */
@@ -177,21 +177,37 @@
             </div>
         </div>
 
-        <div class="nav-section-label">Quick Teams</div>
-        {% for team in team_nav_quick|default([]) %}
-        <a href="{{ team.href }}" class="nav-item" data-page="team-{{ team.name|lower|replace(' ','-') }}">
-            <span class="nav-icon"><img src="/crest/{{ team.name }}" alt="" loading="lazy" style="width:16px;height:16px;object-fit:contain" onerror="this.style.display='none'"/></span>
-            <span class="nav-label">{{ team.name }}</span>
-        </a>
-        {% endfor %}
+        <div class="nav-dropdown">
+            <button type="button" class="nav-dropdown-trigger" aria-haspopup="true">
+                <span class="nav-icon"><i class="ti ti-bolt" aria-hidden="true"></i></span>
+                <span class="nav-label">Quick Teams</span>
+            </button>
+            <div class="nav-dropdown-menu team-nav-menu" role="menu">
+                {% for team in team_nav_quick|default([]) %}
+                <a href="{{ team.href }}" class="nav-dropdown-item" role="menuitem">
+                    <img src="/crest/{{ team.name }}" alt="" aria-hidden="true" loading="lazy"
+                         onerror="this.style.display='none'">
+                    {{ team.name }}
+                </a>
+                {% endfor %}
+            </div>
+        </div>
 
-        <div class="nav-section-label">All Teams</div>
-        {% for team in team_nav_all|default([]) %}
-        <a href="{{ team.href }}" class="nav-item" data-page="team-{{ team.name|lower|replace(' ','-') }}">
-            <span class="nav-icon"><img src="/crest/{{ team.name }}" alt="" loading="lazy" style="width:16px;height:16px;object-fit:contain" onerror="this.style.display='none'"/></span>
-            <span class="nav-label">{{ team.name }}</span>
-        </a>
-        {% endfor %}
+        <div class="nav-dropdown">
+            <button type="button" class="nav-dropdown-trigger" aria-haspopup="true">
+                <span class="nav-icon"><i class="ti ti-users-group" aria-hidden="true"></i></span>
+                <span class="nav-label">All Teams</span>
+            </button>
+            <div class="nav-dropdown-menu team-nav-menu" role="menu">
+                {% for team in team_nav_all|default([]) %}
+                <a href="{{ team.href }}" class="nav-dropdown-item" role="menuitem">
+                    <img src="/crest/{{ team.name }}" alt="" aria-hidden="true" loading="lazy"
+                         onerror="this.style.display='none'">
+                    {{ team.name }}
+                </a>
+                {% endfor %}
+            </div>
+        </div>
     {% endif %}
     </nav>
 

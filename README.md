@@ -151,6 +151,8 @@ hover or keyboard focus; selecting one jumps to that conference's team list.
 On Football pages, the Leagues control reveals all five supported leagues on
 hover or keyboard focus; selecting one opens that league's dashboard.
 The dropdown uses the matching league crest rather than a colour-only marker.
+Quick Teams and All Teams use the same hover/focus dropdown pattern; All Teams
+is scrollable to keep the navigation usable on smaller screens.
 
 ```bash
 cd v4_web

@@ -350,6 +350,11 @@ body {
     padding: 3px;
     width: 24px;
 }
+.team-nav-menu {
+    max-height: min(60vh, 520px);
+    min-width: 220px;
+    overflow-y: auto;
+}
 .nav-dropdown-item:hover,
 .nav-dropdown-item:focus-visible {
     background: rgba(255,255,255,0.12);
