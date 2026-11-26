@@ -148,6 +148,8 @@ narrow screens, the navigation row scrolls horizontally so all league and team
 links remain available without reducing the main content to a narrow sidebar.
 On NBA pages, the Conferences control reveals Eastern and Western links on
 hover or keyboard focus; selecting one jumps to that conference's team list.
+On Football pages, the Leagues control reveals all five supported leagues on
+hover or keyboard focus; selecting one opens that league's dashboard.
 
 ```bash
 cd v4_web

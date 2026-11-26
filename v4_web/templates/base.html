@@ -156,19 +156,25 @@
         <a href="/history"class="nav-item" data-page="history"> <span class="nav-icon"><i class="ti ti-chart-line" aria-hidden="true"></i></span><span class="nav-label">Prediction history</span></a>
         <a href="/tournament" class="nav-item" data-page="tournament"><span class="nav-icon"><i class="ti ti-tournament" aria-hidden="true"></i></span><span class="nav-label">Tournament</span></a>
 
-        <div class="nav-section-label">Leagues</div>
         {% set leagues_nav = [
             ("pl","Premier League","#9B59B6"),("laliga","La Liga","#E74C3C"),
             ("bundesliga","Bundesliga","#C0392B"),("seriea","Serie A","#2563EB"),
             ("ligue1","Ligue 1","#00A3E0"),
         ] %}
-        {% for code, name, dot in leagues_nav %}
-        <a href="/match?league={{ code }}" class="nav-item" data-page="league-{{ code }}"
-           {% if (league|default('pl'))==code %}style="background:rgba(255,255,255,0.12);color:#fff;border-left-color:var(--league-active-bar)"{% endif %}>
-            <span class="nav-icon"><span class="league-nav-dot" style="background:{{ dot }}"></span></span>
-            <span class="nav-label">{{ name }}</span>
-        </a>
-        {% endfor %}
+        <div class="nav-dropdown">
+            <button type="button" class="nav-dropdown-trigger" aria-haspopup="true">
+                <span class="nav-icon"><i class="ti ti-tournament" aria-hidden="true"></i></span>
+                <span class="nav-label">Leagues</span>
+            </button>
+            <div class="nav-dropdown-menu" role="menu">
+                {% for code, name, dot in leagues_nav %}
+                <a href="/match?league={{ code }}" class="nav-dropdown-item" role="menuitem">
+                    <span class="league-nav-dot" style="background:{{ dot }}"></span>
+                    {{ name }}
+                </a>
+                {% endfor %}
+            </div>
+        </div>
 
         <div class="nav-section-label">Quick Teams</div>
         {% for team in team_nav_quick|default([]) %}

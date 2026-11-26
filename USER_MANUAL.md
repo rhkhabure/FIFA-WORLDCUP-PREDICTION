@@ -148,6 +148,8 @@ The navigation is across the top of the page. On smaller screens, swipe or
 scroll the navigation row horizontally to reach additional leagues and teams.
 On the NBA Teams page, hover over or focus **Conferences**, then select
 **Eastern** or **Western** to jump to that section.
+On Football pages, hover over or focus **Leagues**, then select one of the five
+league dashboards.
 
 ### Production release check
 

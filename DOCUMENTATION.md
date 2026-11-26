@@ -229,6 +229,8 @@ horizontal scroll row on narrow screens, while the main content uses the full
 viewport width.
 On NBA pages, the Conferences control uses a hover/focus dropdown whose links
 target the existing `#East` and `#West` team-page anchors.
+On Football pages, the Leagues control uses the same interaction pattern and
+links to the five supported league dashboards.
 
 ### 1.12 Deployment and rollback
 
