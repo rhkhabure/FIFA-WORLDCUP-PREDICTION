@@ -282,5 +282,30 @@
        transform="translate(-2.2343313,3.0462698)"
        id="path3153-2"
        style="opacity:0.32015812;color:#000000;fill:url(#linearGradient4149);fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:0.5;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none;stroke-dashoffset:0;marker:none;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />
+    <g
+       id="trophy-detail"
+       fill="none"
+       stroke="#7b5600"
+       stroke-linecap="round"
+       stroke-linejoin="round">
+      <path d="M437,581 C451,592 481,593 497,580" stroke-width="1.2" opacity=".8" />
+      <path d="M464,565 C480,580 481,613 465,630" stroke-width="1.1" opacity=".72" />
+      <path d="M438,609 C452,598 481,598 497,609" stroke-width=".8" opacity=".52" />
+      <path d="M455,635 C449,641 445,649 448,658 C451,665 456,668 461,669"
+            stroke-width="2" opacity=".72" />
+      <path d="M513,635 C519,641 523,649 520,658 C517,665 512,668 507,669"
+            stroke-width="2" opacity=".72" />
+      <ellipse cx="484" cy="635" rx="29" ry="3" stroke-width="1.2" opacity=".75" />
+      <path d="M460,683 C473,688 493,688 507,683" stroke-width="1" opacity=".55" />
+      <path d="M445,741 L520,741" stroke="#fff1d0" stroke-width="1.2" opacity=".7" />
+      <path d="M448,745 L517,745" stroke="#7b5600" stroke-width=".8" opacity=".8" />
+    </g>
+    <path
+       d="M462,650 C466,658 469,688 470,711"
+       fill="none"
+       stroke="#fff1d0"
+       stroke-width="2"
+       opacity=".55"
+       stroke-linecap="round" />
   </g>
 </svg>
