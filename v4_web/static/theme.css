@@ -90,7 +90,14 @@
     .broadcast-context {
         gap: 7px;
     }
-    .broadcast-context .topbar-title,
+    .page-identity-logo {
+        height: 28px;
+        width: 48px;
+    }
+    .page-identity-kicker {
+        font-size: 9px;
+    }
+    .page-identity-title,
     .broadcast-context .topbar-date {
         display: none;
     }
@@ -731,13 +738,9 @@ body.app-shell {
     gap: 8px;
 }
 .broadcast-brand .sidebar-wordmark {
-    color: #fff;
+    color: #fff !important;
     font: 800 13px var(--font-sans);
     letter-spacing: 0.4px;
-}
-.broadcast-brand .league-badge-pill {
-    font-size: 11px;
-    padding: 4px 9px;
 }
 .broadcast-header .sport-toggle-wrap {
     align-items: center;
@@ -760,7 +763,27 @@ body.app-shell {
     margin-left: auto;
     min-width: 0;
 }
-.broadcast-context .topbar-title {
+.page-identity-logo {
+    background: #fff;
+    border-radius: 6px;
+    flex: 0 0 auto;
+    height: 34px;
+    object-fit: contain;
+    padding: 4px 7px;
+    width: 58px;
+}
+.page-identity-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+.page-identity-kicker {
+    color: rgba(255,255,255,0.68);
+    font: 700 10px var(--font-mono);
+    letter-spacing: 0.14em;
+}
+.page-identity-title {
     color: #fff;
     font-size: var(--text-sm);
     overflow: hidden;

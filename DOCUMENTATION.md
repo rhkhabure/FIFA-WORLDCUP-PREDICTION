@@ -230,6 +230,8 @@ viewport width.
 The shell uses a compact broadcast-style identity row above the navigation;
 page context, live state, and the clock are grouped there, while privacy and
 model details are presented in the page footer.
+The identity row displays the NBA mark for NBA routes and the UEFA football
+mark for Football routes, followed by the current page title.
 On NBA pages, the Conferences control uses a hover/focus dropdown whose links
 target the existing `#East` and `#West` team-page anchors.
 On Football pages, the Leagues control uses the same interaction pattern and

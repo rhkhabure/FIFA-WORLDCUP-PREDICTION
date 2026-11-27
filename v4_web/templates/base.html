@@ -32,7 +32,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=JetBrains+Mono:wght@400;700&display=swap">
     <link rel="stylesheet" href="{{ url_for('static', path='tailwind.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', path='theme.css') }}?v=20261127-1">
+    <link rel="stylesheet" href="{{ url_for('static', path='theme.css') }}?v=20261127-2">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
     <style>
         /* ── NBA theme (official red / blue / white) ──────────── */
@@ -74,8 +74,7 @@
 <div id="sidebar">
     <div class="broadcast-header">
         <div class="broadcast-brand">
-            <div class="league-badge-pill sidebar-wordmark">{{ 'NBA' if is_nba else (league_code | default('PL')) }}</div>
-            <span class="sidebar-wordmark">Melios Dira</span>
+            <span class="sidebar-wordmark">MELIOS DIRA</span>
         </div>
         <div class="sport-toggle-wrap">
             <svg class="sport-ball" viewBox="0 0 40 40" aria-hidden="true" focusable="false">
@@ -110,8 +109,13 @@
             </div>
         </div>
         <div class="broadcast-context">
-            <div class="topbar-league-pill">{{ 'NBA' if is_nba else (league_code | default('PL')) }}</div>
-            <div class="topbar-title">{% if topbar_title %}{{ topbar_title }}{% else %}Melios Dira Odds{% endif %}</div>
+            <img class="page-identity-logo"
+                 src="{{ 'https://cdn.nba.com/logos/leagues/logo-nba.svg' if is_nba else 'https://upload.wikimedia.org/wikipedia/commons/b/b5/UEFA_logo.svg' }}"
+                 alt="{{ 'NBA' if is_nba else 'UEFA' }} logo">
+            <div class="page-identity-copy">
+                <span class="page-identity-kicker">{{ 'NBA' if is_nba else 'UEFA FOOTBALL' }}</span>
+                <strong class="page-identity-title">{{ topbar_title|default(title|default('Football'), true) }}</strong>
+            </div>
             {% if live_count and live_count > 0 %}<div class="live-badge">{{ live_count }} LIVE</div>{% endif %}
             <div class="topbar-date" id="topbar-clock"></div>
         </div>
