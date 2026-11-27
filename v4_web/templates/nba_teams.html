@@ -15,6 +15,11 @@
   .conference-layout{display:grid;grid-template-columns:minmax(0,1fr) 190px minmax(0,1fr);
                       align-items:start;gap:18px}
   .conference-panel{min-width:0}
+  .east-panel .team-grid{direction:rtl}
+  .east-panel .team-card{direction:ltr}
+  .east-panel .t-section-head{flex-direction:row-reverse}
+  .east-panel .t-section-head h2{text-align:right}
+  .east-panel .div-label{text-align:right}
   .playoff-center{position:sticky;top:150px;min-height:320px;display:flex;align-items:center;
                   justify-content:center}
   .court-panel{width:178px;height:260px;border:2px solid rgba(29,66,138,.35);
@@ -26,7 +31,7 @@
   .court-panel::after{content:"";position:absolute;top:0;bottom:0;left:50%;border-left:2px solid rgba(15,23,42,.16)}
   .playoff-trophy{z-index:1;width:118px;padding:18px 8px;text-align:center;border-radius:12px;
                   background:rgba(255,255,255,.92);box-shadow:0 6px 16px rgba(15,23,42,.14)}
-  .playoff-trophy i{color:#C99A2E;font-size:42px;line-height:1}
+  .playoff-trophy img{display:block;height:54px;margin:0 auto;width:76px}
   .playoff-trophy strong{display:block;color:#1D428A;font-size:11px;letter-spacing:.1em;
                          margin-top:8px}
   .playoff-trophy span{display:block;color:#64748b;font:700 9px var(--font-mono);
@@ -80,7 +85,7 @@
   </div>
 
   {% macro conference_panel(conf_name, divisions) %}
-  <section id="{{ conf_name }}" class="conference-panel">
+  <section id="{{ conf_name }}" class="conference-panel {{ 'east-panel' if conf_name == 'East' else 'west-panel' }}">
     <div class="t-section-head">
       <span style="width:10px;height:10px;border-radius:50%;
             background:{{ '#1D428A' if conf_name == 'East' else '#C8102E' }}"></span>
@@ -123,7 +128,7 @@
     <aside class="playoff-center" aria-label="NBA playoff pathway">
       <div class="court-panel">
         <div class="playoff-trophy">
-          <i class="ti ti-trophy" aria-hidden="true"></i>
+          <img src="{{ url_for('static', path='nba-playoff-trophy.svg') }}" alt="NBA Playoffs trophy">
           <strong>NBA PLAYOFFS</strong>
           <span>ROAD TO THE FINALS</span>
         </div>

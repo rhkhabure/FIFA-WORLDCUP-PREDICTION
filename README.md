@@ -163,6 +163,8 @@ is scrollable to keep the navigation usable on smaller screens.
 NBA team cards also show each team's current position within its conference.
 The NBA Teams page presents the Western and Eastern Conferences side by side
 with a central court-and-playoff trophy panel on wide screens.
+The Eastern panel mirrors the Western panel's card flow and heading alignment,
+and the centre uses a dedicated local playoff trophy illustration.
 
 ```bash
 cd v4_web

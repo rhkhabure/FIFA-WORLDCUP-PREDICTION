@@ -245,6 +245,8 @@ The NBA Teams page enriches each card with the current conference rank from
 the cached standings provider; unavailable standings display `—`.
 On wide screens, conference panels flank a central court-themed playoff panel;
 the layout stacks responsively on smaller screens.
+The East panel is directionally mirrored for a balanced bracket-like layout,
+and the playoff panel uses `static/nba-playoff-trophy.svg`.
 
 ### 1.12 Deployment and rollback
 

@@ -156,6 +156,8 @@ NBA team cards show the team's conference position alongside its city and Elo
 rating.
 On larger screens, Western teams appear on the left and Eastern teams on the
 right around the central NBA Playoffs panel.
+The Eastern side is mirrored toward the centre to create a balanced bracket
+layout.
 
 ### Production release check
 
