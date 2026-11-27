@@ -75,37 +75,6 @@
     --transition-base: 180ms ease;
 }
 
-@media (max-width: 640px) {
-    .broadcast-header {
-        gap: 10px;
-        min-height: 56px;
-        padding: 7px 12px;
-    }
-    .broadcast-header .sport-toggle-wrap {
-        padding-left: 10px;
-    }
-    .broadcast-header .sport-labels {
-        display: none;
-    }
-    .broadcast-context {
-        gap: 7px;
-    }
-    .page-identity-logo {
-        height: 28px;
-        width: 48px;
-    }
-    .page-identity-kicker {
-        font-size: 9px;
-    }
-    .page-identity-title,
-    .broadcast-context .topbar-date {
-        display: none;
-    }
-    #sidebar > nav {
-        padding-inline: 8px !important;
-    }
-}
-
 /* ── Premier League ─────────────────────────────────────────────── */
 [data-league="pl"], :root {
     --league-primary:    #3D185A;   /* Deep royal purple */
@@ -767,10 +736,10 @@ body.app-shell {
     background: #fff;
     border-radius: 6px;
     flex: 0 0 auto;
-    height: 34px;
+    height: 42px;
     object-fit: contain;
-    padding: 4px 7px;
-    width: 58px;
+    padding: 3px 6px;
+    width: 74px;
 }
 .page-identity-copy {
     display: flex;
@@ -1075,3 +1044,34 @@ body.app-shell {
     grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 .nba-fan-vote-card .fan-vote-message { text-align: center; }
+
+@media (max-width: 640px) {
+    .broadcast-header {
+        gap: 10px;
+        min-height: 56px;
+        padding: 7px 12px;
+    }
+    .broadcast-header .sport-toggle-wrap {
+        padding-left: 10px;
+    }
+    .broadcast-header .sport-labels {
+        display: none;
+    }
+    .broadcast-context {
+        gap: 7px;
+    }
+    .page-identity-logo {
+        height: 32px;
+        width: 60px;
+    }
+    .page-identity-kicker {
+        font-size: 9px;
+    }
+    .page-identity-title,
+    .broadcast-context .topbar-date {
+        display: none;
+    }
+    #sidebar > nav {
+        padding-inline: 8px !important;
+    }
+}

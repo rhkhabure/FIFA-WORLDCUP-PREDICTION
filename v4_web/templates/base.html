@@ -32,7 +32,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=JetBrains+Mono:wght@400;700&display=swap">
     <link rel="stylesheet" href="{{ url_for('static', path='tailwind.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', path='theme.css') }}?v=20261127-2">
+    <link rel="stylesheet" href="{{ url_for('static', path='theme.css') }}?v=20261127-3">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
     <style>
         /* ── NBA theme (official red / blue / white) ──────────── */
@@ -244,6 +244,44 @@
     }
     tick();
     setInterval(tick, 30000);
+})();
+
+// ── Shared calendar countdowns ────────────────────────────────────
+(function(){
+    function renderCountdown(target, value) {
+        const targetDate = new Date(target);
+        if (Number.isNaN(targetDate.getTime())) {
+            value.textContent = 'Unavailable';
+            return;
+        }
+        const now = new Date();
+        if (targetDate <= now) {
+            value.textContent = 'Due';
+            return;
+        }
+
+        let months = (targetDate.getFullYear() - now.getFullYear()) * 12
+            + targetDate.getMonth() - now.getMonth();
+        let anchor = new Date(now);
+        anchor.setMonth(anchor.getMonth() + months);
+        if (anchor > targetDate) {
+            months -= 1;
+            anchor = new Date(now);
+            anchor.setMonth(anchor.getMonth() + months);
+        }
+        const days = Math.floor((targetDate - anchor) / 86400000);
+        const hours = Math.floor((targetDate - anchor - days * 86400000) / 3600000);
+        value.textContent = `${months}mo ${days}d ${hours}h`;
+    }
+
+    function tickCountdowns() {
+        document.querySelectorAll('[data-countdown-target]').forEach(container => {
+            const value = container.querySelector('[data-countdown-value]');
+            if (value) renderCountdown(container.dataset.countdownTarget, value);
+        });
+    }
+    tickCountdowns();
+    setInterval(tickCountdowns, 3600000);
 })();
 
 // ── Active nav highlight ───────────────────────────────────────────
