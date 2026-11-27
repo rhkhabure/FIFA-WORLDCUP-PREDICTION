@@ -32,7 +32,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=JetBrains+Mono:wght@400;700&display=swap">
     <link rel="stylesheet" href="{{ url_for('static', path='tailwind.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', path='theme.css') }}?v=20261127-3">
+    <link rel="stylesheet" href="{{ url_for('static', path='theme.css') }}?v=20261127-4">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
     <style>
         /* ── NBA theme (official red / blue / white) ──────────── */
@@ -113,7 +113,7 @@
                  src="{{ 'https://cdn.nba.com/logos/leagues/logo-nba.svg' if is_nba else 'https://upload.wikimedia.org/wikipedia/commons/b/b5/UEFA_logo.svg' }}"
                  alt="{{ 'NBA' if is_nba else 'UEFA' }} logo">
             <div class="page-identity-copy">
-                <span class="page-identity-kicker">{{ 'NBA' if is_nba else 'UEFA FOOTBALL' }}</span>
+                {% if is_nba %}<span class="page-identity-kicker">NBA</span>{% endif %}
                 <strong class="page-identity-title">{{ topbar_title|default(title|default('Football'), true) }}</strong>
             </div>
             {% if live_count and live_count > 0 %}<div class="live-badge">{{ live_count }} LIVE</div>{% endif %}
@@ -123,7 +123,6 @@
 
     <nav style="flex:1;overflow-y:auto;overflow-x:hidden;padding:8px 0">
     {% if is_nba %}
-        <div class="nav-section-label">NBA</div>
         <a href="/nba"         class="nav-item" data-page="nba-hub">    <span class="nav-icon"><i class="ti ti-layout-dashboard" aria-hidden="true"></i></span><span class="nav-label">Hub</span></a>
         <a href="/nba/match"   class="nav-item" data-page="nba-match">  <span class="nav-icon"><i class="ti ti-ball-basketball" aria-hidden="true"></i></span><span class="nav-label">Match dashboard</span></a>
         <a href="/nba/history" class="nav-item" data-page="nba-history"><span class="nav-icon"><i class="ti ti-chart-line" aria-hidden="true"></i></span><span class="nav-label">Prediction history</span></a>
@@ -150,7 +149,6 @@
         <span class="nav-item" style="opacity:0.35;cursor:default"><span class="nav-icon"><i class="ti ti-list-numbers" aria-hidden="true"></i></span><span class="nav-label">Standings · Layer 2</span></span>
         <span class="nav-item" style="opacity:0.35;cursor:default"><span class="nav-icon"><i class="ti ti-tournament" aria-hidden="true"></i></span><span class="nav-label">Playoffs · Layer 3</span></span>
     {% else %}
-        <div class="nav-section-label">Navigation</div>
         <a href="/"       class="nav-item" data-page="home">    <span class="nav-icon"><i class="ti ti-layout-dashboard" aria-hidden="true"></i></span><span class="nav-label">Hub</span></a>
         <a href="/match?league={{ league|default('pl') }}" class="nav-item" data-page="match"><span class="nav-icon"><i class="ti ti-ball-football" aria-hidden="true"></i></span><span class="nav-label">Match dashboard</span></a>
         {% if team_map_href|default('/teams') %}
