@@ -1,4 +1,11 @@
 {% set is_nba = (sport == 'nba') %}
+{% set football_logo = {
+    'pl': 'pl',
+    'laliga': 'laliga',
+    'bundesliga': 'bundesliga',
+    'seriea': 'seriea',
+    'ligue1': 'ligue1'
+}.get(league|default('pl'), 'pl') %}
 {% set site_url = public_base_url|default(request.base_url|string, true)|trim('/') %}
 {% set canonical_url = site_url ~ request.url.path %}
 {% set page_title = (title ~ ' · ' if title else '') ~ 'Melios Dira Odds' %}
@@ -32,7 +39,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=JetBrains+Mono:wght@400;700&display=swap">
     <link rel="stylesheet" href="{{ url_for('static', path='tailwind.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', path='theme.css') }}?v=20261127-4">
+    <link rel="stylesheet" href="{{ url_for('static', path='theme.css') }}?v=20261127-5">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
     <style>
         /* ── NBA theme (official red / blue / white) ──────────── */
@@ -110,8 +117,8 @@
         </div>
         <div class="broadcast-context">
             <img class="page-identity-logo"
-                 src="{{ 'https://cdn.nba.com/logos/leagues/logo-nba.svg' if is_nba else 'https://upload.wikimedia.org/wikipedia/commons/b/b5/UEFA_logo.svg' }}"
-                 alt="{{ 'NBA' if is_nba else 'UEFA' }} logo">
+                 src="{{ 'https://cdn.nba.com/logos/leagues/logo-nba.svg' if is_nba else url_for('static', path='logos/' ~ football_logo ~ '.svg') }}"
+                 alt="{{ 'NBA' if is_nba else (league_name|default('Football')) }} {{ 'logo' if is_nba else 'crest' }}">
             <div class="page-identity-copy">
                 {% if is_nba %}<span class="page-identity-kicker">NBA</span>{% endif %}
                 <strong class="page-identity-title">{{ topbar_title|default(title|default('Football'), true) }}</strong>

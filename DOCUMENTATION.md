@@ -230,8 +230,8 @@ viewport width.
 The shell uses a compact broadcast-style identity row above the navigation;
 page context, live state, and the clock are grouped there, while privacy and
 model details are presented in the page footer.
-The identity row displays the NBA mark for NBA routes and the UEFA football
-mark for Football routes, followed by the current page title.
+The identity row displays the NBA mark for NBA routes and the active league
+crest for Football routes, followed by the current page title.
 Countdown widgets use shared `data-countdown-target` and
 `data-countdown-value` attributes and display months, days, and hours.
 On NBA pages, the Conferences control uses a hover/focus dropdown whose links

@@ -236,8 +236,8 @@ Wait for the message `Your quick Tunnel has been created!` and copy the `https:/
 The compact top navigation shows the active sport, page context, live status,
 and current time. Use the horizontally scrollable navigation row to access
 the main pages, leagues, conferences, Quick Teams, and All Teams.
-The NBA or UEFA identity mark beside the page title makes the current sport
-context clear.
+The NBA mark or active Football league crest beside the page title makes the
+current sport and competition context clear.
 Countdown cards show the time remaining to the NBA playoffs or each
 Football league's final matchday.
 

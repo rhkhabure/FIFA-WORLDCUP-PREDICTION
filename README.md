@@ -149,8 +149,8 @@ links remain available without reducing the main content to a narrow sidebar.
 The header uses a compact sports-broadcast layout with the sport switcher,
 page context, live state, and clock sharing one identity row; privacy and model
 details are kept in the page footer.
-The identity row uses the NBA league mark on NBA pages and a UEFA football mark
-on Football pages, alongside a high-contrast page title.
+The identity row uses the NBA league mark on NBA pages and the active
+competition crest on Football pages, alongside a high-contrast page title.
 NBA and Football dashboard countdowns are rendered by the shared calendar
 countdown component in the base layout.
 On NBA pages, the Conferences control reveals Eastern and Western links on
