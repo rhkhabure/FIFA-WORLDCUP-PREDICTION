@@ -154,6 +154,8 @@ Use **Quick Teams** for the featured team links, or **All Teams** to browse the
 complete team list.
 NBA team cards show the team's conference position alongside its city and Elo
 rating.
+On larger screens, Western teams appear on the left and Eastern teams on the
+right around the central NBA Playoffs panel.
 
 ### Production release check
 

@@ -12,6 +12,25 @@
   .div-label{font-family:var(--font-mono);font-size:10px;font-weight:700;text-transform:uppercase;
              letter-spacing:.12em;color:var(--text-muted,#64748b);margin:14px 0 8px}
   .team-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
+  .conference-layout{display:grid;grid-template-columns:minmax(0,1fr) 190px minmax(0,1fr);
+                      align-items:start;gap:18px}
+  .conference-panel{min-width:0}
+  .playoff-center{position:sticky;top:150px;min-height:320px;display:flex;align-items:center;
+                  justify-content:center}
+  .court-panel{width:178px;height:260px;border:2px solid rgba(29,66,138,.35);
+                border-radius:90px;background:linear-gradient(90deg,rgba(200,16,46,.06) 0 50%,rgba(29,66,138,.06) 50%);
+                display:flex;align-items:center;justify-content:center;position:relative;
+                box-shadow:0 10px 24px rgba(15,23,42,.08)}
+  .court-panel::before{content:"";position:absolute;inset:18px 0;border-top:2px solid rgba(29,66,138,.25);
+                        border-bottom:2px solid rgba(200,16,46,.25);border-radius:70px}
+  .court-panel::after{content:"";position:absolute;top:0;bottom:0;left:50%;border-left:2px solid rgba(15,23,42,.16)}
+  .playoff-trophy{z-index:1;width:118px;padding:18px 8px;text-align:center;border-radius:12px;
+                  background:rgba(255,255,255,.92);box-shadow:0 6px 16px rgba(15,23,42,.14)}
+  .playoff-trophy i{color:#C99A2E;font-size:42px;line-height:1}
+  .playoff-trophy strong{display:block;color:#1D428A;font-size:11px;letter-spacing:.1em;
+                         margin-top:8px}
+  .playoff-trophy span{display:block;color:#64748b;font:700 9px var(--font-mono);
+                       letter-spacing:.08em;margin-top:3px}
   .team-card{background:var(--surface,#fff);border:1.5px solid var(--border,#e2e8f0);
              border-radius:12px;padding:14px 12px;text-align:center;text-decoration:none;color:inherit;
              display:block;transition:border-color .12s,transform .12s}
@@ -31,9 +50,20 @@
              font-size:11px;font-weight:700;cursor:pointer;text-decoration:none;
              border:1.5px solid var(--border,#e2e8f0);background:var(--surface,#fff);color:inherit}
   .conf-pill.active{background:var(--league-primary);color:#fff;border-color:var(--league-primary)}
+  @media (max-width:1100px){
+    .conference-layout{grid-template-columns:minmax(0,1fr) 150px minmax(0,1fr);gap:12px}
+    .team-grid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}
+  }
+  @media (max-width:760px){
+    .conference-layout{display:flex;flex-direction:column;gap:8px}
+    .conference-panel{width:100%}
+    .playoff-center{min-height:190px;order:0;position:relative}
+    .court-panel{height:150px;width:170px}
+    .team-grid{grid-template-columns:repeat(auto-fill,minmax(145px,1fr))}
+  }
 </style>
 
-<div style="max-width:1200px;margin:0 auto">
+<div style="max-width:1500px;margin:0 auto">
 
   <!-- quick jump pills -->
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px">
@@ -49,8 +79,8 @@
     </span>
   </div>
 
-  {% for conf_name, divisions in conferences.items() %}
-  <div id="{{ conf_name }}" style="margin-bottom:28px">
+  {% macro conference_panel(conf_name, divisions) %}
+  <section id="{{ conf_name }}" class="conference-panel">
     <div class="t-section-head">
       <span style="width:10px;height:10px;border-radius:50%;
             background:{{ '#1D428A' if conf_name == 'East' else '#C8102E' }}"></span>
@@ -85,8 +115,22 @@
       {% endfor %}
     </div>
     {% endfor %}
+  </section>
+  {% endmacro %}
+
+  <div class="conference-layout">
+    {{ conference_panel('West', conferences.get('West', {})) }}
+    <aside class="playoff-center" aria-label="NBA playoff pathway">
+      <div class="court-panel">
+        <div class="playoff-trophy">
+          <i class="ti ti-trophy" aria-hidden="true"></i>
+          <strong>NBA PLAYOFFS</strong>
+          <span>ROAD TO THE FINALS</span>
+        </div>
+      </div>
+    </aside>
+    {{ conference_panel('East', conferences.get('East', {})) }}
   </div>
-  {% endfor %}
 
   <div style="font-family:var(--font-mono);font-size:10px;color:var(--text-muted,#94a3b8);
        text-align:center;margin-top:8px">

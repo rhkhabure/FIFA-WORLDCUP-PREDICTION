@@ -243,6 +243,8 @@ Quick Teams and All Teams are also dropdown controls, with crest-backed team
 links and a scrollable All Teams list.
 The NBA Teams page enriches each card with the current conference rank from
 the cached standings provider; unavailable standings display `—`.
+On wide screens, conference panels flank a central court-themed playoff panel;
+the layout stacks responsively on smaller screens.
 
 ### 1.12 Deployment and rollback
 

@@ -161,6 +161,8 @@ The dropdown uses the matching league crest rather than a colour-only marker.
 Quick Teams and All Teams use the same hover/focus dropdown pattern; All Teams
 is scrollable to keep the navigation usable on smaller screens.
 NBA team cards also show each team's current position within its conference.
+The NBA Teams page presents the Western and Eastern Conferences side by side
+with a central court-and-playoff trophy panel on wide screens.
 
 ```bash
 cd v4_web
