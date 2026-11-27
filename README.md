@@ -160,6 +160,7 @@ hover or keyboard focus; selecting one opens that league's dashboard.
 The dropdown uses the matching league crest rather than a colour-only marker.
 Quick Teams and All Teams use the same hover/focus dropdown pattern; All Teams
 is scrollable to keep the navigation usable on smaller screens.
+NBA team cards also show each team's current position within its conference.
 
 ```bash
 cd v4_web

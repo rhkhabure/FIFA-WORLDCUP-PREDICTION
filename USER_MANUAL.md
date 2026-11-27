@@ -152,6 +152,8 @@ On Football pages, hover over or focus **Leagues**, then select one of the five
 league dashboards.
 Use **Quick Teams** for the featured team links, or **All Teams** to browse the
 complete team list.
+NBA team cards show the team's conference position alongside its city and Elo
+rating.
 
 ### Production release check
 

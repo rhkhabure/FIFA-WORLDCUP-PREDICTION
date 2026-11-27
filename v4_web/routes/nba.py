@@ -651,14 +651,23 @@ async def nba_history(request: Request, conference: str = "all"):
 async def nba_teams(request: Request):
     """
     /nba/teams — all 30 teams grouped by conference and division.
-    Shows Elo rating and colour badge per team.
+    Shows conference position, Elo rating, and colour badge per team.
     """
     # Build team cards with current Elo
+    standings = await run_in_threadpool(get_conference_standings)
     team_cards = {}
     for tid in NBA_TEAM_IDS:
         t = nba_team(tid)
         elo = _model.get_elo(tid) if _model else 1500.0
-        team_cards[tid] = {**t, "elo": round(elo, 0), "team_id": tid}
+        standing = _get_team_standing(standings, tid, t.get("conference", ""))
+        rank = standing.get("rank") if standing else None
+        team_cards[tid] = {
+            **t,
+            "elo": round(elo, 0),
+            "team_id": tid,
+            "conference_rank": rank,
+            "conference_rank_label": _ordinal_label(rank) if rank else "—",
+        }
 
     return templates.TemplateResponse(
         request=request,

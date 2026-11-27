@@ -241,6 +241,8 @@ links to the five supported league dashboards.
 Each league option displays its local crest asset.
 Quick Teams and All Teams are also dropdown controls, with crest-backed team
 links and a scrollable All Teams list.
+The NBA Teams page enriches each card with the current conference rank from
+the cached standings provider; unavailable standings display `—`.
 
 ### 1.12 Deployment and rollback
 

@@ -21,6 +21,10 @@
   .team-logo img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;
                  background:#fff;padding:4px;z-index:1}
   .team-logo span{font-family:var(--font-mono);font-size:10px;font-weight:800;color:#fff}
+  .team-rank{display:inline-flex;align-items:center;padding:3px 7px;border-radius:99px;
+             background:color-mix(in srgb,var(--team-col) 12%,#fff);
+             color:var(--team-col);font-family:var(--font-mono);font-size:10px;font-weight:700;
+             margin-top:6px}
   .elo-bar{height:4px;border-radius:99px;background:var(--border,#e2e8f0);margin-top:8px;overflow:hidden}
   .elo-bar > div{height:100%;border-radius:99px;background:var(--team-col)}
   .conf-pill{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:99px;
@@ -71,6 +75,7 @@
         </div>
         <div style="font-size:13px;font-weight:800;margin-bottom:2px">{{ tc.get('name', '—') }}</div>
         <div style="font-size:11px;color:var(--text-muted,#64748b)">{{ tc.get('city', '') }}</div>
+        <div class="team-rank">{{ tc.get('conference_rank_label', '—') }} in {{ conf_name }}</div>
         <div style="font-family:var(--font-mono);font-size:12px;font-weight:700;
              color:{{ col }};margin-top:6px">{{ elo|int }}</div>
         <div class="elo-bar">
