@@ -240,6 +240,9 @@ The NBA mark or active Football league crest beside the page title makes the
 current sport and competition context clear.
 Countdown cards show the time remaining to the NBA playoffs or each
 Football league's final matchday.
+The Football Hub starts with summary metrics, a featured fixture, and current
+league leaders, followed by the league cards, fixtures, standings, and model
+performance details.
 
 | Icon | Page | What it shows |
 |------|------|---------------|

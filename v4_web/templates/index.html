@@ -14,13 +14,61 @@
 /* ── League grid ──────────────────────────────────────────────── */
 .hub-grid {
     display: grid;
-    grid-template-columns: 2fr 1fr 1fr;
-    grid-template-rows: auto auto;
+    grid-template-columns: 1.25fr 1fr 1fr;
+    grid-template-rows: minmax(260px, auto) minmax(260px, auto);
     gap: 14px;
     margin-bottom: 28px;
 }
 /* PL spans 2 rows on left */
 .hub-grid .lc-pl { grid-row: span 2; }
+.hub-overview {
+    display:grid;
+    grid-template-columns:repeat(4,minmax(0,1fr));
+    gap:12px;
+    margin-bottom:22px;
+}
+.overview-card,.feature-panel,.snapshot-panel {
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:14px;
+    box-shadow:var(--shadow-sm);
+}
+.overview-card { padding:14px 16px; }
+.overview-value { color:var(--league-primary);font:900 24px var(--font-mono); }
+.overview-label { color:var(--text-muted);font-size:10px;font-weight:800;
+                  letter-spacing:.08em;text-transform:uppercase;margin-top:4px; }
+.hub-main-grid {
+    display:grid;
+    grid-template-columns:minmax(0,1.3fr) minmax(300px,.7fr);
+    gap:16px;
+    margin-bottom:28px;
+}
+.feature-panel { overflow:hidden; }
+.feature-panel-head { align-items:center;background:linear-gradient(120deg,var(--league-primary),#102b4c);
+                      color:#fff;display:flex;justify-content:space-between;padding:15px 18px; }
+.feature-panel-title { font-size:12px;font-weight:900;letter-spacing:.08em;text-transform:uppercase; }
+.feature-empty { color:var(--text-muted);font-size:12px;padding:24px; }
+.featured-match { align-items:center;display:grid;grid-template-columns:1fr auto 1fr;
+                   gap:12px;padding:24px 20px; }
+.featured-team { font-size:16px;font-weight:900; }
+.featured-team.away { text-align:right; }
+.featured-crest { height:42px;object-fit:contain;width:42px; }
+.featured-vs { color:var(--text-muted);font:700 11px var(--font-mono);text-align:center; }
+.featured-meta { border-top:1px solid var(--border);color:var(--text-muted);font-size:11px;
+                 padding:11px 18px;text-align:center; }
+.snapshot-panel { overflow:hidden; }
+.snapshot-head { align-items:center;border-bottom:1px solid var(--border);display:flex;
+                 justify-content:space-between;padding:14px 16px; }
+.snapshot-head strong { font-size:12px; }
+.snapshot-head span { color:var(--text-muted);font-size:10px; }
+.snapshot-row { align-items:center;border-bottom:1px solid var(--border);display:flex;
+                gap:8px;padding:9px 14px; }
+.snapshot-row:last-child { border-bottom:0; }
+.snapshot-rank { color:var(--text-muted);font:700 11px var(--font-mono);width:18px; }
+.snapshot-row img { height:22px;object-fit:contain;width:22px; }
+.snapshot-team { flex:1;font-size:11px;font-weight:700;min-width:0;overflow:hidden;
+                 text-overflow:ellipsis;white-space:nowrap; }
+.snapshot-points { color:var(--league-primary);font:800 12px var(--font-mono); }
 
 /* ── League card ──────────────────────────────────────────────── */
 .league-card {
@@ -307,10 +355,13 @@
     }
     .hub-grid .lc-pl { grid-row: span 1; grid-column: span 2; }
     .matches-section { grid-template-columns: 1fr; }
+    .hub-overview { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .hub-main-grid { grid-template-columns:1fr; }
 }
 @media (max-width: 720px) {
     .hub-grid { grid-template-columns: 1fr; }
     .hub-grid .lc-pl { grid-column: span 1; }
+    .hub-overview { grid-template-columns:1fr 1fr; }
 }
 </style>
 
@@ -344,6 +395,28 @@
   <h1 class="page-title">Football hub</h1>
   <p class="page-subtitle">League coverage, today’s fixtures, standings, and prediction performance.</p>
 </header>
+{% set live_total = namespace(value=0) %}
+{% for group in live_match_groups %}{% set live_total.value = live_total.value + group.fixtures|length %}{% endfor %}
+{% set team_total = namespace(value=0) %}
+{% for rows in all_standings.values() %}{% set team_total.value = team_total.value + rows|length %}{% endfor %}
+<div class="hub-overview" aria-label="Football hub summary">
+  <div class="overview-card">
+    <div class="overview-value">{{ live_total.value }}</div>
+    <div class="overview-label">Live matches</div>
+  </div>
+  <div class="overview-card">
+    <div class="overview-value">{{ today_matches|length }}</div>
+    <div class="overview-label">Fixtures in view</div>
+  </div>
+  <div class="overview-card">
+    <div class="overview-value">{{ team_total.value }}</div>
+    <div class="overview-label">Tracked teams</div>
+  </div>
+  <div class="overview-card">
+    <div class="overview-value">5</div>
+    <div class="overview-label">Leagues covered</div>
+  </div>
+</div>
 <div class="section-head">Choose your league</div>
 <div class="hub-grid">
 
@@ -533,6 +606,58 @@
     </div>
   </a>
 
+</div>
+
+<!-- ── FEATURED MATCH + STANDINGS SNAPSHOT ───────────────────── -->
+<div class="hub-main-grid">
+  <section class="feature-panel" aria-labelledby="featured-match-title">
+    <div class="feature-panel-head">
+      <span class="feature-panel-title" id="featured-match-title">Featured fixture</span>
+      <span class="lc-status">{% if today_matches %}Next in view{% else %}No fixture selected{% endif %}</span>
+    </div>
+    {% if today_matches %}
+    {% set featured = today_matches[0] %}
+    <a class="featured-match" href="/match?match_id={{ featured.match_id }}&league={{ featured.league }}"
+       style="text-decoration:none;color:inherit">
+      <div>
+        <div class="featured-team">{{ featured.home }}</div>
+        <div class="match-sub">{{ featured.league_name }}</div>
+      </div>
+      <div class="featured-vs">
+        <div>VS</div>
+        <strong>{{ featured.kickoff_eat }}</strong>
+      </div>
+      <div class="featured-team away">
+        <div>{{ featured.away }}</div>
+        <div class="match-sub">{{ featured.status }}</div>
+      </div>
+    </a>
+    <div class="featured-meta">
+      {{ featured.local_date }} · Select the fixture for the full prediction dashboard
+    </div>
+    {% else %}
+    <div class="feature-empty">No upcoming or recent fixture is available right now.</div>
+    {% endif %}
+  </section>
+
+  <section class="snapshot-panel" aria-labelledby="snapshot-title">
+    <div class="snapshot-head">
+      <strong id="snapshot-title">Standings snapshot</strong>
+      <span>Current leaders</span>
+    </div>
+    {% for lg in ["pl", "laliga", "bundesliga", "seriea", "ligue1"] %}
+      {% set rows = all_standings.get(lg, []) %}
+      {% if rows %}
+      {% set row = rows[0] %}
+      <div class="snapshot-row">
+        <span class="snapshot-rank">{{ row.position }}</span>
+        <img src="{{ row.crest }}" alt="" loading="lazy" onerror="this.style.display='none'">
+        <span class="snapshot-team">{{ row.team_name }}</span>
+        <span class="snapshot-points">{{ row.points }} pts</span>
+      </div>
+      {% endif %}
+    {% endfor %}
+  </section>
 </div>
 
 <!-- ── TODAY'S MATCHES + ACCURACY ─────────────────────────────── -->

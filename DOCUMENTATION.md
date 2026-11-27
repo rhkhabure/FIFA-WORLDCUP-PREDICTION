@@ -234,6 +234,8 @@ The identity row displays the NBA mark for NBA routes and the active league
 crest for Football routes, followed by the current page title.
 Countdown widgets use shared `data-countdown-target` and
 `data-countdown-value` attributes and display months, days, and hours.
+The Football Hub layout includes summary metrics, a featured fixture, current
+league leaders, responsive league cards, fixtures, and model performance.
 On NBA pages, the Conferences control uses a hover/focus dropdown whose links
 target the existing `#East` and `#West` team-page anchors.
 On Football pages, the Leagues control uses the same interaction pattern and

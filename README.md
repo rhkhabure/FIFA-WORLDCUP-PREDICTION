@@ -153,6 +153,9 @@ The identity row uses the NBA league mark on NBA pages and the active
 competition crest on Football pages, alongside a high-contrast page title.
 NBA and Football dashboard countdowns are rendered by the shared calendar
 countdown component in the base layout.
+The Football Hub uses a summary strip, balanced league-card grid, featured
+fixture panel, standings leader snapshot, fixture list, and model-performance
+panel to make better use of wide screens.
 On NBA pages, the Conferences control reveals Eastern and Western links on
 hover or keyboard focus; selecting one jumps to that conference's team list.
 On Football pages, the Leagues control reveals all five supported leagues on
