@@ -339,6 +339,15 @@ does not retrain the live classifier.
 - Output: median final table with P10/P90 range, title/top 4/relegation probabilities per team
 - 10,000 simulations, ~1.5 seconds
 
+### 2.2 Sports loading experience
+
+The shared page shell provides a sports-focused loading overlay for key page
+transitions and long-running simulations. Football pages show an animated ball
+crossing a pitch, while NBA pages show a basketball crossing a half-court.
+Navigation loading is delayed briefly to prevent flicker on fast responses.
+The loader exposes live status text, sets `aria-busy` while active, and disables
+motion through a static presentation when `prefers-reduced-motion` is enabled.
+
 ---
 
 ## 3. Data pipeline

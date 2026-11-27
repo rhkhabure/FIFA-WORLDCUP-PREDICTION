@@ -26,6 +26,11 @@ the NBA data feeds.
 
 The application is a FastAPI server with Jinja2 templates, a dark-mode UI, football pitches, and an SVG basketball court.
 
+Key page transitions and long-running simulations use a shared sports loader:
+football pages animate a ball across a pitch, while NBA pages animate a
+basketball across a half-court. The loader is delayed briefly to avoid
+flickering on fast requests and respects reduced-motion browser preferences.
+
 ---
 
 ## Quick start

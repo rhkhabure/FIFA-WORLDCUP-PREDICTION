@@ -39,7 +39,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=JetBrains+Mono:wght@400;700&display=swap">
     <link rel="stylesheet" href="{{ url_for('static', path='tailwind.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', path='theme.css') }}?v=20261127-5">
+    <link rel="stylesheet" href="{{ url_for('static', path='theme.css') }}?v=20261127-6">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
     <style>
         /* ── NBA theme (official red / blue / white) ──────────── */
@@ -137,6 +137,59 @@
 <body class="app-shell" style="background:var(--league-tint)">
 
 <a class="skip-link" href="#main-content">Skip to main content</a>
+<div class="site-loader" data-sport="{{ 'nba' if is_nba else 'football' }}"
+     data-site-loader role="status" aria-live="polite" aria-hidden="true">
+    <div class="site-loader-card">
+        <div class="site-loader-art football-art" aria-hidden="true">
+            <div class="site-loader-pitch">
+                <span class="site-loader-midline"></span>
+                <span class="site-loader-circle"></span>
+            </div>
+            <span class="site-loader-ball" aria-label="Football"></span>
+        </div>
+        <div class="site-loader-art basketball-art" aria-hidden="true">
+            <div class="site-loader-court">
+                <svg class="site-loader-court-svg" viewBox="0 0 220 78"
+                     xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <pattern id="loader-wood" width="28" height="78"
+                                 patternUnits="userSpaceOnUse">
+                            <rect width="14" height="78" fill="#c98d52"/>
+                            <rect x="14" width="14" height="78" fill="#d99d5f"/>
+                        </pattern>
+                    </defs>
+                    <rect x="1" y="1" width="218" height="76" rx="4"
+                          fill="url(#loader-wood)" stroke="#fff" stroke-width="2"/>
+                    <line x1="110" y1="1" x2="110" y2="77"
+                          stroke="#fff" stroke-width="2"/>
+                    <circle cx="110" cy="39" r="15"
+                            fill="none" stroke="#fff" stroke-width="2"/>
+                    <rect x="1" y="25" width="29" height="28"
+                          fill="rgba(116,68,34,.18)" stroke="#fff" stroke-width="2"/>
+                    <rect x="190" y="25" width="29" height="28"
+                          fill="rgba(116,68,34,.18)" stroke="#fff" stroke-width="2"/>
+                    <path d="M30 7 A39 39 0 0 1 30 71"
+                          fill="none" stroke="#fff" stroke-width="2"/>
+                    <path d="M190 7 A39 39 0 0 0 190 71"
+                          fill="none" stroke="#fff" stroke-width="2"/>
+                    <rect x="7" y="29" width="2" height="20"
+                          fill="none" stroke="#fff" stroke-width="2"/>
+                    <circle cx="11" cy="39" r="4"
+                            fill="none" stroke="#d1123f" stroke-width="2.5"/>
+                    <rect x="211" y="29" width="2" height="20"
+                          fill="none" stroke="#fff" stroke-width="2"/>
+                    <circle cx="209" cy="39" r="4"
+                            fill="none" stroke="#d1123f" stroke-width="2.5"/>
+                </svg>
+            </div>
+            <span class="site-loader-basketball" aria-label="Basketball"></span>
+        </div>
+        <div class="site-loader-kicker">Matchday data</div>
+        <div class="site-loader-message" data-site-loader-message>
+            Loading your dashboard<span class="site-loader-dots"></span>
+        </div>
+    </div>
+</div>
 <div class="vote-onboarding" data-vote-onboarding role="dialog"
      aria-modal="true" aria-labelledby="vote-onboarding-title">
     <div class="vote-onboarding-card">
@@ -329,6 +382,50 @@
     }
     tick();
     setInterval(tick, 30000);
+})();
+
+// ── Shared sports loader ──────────────────────────────────────────
+(function(){
+    const loader = document.querySelector('[data-site-loader]');
+    if (!loader) return;
+    const message = loader.querySelector('[data-site-loader-message]');
+    let timer = null;
+    let visible = false;
+    const keyPath = /^(\/|\/nba\/?|\/match|\/nba\/match|\/team\/|\/teams(?:\/|$)|\/nba\/team\/|\/nba\/teams|\/history|\/nba\/history|\/tournament)/;
+    const show = (text) => {
+        if (message && text) message.textContent = text;
+        loader.classList.add('is-visible');
+        loader.setAttribute('aria-hidden', 'false');
+        document.body.setAttribute('aria-busy', 'true');
+        visible = true;
+    };
+    const hide = () => {
+        if (timer) { clearTimeout(timer); timer = null; }
+        loader.classList.remove('is-visible');
+        loader.setAttribute('aria-hidden', 'true');
+        document.body.removeAttribute('aria-busy');
+        visible = false;
+    };
+    window.siteLoader = {
+        show: (text) => show(text || 'Loading your dashboard'),
+        hide
+    };
+    document.addEventListener('click', (event) => {
+        if (event.defaultPrevented || event.button !== 0 ||
+            event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        const link = event.target.closest('a[href]');
+        if (!link || link.target === '_blank' || link.hasAttribute('download')) return;
+        const url = new URL(link.href, window.location.href);
+        if (url.origin !== window.location.origin ||
+            (url.pathname === window.location.pathname &&
+             url.search === window.location.search &&
+             url.hash === window.location.hash)) return;
+        if (!keyPath.test(url.pathname)) return;
+        timer = setTimeout(() => {
+            if (!visible) show(url.pathname.startsWith('/nba') ? 'Loading the basketball dashboard' : 'Loading the football dashboard');
+        }, 450);
+    });
+    window.addEventListener('pageshow', hide);
 })();
 
 // ── First-visit fan voting prompt ─────────────────────────────────

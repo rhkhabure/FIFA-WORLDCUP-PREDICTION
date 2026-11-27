@@ -560,7 +560,7 @@ def generate_pitch_svg_horizontal(home_formation="4-3-3", away_formation="4-3-3"
     if away_players is None or len(away_players) == 0:
         away_players = get_squad_for_team(away_team)
 
-    W, H = 320, 200   # doubled from 160x100 for better player label legibility
+    W, H = 320, 200   # viewBox scales with the full width of the lineup card
 
     svg = (
         f'<svg width="100%" style="max-width:100%;display:block;margin:0 auto;"'
@@ -742,10 +742,10 @@ def generate_pitch_svg_horizontal(home_formation="4-3-3", away_formation="4-3-3"
     def _jersey_svg(cx: float, cy: float, kit: dict, is_home: bool, clip_defs: list) -> str:
         """
         Draw a jersey shape centred at (cx, cy) in the 320×200 pitch viewBox.
-        Jersey path drawn in a local 40×44 space, scaled to ~12×13 on pitch.
+        Jersey path drawn in a local 40×44 space, scaled to ~15×17 on pitch.
         clip_defs: list to append <clipPath> definitions into (for global <defs>)
         """
-        S = 0.30
+        S = 0.38
         tx = cx - 20 * S
         ty = cy - 22 * S
 
@@ -821,7 +821,7 @@ def generate_pitch_svg_horizontal(home_formation="4-3-3", away_formation="4-3-3"
                     f'{j}'
                     f'<text x="{x:.1f}" y="{y+11:.1f}" fill="white"'
                     f' font-family="\'JetBrains Mono\',monospace"'
-                    f' font-size="5px" text-anchor="middle"'
+                    f' font-size="5.6px" text-anchor="middle"'
                     f' style="text-shadow:0 0 3px rgba(0,0,0,0.8)">{name}</text>'
                     f'</a>'
                 )
@@ -847,7 +847,7 @@ def generate_pitch_svg_horizontal(home_formation="4-3-3", away_formation="4-3-3"
                     f'{j}'
                     f'<text x="{x:.1f}" y="{y+11:.1f}" fill="white"'
                     f' font-family="\'JetBrains Mono\',monospace"'
-                    f' font-size="5px" text-anchor="middle"'
+                    f' font-size="5.6px" text-anchor="middle"'
                     f' style="text-shadow:0 0 3px rgba(0,0,0,0.8)">{name}</text>'
                     f'</a>'
                 )
@@ -865,12 +865,14 @@ def generate_pitch_svg_horizontal(home_formation="4-3-3", away_formation="4-3-3"
         if home_crest_url:
             svg += (
                 f'<image href="{home_crest_url}"'
-                f' x="121" y="10" width="14" height="14" opacity="0.95"/>'
+                f' x="120" y="9" width="18" height="18"'
+                f' preserveAspectRatio="xMidYMid meet" opacity="0.95"/>'
             )
         if away_crest_url:
             svg += (
                 f'<image href="{away_crest_url}"'
-                f' x="185" y="10" width="14" height="14" opacity="0.95"/>'
+                f' x="182" y="9" width="18" height="18"'
+                f' preserveAspectRatio="xMidYMid meet" opacity="0.95"/>'
             )
         svg += (
             f'<text id="live-score" x="160" y="23" fill="white"'

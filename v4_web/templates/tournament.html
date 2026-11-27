@@ -257,6 +257,7 @@ function clearSelection() {
 // ── CL simulation ─────────────────────────────────────────────────
 async function runCL() {
   if (selected.length !== 16) return;
+  if (window.siteLoader) window.siteLoader.show('Running 10,000 Champions League simulations');
   document.getElementById('cl-loading').style.display = '';
   document.getElementById('cl-results').style.display = 'none';
   document.getElementById('cl-run-btn').disabled = true;
@@ -276,6 +277,7 @@ async function runCL() {
   } catch(e) {
     alert('Simulation failed: ' + e.message);
   } finally {
+    if (window.siteLoader) window.siteLoader.hide();
     document.getElementById('cl-loading').style.display = 'none';
     document.getElementById('cl-run-btn').disabled = false;
   }
@@ -360,6 +362,7 @@ function renderCLResults(data) {
 
 // ── PL simulation ─────────────────────────────────────────────────
 async function runPL() {
+  if (window.siteLoader) window.siteLoader.show('Simulating the remaining Premier League season');
   document.getElementById('pl-loading').style.display = '';
   document.getElementById('pl-results').style.display = 'none';
   document.getElementById('pl-run-btn').disabled = true;
@@ -372,6 +375,7 @@ async function runPL() {
   } catch(e) {
     alert('Simulation failed: ' + e.message);
   } finally {
+    if (window.siteLoader) window.siteLoader.hide();
     document.getElementById('pl-loading').style.display = 'none';
     document.getElementById('pl-run-btn').disabled = false;
   }
