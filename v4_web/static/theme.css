@@ -75,6 +75,30 @@
     --transition-base: 180ms ease;
 }
 
+@media (max-width: 640px) {
+    .broadcast-header {
+        gap: 10px;
+        min-height: 56px;
+        padding: 7px 12px;
+    }
+    .broadcast-header .sport-toggle-wrap {
+        padding-left: 10px;
+    }
+    .broadcast-header .sport-labels {
+        display: none;
+    }
+    .broadcast-context {
+        gap: 7px;
+    }
+    .broadcast-context .topbar-title,
+    .broadcast-context .topbar-date {
+        display: none;
+    }
+    #sidebar > nav {
+        padding-inline: 8px !important;
+    }
+}
+
 /* ── Premier League ─────────────────────────────────────────────── */
 [data-league="pl"], :root {
     --league-primary:    #3D185A;   /* Deep royal purple */
@@ -666,6 +690,14 @@ a {
     padding: 16px 0 8px;
 }
 .site-footer a { color: var(--league-primary); text-decoration: underline; }
+.site-footer-meta {
+    color: var(--text-muted);
+    display: block;
+    font: 10px var(--font-mono);
+    letter-spacing: 0.08em;
+    margin-top: 6px;
+    text-transform: uppercase;
+}
 
 /* ── Top navigation shell ─────────────────────────────────────── */
 body.app-shell {
@@ -674,6 +706,7 @@ body.app-shell {
     min-height: 100vh;
 }
 #sidebar {
+    background: linear-gradient(115deg, var(--league-sidebar-bg) 0%, #102b4c 58%, var(--league-sidebar-bg) 100%);
     border-bottom: 1px solid rgba(255,255,255,0.08);
     border-right: 0;
     height: auto;
@@ -682,6 +715,62 @@ body.app-shell {
     top: 0;
     width: 100%;
     z-index: 60;
+}
+.broadcast-header {
+    align-items: center;
+    border-bottom: 1px solid rgba(255,255,255,0.12);
+    display: flex;
+    gap: 18px;
+    min-height: 62px;
+    padding: 8px 18px;
+}
+.broadcast-brand {
+    align-items: center;
+    display: flex;
+    flex: 0 0 auto;
+    gap: 8px;
+}
+.broadcast-brand .sidebar-wordmark {
+    color: #fff;
+    font: 800 13px var(--font-sans);
+    letter-spacing: 0.4px;
+}
+.broadcast-brand .league-badge-pill {
+    font-size: 11px;
+    padding: 4px 9px;
+}
+.broadcast-header .sport-toggle-wrap {
+    align-items: center;
+    border-bottom: 0;
+    border-left: 1px solid rgba(255,255,255,0.16);
+    gap: 8px;
+    padding: 0 0 0 16px;
+}
+.broadcast-header .sport-ball {
+    height: 34px;
+    width: 34px;
+}
+.broadcast-header .sport-labels {
+    font-size: 10px;
+}
+.broadcast-context {
+    align-items: center;
+    display: flex;
+    gap: 10px;
+    margin-left: auto;
+    min-width: 0;
+}
+.broadcast-context .topbar-title {
+    color: #fff;
+    font-size: var(--text-sm);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.broadcast-context .topbar-date {
+    color: rgba(255,255,255,0.68);
+    font-size: var(--text-xs);
+    white-space: nowrap;
 }
 #sidebar > nav {
     align-items: stretch;

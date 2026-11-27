@@ -32,7 +32,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=JetBrains+Mono:wght@400;700&display=swap">
     <link rel="stylesheet" href="{{ url_for('static', path='tailwind.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', path='theme.css') }}?v=20261126-6">
+    <link rel="stylesheet" href="{{ url_for('static', path='theme.css') }}?v=20261127-1">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
     <style>
         /* ── NBA theme (official red / blue / white) ──────────── */
@@ -72,49 +72,48 @@
 
 <!-- ── SIDEBAR ──────────────────────────────────────────────────── -->
 <div id="sidebar">
-    <div style="padding:18px 14px 14px;border-bottom:1px solid rgba(255,255,255,0.1);
-                display:flex;align-items:center;justify-content:space-between">
-        <div style="display:flex;align-items:center;gap:8px">
+    <div class="broadcast-header">
+        <div class="broadcast-brand">
             <div class="league-badge-pill sidebar-wordmark">{{ 'NBA' if is_nba else (league_code | default('PL')) }}</div>
-            <span class="sidebar-wordmark"
-                  style="font-size:12px;font-weight:800;color:#fff;letter-spacing:0.5px;font-family:var(--font-sans)">
-                Melios Dira
-            </span>
+            <span class="sidebar-wordmark">Melios Dira</span>
         </div>
-    </div>
-
-    <!-- ── Sport toggle: left half football, right half basketball ── -->
-    <!-- Placeholder design — swap the SVG later, links/classes stay   -->
-    <div class="sport-toggle-wrap">
-        <svg class="sport-ball" viewBox="0 0 40 40" aria-hidden="true" focusable="false">
-            <defs>
-                <clipPath id="ball-left"><path d="M20 2 A18 18 0 0 0 20 38 Z"/></clipPath>
-                <clipPath id="ball-right"><path d="M20 2 A18 18 0 0 1 20 38 Z"/></clipPath>
-            </defs>
-            <a href="/" tabindex="-1" aria-label="Football">
-                <title>Football</title>
-                <g class="half {{ 'inactive' if is_nba else '' }}" clip-path="url(#ball-left)">
-                    <rect x="0" y="0" width="20" height="40" fill="#2E7D32"/>
-                    <circle cx="20" cy="20" r="6" fill="none" stroke="#fff" stroke-width="1"/>
-                    <rect x="2" y="13" width="6" height="14" fill="none" stroke="#fff" stroke-width="1"/>
-                    <circle cx="20" cy="20" r="1" fill="#fff"/>
-                </g>
-            </a>
-            <a href="/nba" tabindex="-1" aria-label="Basketball">
-                <title>Basketball</title>
-                <g class="half {{ '' if is_nba else 'inactive' }}" clip-path="url(#ball-right)">
-                    <rect x="20" y="0" width="20" height="40" fill="#C8763A"/>
-                    <circle cx="20" cy="20" r="6" fill="none" stroke="#fff" stroke-width="1"/>
-                    <rect x="31" y="15" width="7" height="10" fill="none" stroke="#fff" stroke-width="1"/>
-                    <path d="M38 8 A12 12 0 0 0 38 32" fill="none" stroke="#fff" stroke-width="1"/>
-                </g>
-            </a>
-            <line x1="20" y1="2" x2="20" y2="38" stroke="#fff" stroke-width="1.2"/>
-            <circle cx="20" cy="20" r="18" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="1.2"/>
-        </svg>
-        <div class="sport-labels">
-            <a href="/"    class="{{ '' if is_nba else 'on' }}">Football</a>
-            <a href="/nba" class="{{ 'on' if is_nba else '' }}">Basketball</a>
+        <div class="sport-toggle-wrap">
+            <svg class="sport-ball" viewBox="0 0 40 40" aria-hidden="true" focusable="false">
+                <defs>
+                    <clipPath id="ball-left"><path d="M20 2 A18 18 0 0 0 20 38 Z"/></clipPath>
+                    <clipPath id="ball-right"><path d="M20 2 A18 18 0 0 1 20 38 Z"/></clipPath>
+                </defs>
+                <a href="/" tabindex="-1" aria-label="Football">
+                    <title>Football</title>
+                    <g class="half {{ 'inactive' if is_nba else '' }}" clip-path="url(#ball-left)">
+                        <rect x="0" y="0" width="20" height="40" fill="#2E7D32"/>
+                        <circle cx="20" cy="20" r="6" fill="none" stroke="#fff" stroke-width="1"/>
+                        <rect x="2" y="13" width="6" height="14" fill="none" stroke="#fff" stroke-width="1"/>
+                        <circle cx="20" cy="20" r="1" fill="#fff"/>
+                    </g>
+                </a>
+                <a href="/nba" tabindex="-1" aria-label="Basketball">
+                    <title>Basketball</title>
+                    <g class="half {{ '' if is_nba else 'inactive' }}" clip-path="url(#ball-right)">
+                        <rect x="20" y="0" width="20" height="40" fill="#C8763A"/>
+                        <circle cx="20" cy="20" r="6" fill="none" stroke="#fff" stroke-width="1"/>
+                        <rect x="31" y="15" width="7" height="10" fill="none" stroke="#fff" stroke-width="1"/>
+                        <path d="M38 8 A12 12 0 0 0 38 32" fill="none" stroke="#fff" stroke-width="1"/>
+                    </g>
+                </a>
+                <line x1="20" y1="2" x2="20" y2="38" stroke="#fff" stroke-width="1.2"/>
+                <circle cx="20" cy="20" r="18" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="1.2"/>
+            </svg>
+            <div class="sport-labels">
+                <a href="/"    class="{{ '' if is_nba else 'on' }}">Football</a>
+                <a href="/nba" class="{{ 'on' if is_nba else '' }}">Basketball</a>
+            </div>
+        </div>
+        <div class="broadcast-context">
+            <div class="topbar-league-pill">{{ 'NBA' if is_nba else (league_code | default('PL')) }}</div>
+            <div class="topbar-title">{% if topbar_title %}{{ topbar_title }}{% else %}Melios Dira Odds{% endif %}</div>
+            {% if live_count and live_count > 0 %}<div class="live-badge">{{ live_count }} LIVE</div>{% endif %}
+            <div class="topbar-date" id="topbar-clock"></div>
         </div>
     </div>
 
@@ -211,27 +210,10 @@
     {% endif %}
     </nav>
 
-    <div style="border-top:1px solid rgba(255,255,255,0.08);padding:10px 14px">
-        <a href="/privacy" style="display:block;color:rgba(255,255,255,0.8);font-size:11px;margin-bottom:8px;text-decoration:underline">
-            Privacy notice
-        </a>
-        <div class="sidebar-footer-text"
-             style="font-size:10px;color:rgba(255,255,255,0.62);font-family:var(--font-mono);
-                    text-transform:uppercase;letter-spacing:0.1em">
-            {{ 'Elo · Neural Net V3' if is_nba else 'Dixon-Coles · Neural Net' }}
-        </div>
-    </div>
 </div>
 
 <!-- ── MAIN CONTENT ──────────────────────────────────────────────── -->
 <main id="main-content">
-    <div id="topbar">
-        <div class="topbar-league-pill">{{ 'NBA' if is_nba else (league_code | default('PL')) }}</div>
-        {% if topbar_title %}<div class="topbar-title">{{ topbar_title }}</div>
-        {% else %}<div class="topbar-title">Melios Dira Odds</div>{% endif %}
-        {% if live_count and live_count > 0 %}<div class="live-badge">{{ live_count }} LIVE</div>{% endif %}
-        <div class="topbar-date" id="topbar-clock"></div>
-    </div>
     <div id="page-content">
         <div class="page-container">{% block content %}{% endblock %}
             <footer class="site-footer">
@@ -239,6 +221,7 @@
                 We do not accept bets, payments or deposits, and this is not betting advice. Predictions can be wrong.
                 This site is for adults aged 18 and over. If gambling is causing you harm, please seek local support.
                 <a href="/privacy">Privacy notice</a></p>
+                <span class="site-footer-meta">{{ 'Elo · Neural Net V3' if is_nba else 'Dixon-Coles · Neural Net' }}</span>
             </footer>
         </div>
     </div>

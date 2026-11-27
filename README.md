@@ -146,6 +146,9 @@ Tailwind asset locally, download the v3.4.17 standalone executable as
 Navigation is presented as a responsive top bar across the application. On
 narrow screens, the navigation row scrolls horizontally so all league and team
 links remain available without reducing the main content to a narrow sidebar.
+The header uses a compact sports-broadcast layout with the sport switcher,
+page context, live state, and clock sharing one identity row; privacy and model
+details are kept in the page footer.
 On NBA pages, the Conferences control reveals Eastern and Western links on
 hover or keyboard focus; selecting one jumps to that conference's team list.
 On Football pages, the Leagues control reveals all five supported leagues on
