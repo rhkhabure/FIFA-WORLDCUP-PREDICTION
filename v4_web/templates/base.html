@@ -71,11 +71,91 @@
         .sport-labels a.on { color: #fff; font-weight: 700; }
         .sport-labels a:hover { color: rgba(255,255,255,0.85); }
         #sidebar.collapsed .sport-labels { display: none; }
+        .vote-onboarding {
+            align-items: center;
+            background: rgba(15, 23, 42, .62);
+            display: none;
+            inset: 0;
+            justify-content: center;
+            padding: 20px;
+            position: fixed;
+            z-index: 1000;
+        }
+        .vote-onboarding.is-visible { display: flex; }
+        .vote-onboarding-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            box-shadow: 0 24px 70px rgba(15, 23, 42, .28);
+            max-width: 430px;
+            padding: 26px;
+            width: 100%;
+        }
+        .vote-onboarding-kicker {
+            color: var(--league-primary);
+            font: 800 10px var(--font-mono);
+            letter-spacing: .14em;
+            text-transform: uppercase;
+        }
+        .vote-onboarding-title {
+            color: var(--text-primary);
+            font-size: 24px;
+            font-weight: 900;
+            line-height: 1.1;
+            margin: 8px 0 10px;
+        }
+        .vote-onboarding-copy {
+            color: var(--text-muted);
+            font-size: 13px;
+            line-height: 1.55;
+            margin: 0 0 20px;
+        }
+        .vote-onboarding-actions { display: flex; gap: 10px; }
+        .vote-onboarding-actions button,
+        .vote-onboarding-actions a {
+            border-radius: 9px;
+            cursor: pointer;
+            flex: 1;
+            font-size: 12px;
+            font-weight: 800;
+            padding: 11px 14px;
+            text-align: center;
+            text-decoration: none;
+        }
+        .vote-onboarding-primary {
+            background: var(--league-primary);
+            border: 1px solid var(--league-primary);
+            color: #fff;
+        }
+        .vote-onboarding-secondary {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+        }
     </style>
 </head>
 <body class="app-shell" style="background:var(--league-tint)">
 
 <a class="skip-link" href="#main-content">Skip to main content</a>
+<div class="vote-onboarding" data-vote-onboarding role="dialog"
+     aria-modal="true" aria-labelledby="vote-onboarding-title">
+    <div class="vote-onboarding-card">
+        <div class="vote-onboarding-kicker">Optional community feature</div>
+        <h2 class="vote-onboarding-title" id="vote-onboarding-title">Want to vote on matches?</h2>
+        <p class="vote-onboarding-copy">
+            Enable anonymous fan voting to share your match predictions. You can
+            enable it later from any match dashboard.
+        </p>
+        <div class="vote-onboarding-actions">
+            <a class="vote-onboarding-primary" data-vote-onboarding-enable
+               href="{{ '/nba/match' if is_nba else '/match?league=' ~ (league|default('pl')) }}">
+                Enable voting
+            </a>
+            <button type="button" class="vote-onboarding-secondary"
+                    data-vote-onboarding-dismiss>Not now</button>
+        </div>
+    </div>
+</div>
 
 <!-- ── SIDEBAR ──────────────────────────────────────────────────── -->
 <div id="sidebar">
@@ -249,6 +329,36 @@
     }
     tick();
     setInterval(tick, 30000);
+})();
+
+// ── First-visit fan voting prompt ─────────────────────────────────
+(function(){
+    const prompt = document.querySelector('[data-vote-onboarding]');
+    if (!prompt) return;
+    const consentKey = 'fan-voting-consent';
+    const seenKey = 'fan-voting-onboarding-seen';
+    let consented = false;
+    let seen = false;
+    try {
+        consented = localStorage.getItem(consentKey) === 'granted';
+        seen = localStorage.getItem(seenKey) === '1';
+    } catch (error) {
+        return;
+    }
+    if (consented || seen) return;
+    prompt.classList.add('is-visible');
+    const close = () => prompt.classList.remove('is-visible');
+    const markSeen = () => localStorage.setItem(seenKey, '1');
+    const enable = prompt.querySelector('[data-vote-onboarding-enable]');
+    const dismiss = prompt.querySelector('[data-vote-onboarding-dismiss]');
+    enable.addEventListener('click', () => {
+        localStorage.setItem(consentKey, 'granted');
+        markSeen();
+    });
+    dismiss.addEventListener('click', () => {
+        markSeen();
+        close();
+    });
 })();
 
 // ── Shared calendar countdowns ────────────────────────────────────

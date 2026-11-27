@@ -234,8 +234,17 @@ The identity row displays the NBA mark for NBA routes and the active league
 crest for Football routes, followed by the current page title.
 Countdown widgets use shared `data-countdown-target` and
 `data-countdown-value` attributes and display months, days, and hours.
-The Football Hub layout includes summary metrics, a featured fixture, current
-league leaders, responsive league cards, fixtures, and model performance.
+The Football Hub layout includes summary metrics, responsive league cards,
+fixtures, current league leaders, and a featured fixture panel. The featured
+fixture follows the selected league-table tab and shows standings positions,
+the last five results from cached season match records, implied odds, and a
+100% home/draw/away probability bar. League
+standings use a Premier League fallback provider when the primary standings
+request returns no rows.
+Shared football team pages use the same fixed profile layout for all supported
+leagues, and the navigation crest proxy resolves clubs from the cached
+competition team records when they are not present in the small static crest
+registry.
 On NBA pages, the Conferences control uses a hover/focus dropdown whose links
 target the existing `#East` and `#West` team-page anchors.
 On Football pages, the Leagues control uses the same interaction pattern and
@@ -413,7 +422,8 @@ Big Balls Sports (BBS_API_KEY)
   → Prediction job: log upcoming La Liga matches + results
 
 football-data.org (FOOTBALLDATA_ORG_KEY)
-  → Supported competition fixtures and finished scores (PL, Serie A, Bundesliga)
+  → Supported competition fixtures and finished scores (PL, Serie A,
+    Bundesliga, Ligue 1)
   → Prediction job: log pre-match estimates and settle results
 
 FotMob via parse.bot (PARSE_BOT_KEY)
@@ -606,8 +616,8 @@ def setup(p_db, model, ...):
 `prediction_job.py` runs as an `asyncio` background task, triggered every 30 minutes by an `asyncio.create_task` in `main.py`'s lifespan.
 
 **Each cycle:**
-1. Fetch upcoming PL fixtures (FPL), La Liga (BBS), and Serie A/Bundesliga
-   (football-data.org) → log new DC predictions to SQLite.
+1. Fetch upcoming PL fixtures (FPL), La Liga (BBS), and Serie A/Bundesliga/
+   Ligue 1 (football-data.org) → log new DC predictions to SQLite.
 2. Where available, fetch confirmed lineups and save a separate heuristic
    lineup-adjusted snapshot. Serie A lineup adjustments are disabled.
 3. Check unresolved past predictions (kickoff > 2 hours ago) → fill in final

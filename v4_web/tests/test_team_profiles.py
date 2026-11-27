@@ -18,6 +18,24 @@ class TeamProfileTests(unittest.TestCase):
 
         self.assertEqual(team["id"], 5)
 
+    def test_crest_resolver_uses_competition_team_records(self):
+        main._COMPETITION_CREST_CACHE.clear()
+        with (
+            patch.object(main, "get_crest_url", return_value=""),
+            patch.object(
+                main,
+                "get_competition_teams_fd",
+                return_value=[{
+                    "name": "Parma",
+                    "crest": "https://example.test/parma.svg",
+                }],
+            ),
+        ):
+            crest = main._resolve_competition_crest("Parma Calcio 1913")
+
+        self.assertEqual(crest, "https://example.test/parma.svg")
+        main._COMPETITION_CREST_CACHE.clear()
+
     def test_next_fixture_uses_home_away_data(self):
         fixture = main._next_fixture_from_team_fixtures(
             [{

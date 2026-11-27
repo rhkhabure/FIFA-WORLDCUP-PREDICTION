@@ -20,6 +20,7 @@ Run:  uvicorn main:app --reload --port 8000
 import concurrent.futures
 import json
 import pickle
+import re
 import sys
 import time
 import urllib.request as _urllib_req
@@ -747,20 +748,59 @@ _TEAM_PROFILE_FALLBACKS = {
     },
 }
 
+_COMPETITION_CREST_CACHE: dict[str, str] = {}
+
+
+def _crest_lookup_key(name: str) -> str:
+    canonical = TEAM_NAME_ALIASES.get(name, name)
+    key = re.sub(r"[^a-z0-9]", "", str(canonical).casefold())
+    return re.sub(r"(calcio|footballclub|societa|1913)+$", "", key)
+
+
+def _resolve_competition_crest(team_name: str) -> str:
+    """Resolve a club crest from the cached competition team records."""
+    direct_url = get_crest_url(team_name)
+    if direct_url:
+        return direct_url
+
+    lookup_key = _crest_lookup_key(team_name)
+    if lookup_key in _COMPETITION_CREST_CACHE:
+        return _COMPETITION_CREST_CACHE[lookup_key]
+
+    for league_cfg in MATCH_LEAGUES.values():
+        try:
+            teams = get_competition_teams_fd(league_cfg["comp"])
+        except Exception as exc:
+            print(f"[crest] {league_cfg['comp']} lookup error: {exc}")
+            continue
+        for team in teams:
+            if _crest_lookup_key(team.get("name", "")) == lookup_key:
+                crest = team.get("crest", "") or ""
+                _COMPETITION_CREST_CACHE[lookup_key] = crest
+                return crest
+
+    _COMPETITION_CREST_CACHE[lookup_key] = ""
+    return ""
+
 
 # ── DC pre-game ───────────────────────────────────────────────────────────────
 
 @app.get("/crest/{team_name}")
 async def crest_proxy(team_name: str):
     """Proxy crest images to avoid CORS issues in SVG <image> tags."""
-    url = get_crest_url(team_name)
+    url = _resolve_competition_crest(team_name)
     if not url:
         return _Response(status_code=404)
     try:
         req = _urllib_req.Request(url, headers={"User-Agent": "Mozilla/5.0"})
         with _urllib_req.urlopen(req, timeout=5) as resp:
             data = resp.read()
-        return _Response(content=data, media_type="image/png",
+        media_type = (
+            "image/svg+xml"
+            if data.lstrip().startswith(b"<svg")
+            else "image/png"
+        )
+        return _Response(content=data, media_type=media_type,
                         headers={"Cache-Control": "public, max-age=86400"})
     except Exception:
         return _Response(status_code=404)
@@ -1739,6 +1779,43 @@ async def history_page(request: Request):
     )
 
 
+def _stored_fixture_fallback(
+    predictions: list[dict],
+    league: str,
+    date_from: str,
+    date_to: str,
+) -> list[dict]:
+    """Build hub fixtures from logged predictions when the provider is unavailable."""
+    fallback = []
+    for prediction in predictions:
+        if prediction.get("league", "pl") != league:
+            continue
+        kickoff_utc = prediction.get("kickoff_utc", "")
+        try:
+            kickoff = datetime.fromisoformat(
+                kickoff_utc.replace("Z", "+00:00")
+            ).astimezone(EAT)
+        except (AttributeError, TypeError, ValueError):
+            continue
+        local_date = kickoff.date().isoformat()
+        if not date_from <= local_date <= date_to:
+            continue
+        finished = bool(prediction.get("actual_result"))
+        fallback.append({
+            "match_id": str(prediction.get("match_id", "")),
+            "home": prediction.get("home_team", ""),
+            "away": prediction.get("away_team", ""),
+            "kickoff_utc": kickoff_utc,
+            "kickoff_eat": kickoff.strftime("%a %d %b · %H:%M"),
+            "local_date": local_date,
+            "gameweek": None,
+            "status": "Finished" if finished else "Scheduled",
+            "home_score": prediction.get("actual_hg") if finished else None,
+            "away_score": prediction.get("actual_ag") if finished else None,
+        })
+    return sorted(fallback, key=lambda fixture: fixture["kickoff_utc"])
+
+
 @app.get("/", response_class=HTMLResponse)
 async def hub(request: Request):
 
@@ -1805,6 +1882,24 @@ async def hub(request: Request):
     except Exception as e:
         print(f"[hub] saved prediction lookup error: {e}")
         saved_predictions = []
+
+    # Provider requests can be rate-limited independently of the prediction
+    # logger. Keep the hub useful by reusing the already stored fixture records
+    # when a competition has no fresh provider response.
+    for league in leagues:
+        if fixtures_by_league.get(league):
+            continue
+        fallback = _stored_fixture_fallback(
+            saved_predictions, league, date_from, date_to
+        )
+        if fallback:
+            fixtures_by_league[league] = sorted(
+                fallback, key=lambda fixture: fixture["kickoff_utc"]
+            )
+            print(
+                f"[hub] {league}: using {len(fallback)} stored fixtures "
+                "after provider response was unavailable"
+            )
 
     today_matches = []
     for league, league_data in leagues.items():
@@ -1898,15 +1993,158 @@ async def hub(request: Request):
         1 for fixture in today_matches
         if fixture["league"] == "laliga" and fixture["local_date"] == today
     )
+    today_counts = {
+        league: sum(
+            1 for fixture in today_matches
+            if fixture["league"] == league and fixture["local_date"] == today
+        )
+        for league in leagues
+    }
+    live_counts = {
+        league: sum(
+            1 for fixture in today_matches
+            if fixture["league"] == league and fixture["is_live"]
+        )
+        for league in leagues
+    }
 
     # Fetch standings for hub page
     all_standings = {}
     for lg, code in [("pl", "PL"), ("laliga", "PD"), ("bundesliga", "BL1"), ("seriea", "SA"), ("ligue1", "FL1")]:
         try:
             st = get_competition_standings_fd(code)
+            if lg == "pl" and not st:
+                st = get_standings(season)
             all_standings[lg] = st
-        except:
+        except Exception as e:
+            print(f"[hub] {lg} standings fetch error: {e}")
             all_standings[lg] = []
+
+    def _team_key(name):
+        return " ".join(
+            str(TEAM_NAME_ALIASES.get(name, name)).casefold().split()
+        )
+
+    team_matches_cache = {}
+
+    def _team_form_from_records(league, team, standings_row):
+        team_id = standings_row.get("team_id") if standings_row else None
+        competition = MATCH_LEAGUES[league].get("comp")
+        if not team_id or not competition:
+            return []
+        cache_key = (league, team_id)
+        if cache_key not in team_matches_cache:
+            try:
+                team_matches_cache[cache_key] = get_team_matches_fd(
+                    int(team_id), competition, season=season
+                )
+            except Exception as e:
+                print(f"[hub] {league} form lookup error for {team}: {e}")
+                team_matches_cache[cache_key] = []
+        return [
+            match.get("result")
+            for match in team_matches_cache[cache_key]
+            if match.get("result") in ("W", "D", "L")
+            and match.get("status") == "FINISHED"
+        ][:5]
+
+    def _fixture_form(league, team, standings_row):
+        stored_form = _team_form_from_records(league, team, standings_row)
+        if stored_form:
+            return stored_form
+        form = []
+        for fixture in sorted(
+            fixtures_by_league.get(league, []),
+            key=lambda item: item.get("kickoff_utc", ""),
+            reverse=True,
+        ):
+            if fixture.get("status") != "Finished":
+                continue
+            side = (
+                "home" if _team_key(fixture.get("home", "")) == _team_key(team)
+                else "away" if _team_key(fixture.get("away", "")) == _team_key(team)
+                else None
+            )
+            if not side:
+                continue
+            home_score = fixture.get("home_score")
+            away_score = fixture.get("away_score")
+            if home_score is None or away_score is None:
+                continue
+            won = home_score > away_score if side == "home" else away_score > home_score
+            drawn = home_score == away_score
+            form.append("D" if drawn else "W" if won else "L")
+            if len(form) == 5:
+                break
+        return form
+
+    featured_by_league = {}
+    for lg in leagues:
+        candidates = fixtures_by_league.get(lg, [])
+        if not candidates:
+            continue
+        upcoming = [
+            fixture for fixture in candidates
+            if fixture.get("status") not in ("Finished", "Postponed", "Cancelled")
+        ]
+        fixture = (upcoming or candidates)[0]
+        standings_by_team = {
+            _team_key(row.get("team_name", "")): row
+            for row in all_standings.get(lg, [])
+        }
+        prediction = find_pregame_prediction(
+            saved_predictions,
+            league=lg,
+            match_id=str(fixture.get("match_id", "")),
+            home_team=str(fixture.get("home", "")),
+            away_team=str(fixture.get("away", "")),
+            kickoff_utc=str(fixture.get("kickoff_utc", "")),
+            team_aliases=TEAM_NAME_ALIASES,
+        )
+        probabilities = (
+            [prediction.get(key) for key in
+             ("pre_dc_home", "pre_dc_draw", "pre_dc_away")]
+            if prediction else None
+        )
+        if not probabilities or any(value is None for value in probabilities):
+            try:
+                probabilities = dc_pregame(
+                    fixture["home"], fixture["away"], MATCH_LEAGUES[lg]["priors"]
+                )
+            except Exception as e:
+                print(f"[hub] {lg} featured prediction error: {e}")
+                probabilities = None
+        if probabilities:
+            total = sum(max(float(value), 0.0) for value in probabilities)
+            probabilities = [
+                round(max(float(value), 0.0) / total * 100, 1)
+                for value in probabilities
+            ] if total else [0.0, 0.0, 0.0]
+            probabilities[-1] = round(100.0 - sum(probabilities[:-1]), 1)
+        else:
+            probabilities = [None, None, None]
+        home_row = standings_by_team.get(_team_key(fixture.get("home", "")), {})
+        away_row = standings_by_team.get(_team_key(fixture.get("away", "")), {})
+        featured_by_league[lg] = {
+            **fixture,
+            "league": lg,
+            "league_name": MATCH_LEAGUES[lg]["name"],
+            "home_position": home_row.get("position"),
+            "away_position": away_row.get("position"),
+            "home_crest": home_row.get("crest", ""),
+            "away_crest": away_row.get("crest", ""),
+            "home_form": _fixture_form(
+                lg, fixture.get("home", ""), home_row
+            ),
+            "away_form": _fixture_form(
+                lg, fixture.get("away", ""), away_row
+            ),
+            "probabilities": probabilities,
+            "odds": [
+                round(100.0 / value, 2) if value else None
+                for value in probabilities
+            ],
+        }
 
     return templates.TemplateResponse(
         request=request, name="index.html",
@@ -1916,7 +2154,7 @@ async def hub(request: Request):
             "league_code"     : "PL",
             "season_label"    : season_label,
             "all_standings"   : all_standings,
-            "all_standings"   : all_standings,
+            "featured_by_league": featured_by_league,
             "pl_stats"        : pl_stats,
             "ll_stats"        : ll_stats,
             "bl_stats"        : bl_stats,
@@ -1927,6 +2165,8 @@ async def hub(request: Request):
             "today_match_groups": today_match_groups,
             "today"           : today,
             "today_count_laliga": today_count_laliga,
+            "today_counts"     : today_counts,
+            "live_counts"      : live_counts,
             "football_countdowns": _football_final_matchdays(season),
             "live_count"      : 0,
             "live_count_pl"   : 0,

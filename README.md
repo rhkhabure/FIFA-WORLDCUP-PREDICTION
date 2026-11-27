@@ -233,7 +233,7 @@ FIFA-WORLDCUP-PREDICTION/
 │   │   ├── match.py                 # Football match dashboard and API routes
 │   │   └── nba.py                   # NBA hub, match, history, team and player routes
 │   ├── bbs.py                       # Big Balls Sports API client (La Liga)
-│   ├── footballdata.py              # football-data.org client (PL scores/fixtures)
+│   ├── footballdata.py              # football-data.org client (FD competition fixtures/results)
 │   ├── fotmob.py                    # FotMob via parse.bot (lineups, live xG)
 │   ├── fpl.py                       # FPL API client (PL fixtures, team map)
 │   ├── thesportsdb.py               # TheSportsDB client (player photos, career)
@@ -314,6 +314,7 @@ The football dashboard has also been extended beyond the original Premier League
 | La Liga fixture views now include recent results with scores and restrict upcoming fixtures to the relevant current-day/weekend window. Match detail uses the selected fixture's current data where available. | Old fixtures were lingering in widgets, and games could be missing or inconsistently marked live when switching views. | Fixture lists stay focused on recent, current and near-term matches, with fewer stale results and more consistent score/status display. |
 | Prediction history uses normalized team/result matching and derives the predicted outcome from the stored probabilities. Verified missing results were added to the history database. | Team-name variants and mismatched result handling made some correct predictions appear wrong or left completed games out of history. | Displayed outcomes are consistent with the saved prediction probabilities and confirmed scores; corrected historical rows remain in the database. |
 | The main hub now gathers fixtures across the supported football competitions, groups them by league and gives live matches priority. Fixture links retain their league context. | The home screen was limited to Premier League fixtures, and multi-league navigation could open the wrong competition context. | One hub presents the available league fixtures and sends each selection to the matching dashboard. |
+| The Football Hub now links its league-table selection to a per-league featured fixture with table positions, the last five results from the existing season match records, implied odds, and a 100% home/draw/away probability bar. League cards use one shared live/today/upcoming status rule and preserve native crest colors. The Premier League table also has a fallback standings provider. | The featured panel was fixed to the first mixed-league fixture, duplicated model-performance values, league badges differed by card, some crests were incorrectly forced white, and form was limited to the hub's short fixture window. | Selecting a league updates its table, fixtures, and featured match together, while card statuses, crest artwork, and team form remain consistent across competitions. |
 | Added a Serie A dashboard and prediction-history integration, league-aware team navigation, and a club map/directory. | Serie A was the first vertical slice in a staged expansion to more leagues; its teams, IDs and data feeds differ from Premier League conventions. | Serie A fixtures and model estimates have their own overview/history context, with club pages reachable from the sidebar and map. Missing priors or unavailable club data are identified instead of being presented as verified facts. |
 
 ---
@@ -357,7 +358,7 @@ NBA support was built as a separate basketball experience rather than adapting f
 
 | Source | Used for | Key |
 |--------|----------|-----|
-| football-data.org | PL finished scores, standings | `FOOTBALLDATA_ORG_KEY` in `.env` |
+| football-data.org | PL, Serie A, Bundesliga and Ligue 1 fixtures/results | `FOOTBALLDATA_ORG_KEY` in `.env` |
 | FPL API | PL upcoming fixtures, team names | None (free) |
 | Big Balls Sports | La Liga live scores, fixtures | `BBS_API_KEY` in `.env` |
 | FotMob via parse.bot | Lineups, live xG | `PARSE_BOT_KEY` in `.env` |
