@@ -20,7 +20,7 @@
   .east-panel .t-section-head{flex-direction:row-reverse}
   .east-panel .t-section-head h2{text-align:right}
   .east-panel .div-label{text-align:right}
-  .playoff-center{position:sticky;top:150px;min-height:320px;display:flex;align-items:center;
+  .playoff-center{align-self:center;min-height:320px;display:flex;align-items:center;
                   justify-content:center}
   .court-panel{width:178px;height:260px;border:2px solid rgba(29,66,138,.35);
                 border-radius:90px;background:linear-gradient(90deg,rgba(200,16,46,.06) 0 50%,rgba(29,66,138,.06) 50%);
@@ -31,7 +31,7 @@
   .court-panel::after{content:"";position:absolute;top:0;bottom:0;left:50%;border-left:2px solid rgba(15,23,42,.16)}
   .playoff-trophy{z-index:1;width:118px;padding:18px 8px;text-align:center;border-radius:12px;
                   background:rgba(255,255,255,.92);box-shadow:0 6px 16px rgba(15,23,42,.14)}
-  .playoff-trophy img{display:block;height:54px;margin:0 auto;width:76px}
+  .playoff-trophy img{display:block;height:100px;margin:0 auto;width:64px;object-fit:contain}
   .playoff-trophy strong{display:block;color:#1D428A;font-size:11px;letter-spacing:.1em;
                          margin-top:8px}
   .playoff-trophy span{display:block;color:#64748b;font:700 9px var(--font-mono);
@@ -49,6 +49,15 @@
              background:color-mix(in srgb,var(--team-col) 12%,#fff);
              color:var(--team-col);font-family:var(--font-mono);font-size:10px;font-weight:700;
              margin-top:6px}
+  .nba-teams-page{isolation:isolate;position:relative}
+  .nba-teams-page::before{content:"";position:absolute;inset:-24px -8px;z-index:-1;
+                          background:
+                            radial-gradient(circle at 50% 28%,rgba(29,66,138,.12),transparent 25%),
+                            linear-gradient(90deg,transparent 49.8%,rgba(29,66,138,.08) 50%,transparent 50.2%),
+                            linear-gradient(0deg,transparent 49.8%,rgba(200,16,46,.06) 50%,transparent 50.2%),
+                            var(--league-tint,#f3f5f9);
+                          background-size:auto,100% 100%,100% 100%,auto;
+                          border-radius:20px;pointer-events:none}
   .elo-bar{height:4px;border-radius:99px;background:var(--border,#e2e8f0);margin-top:8px;overflow:hidden}
   .elo-bar > div{height:100%;border-radius:99px;background:var(--team-col)}
   .conf-pill{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:99px;
@@ -68,7 +77,7 @@
   }
 </style>
 
-<div style="max-width:1500px;margin:0 auto">
+<div class="nba-teams-page" style="max-width:1500px;margin:0 auto">
 
   <!-- quick jump pills -->
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px">
@@ -128,7 +137,7 @@
     <aside class="playoff-center" aria-label="NBA playoff pathway">
       <div class="court-panel">
         <div class="playoff-trophy">
-          <img src="{{ url_for('static', path='nba-playoff-trophy.svg') }}" alt="NBA Playoffs trophy">
+          <img src="{{ url_for('static', path='larry-obrien-trophy.svg') }}" alt="Larry O'Brien NBA championship trophy">
           <strong>NBA PLAYOFFS</strong>
           <span>ROAD TO THE FINALS</span>
         </div>

@@ -246,7 +246,9 @@ the cached standings provider; unavailable standings display `—`.
 On wide screens, conference panels flank a central court-themed playoff panel;
 the layout stacks responsively on smaller screens.
 The East panel is directionally mirrored for a balanced bracket-like layout,
-and the playoff panel uses `static/nba-playoff-trophy.svg`.
+and the playoff panel uses the locally stored
+`static/larry-obrien-trophy.svg` illustration. The asset is by Xander89 and is
+used under CC BY-SA 3.0 from Wikimedia Commons.
 
 ### 1.12 Deployment and rollback
 

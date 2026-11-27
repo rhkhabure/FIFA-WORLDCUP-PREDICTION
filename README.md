@@ -165,6 +165,8 @@ The NBA Teams page presents the Western and Eastern Conferences side by side
 with a central court-and-playoff trophy panel on wide screens.
 The Eastern panel mirrors the Western panel's card flow and heading alignment,
 and the centre uses a dedicated local playoff trophy illustration.
+The trophy illustration is the Larry O'Brien Championship Trophy icon by
+Xander89, used under CC BY-SA 3.0 from Wikimedia Commons.
 
 ```bash
 cd v4_web

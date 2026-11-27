@@ -158,6 +158,8 @@ On larger screens, Western teams appear on the left and Eastern teams on the
 right around the central NBA Playoffs panel.
 The Eastern side is mirrored toward the centre to create a balanced bracket
 layout.
+The centre panel uses a recognizable Larry O'Brien-style championship trophy
+illustration and a subtle court-inspired background.
 
 ### Production release check
 
